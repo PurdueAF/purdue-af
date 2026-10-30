@@ -28,6 +28,16 @@ EXPECTED_TOOLS = {
     "get_dask_cluster_usage",
     "scale_dask_cluster",
     "stop_dask_cluster",
+    # ray
+    "get_ray_capacity",
+    "submit_ray_job",
+    "list_ray_jobs",
+    "get_ray_job",
+    "stop_ray_job",
+    "delete_ray_job",
+    "get_ray_cluster",
+    "start_ray_cluster",
+    "stop_ray_cluster",
     # profiles + session lifecycle
     "list_af_profiles",
     "get_session_status",

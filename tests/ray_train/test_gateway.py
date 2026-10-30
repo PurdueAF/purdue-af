@@ -2926,6 +2926,131 @@ async def test_a_job_on_nrp_asks_for_a_whole_number_of_workers(nrp_env, workers)
     assert nrp_env.nrp.jobs == {}
 
 
+async def own_cluster(env, method, token="session-a", path="/af/cluster", **headers):
+    async with env.session.request(
+        method,
+        env.dashboard + path,
+        headers={"Authorization": f"Bearer {token}"} | headers,
+    ) as r:
+        body = await r.json() if r.status == 200 else None
+        return r.status, r.reason, body
+
+
+async def test_a_user_with_no_cluster_is_told_so_and_none_starts(env):
+    assert (await own_cluster(env, "GET"))[2] == {"exists": False}
+    assert env.kube.clusters == {}
+
+
+async def test_a_cluster_starts_in_the_shape_asked_and_reports_it(env):
+    status, _, found = await own_cluster(
+        env, "POST", **{gw.MOST_METADATA: "2", gw.CPUS_METADATA: "4"}
+    )
+    assert status == 200
+    assert found["exists"] is True
+    assert (found["name"], found["workers"]) == ("ray-train-user-a", 2)
+    assert found["cpus_per_worker"] == "4"
+    assert "ray-train-user-a" in env.kube.clusters
+    assert (await own_cluster(env, "GET"))[2]["workers"] == 2
+
+
+async def test_a_cluster_is_not_for_nrp(env):
+    status, reason, _ = await own_cluster(env, "POST", **{gw.SITE_METADATA: "nrp"})
+    assert status == 400
+    assert "Ray Client reaches your own cluster" in reason
+
+
+async def test_a_call_with_no_token_reaches_no_cluster(env):
+    async with env.session.get(env.dashboard + "/af/cluster") as r:
+        assert r.status == 401
+
+
+async def test_stopping_a_cluster_removes_it_and_tells_its_clients(env):
+    await own_cluster(env, "POST")
+    env.gateway.clients["ray-train-user-a"] = {"client"}
+    assert (await own_cluster(env, "DELETE"))[0] == 200
+    assert (await own_cluster(env, "GET"))[2] == {"exists": False}
+    assert env.gateway.gone["client"][1] == gw.REMOVED_BY_USER
+
+
+async def test_stopping_no_cluster_says_so(env):
+    status, reason, _ = await own_cluster(env, "DELETE")
+    assert (status, reason) == (404, "You have no Ray cluster")
+
+
+async def test_a_busy_cluster_stops_only_by_force(env, monkeypatch):
+    await own_cluster(env, "POST")
+
+    async def busy(cluster):
+        return True
+
+    monkeypatch.setattr(env.gateway, "busy", busy)
+    status, reason, _ = await own_cluster(env, "DELETE")
+    assert status == 409
+    assert "runs tasks or jobs" in reason
+    assert (await own_cluster(env, "GET"))[2]["exists"] is True
+    assert (await own_cluster(env, "DELETE", path="/af/cluster?force=true"))[0] == 200
+    assert (await own_cluster(env, "GET"))[2] == {"exists": False}
+
+
+def free_gpus_of(gateway, monkeypatch, free):
+    async def answer():
+        return free
+
+    monkeypatch.setattr(gateway, "free_gpus", answer)
+
+
+async def test_capacity_counts_workers_of_a_shape_at_both_sites(nrp_env, monkeypatch):
+    free_gpus_of(
+        nrp_env.gateway,
+        monkeypatch,
+        {"nvidia.com/mig-1g.5gb": (3, 1), "nvidia.com/gpu": (2, 2)},
+    )
+    nrp_env.answers[nrp_gpus.REQUESTED] = [
+        nrp_sample(1, node="west-2", resource="nvidia_com_gpu")
+    ]
+    found = await nrp_env.gateway.capacity({})
+    purdue, on_nrp = found["purdue"], found["nrp"]
+    assert (purdue["workers_free"], purdue["workers_preemptible"]) == (5, 3)
+    assert purdue["workers_most"] == 22
+    # Taken room counts now, and not for the most a job may ask for.
+    assert (on_nrp["workers_free"], on_nrp["workers_most"]) == (3, 4)
+    assert on_nrp["groups"][0] == {
+        "region": "us-west",
+        "model": "NVIDIA A10",
+        "workers": 3,
+    }
+
+
+async def test_capacity_of_a_shape_only_t4s_can_be(nrp_env, monkeypatch):
+    free_gpus_of(
+        nrp_env.gateway,
+        monkeypatch,
+        {"nvidia.com/mig-1g.5gb": (3, 0), "nvidia.com/gpu": (5, 1)},
+    )
+    found = await nrp_env.gateway.capacity(
+        {gw.MEMORY_METADATA: "16", gw.PER_WORKER_METADATA: "2"}
+    )
+    assert found["purdue"]["workers_free"] == 2
+    assert found["purdue"]["workers_most"] == 4
+    assert [k["resource"] for k in found["purdue"]["kinds"]] == ["nvidia.com/gpu"]
+    assert found["nrp"] is None
+
+
+async def test_capacity_is_unknown_rather_than_zero_without_metrics(
+    nrp_env, monkeypatch
+):
+    free_gpus_of(nrp_env.gateway, monkeypatch, None)
+    del nrp_env.answers[nrp_gpus.ALLOCATABLE]
+    found = await nrp_env.gateway.capacity({})
+    assert found["purdue"]["known"] is False
+    assert found["nrp"]["known"] is False
+
+
+async def test_capacity_refuses_a_shape_no_gpu_has(nrp_env):
+    with pytest.raises(gw.Refused):
+        await nrp_env.gateway.capacity({gw.MEMORY_METADATA: "4000"})
+
+
 async def test_the_code_a_job_on_nrp_uploads_reaches_it_through_its_s3_prefix(nrp_env):
     env = nrp_env
     path = "/api/packages/gcs/_ray_pkg_1.zip"

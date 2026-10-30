@@ -49,7 +49,7 @@ send their training to it:
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `gateway.py`         | The gateway: relays Ray Client and Jobs API calls, creates and deletes users' RayClusters, and creates a RayJob per submission |
 | `config.yaml`        | The gateway's settings: timeouts, GPU limits, the addresses it asks, and the volumes a workload account's cluster keeps    |
-| `nrp_gpus.py`        | How many GPUs NRP Nautilus has free for Ray workers, by region, from NRP's public Prometheus; `GET /af/nrp-gpus` on the gateway's `:8265` answers it |
+| `nrp_gpus.py`        | How many GPUs NRP Nautilus has free for Ray workers, by region, from NRP's public Prometheus; `GET /af/nrp-gpus` and `GET /af/capacity` on the gateway's `:8265` answer it |
 | `rayjob-nrp.yaml`    | The template of a job on NRP: its image, its head's and worker's sizes, its NCCL settings, and the nrp-s3 keys its pods read |
 | `nrp_jobs.py`        | A job on NRP: its RayJob, the NRP API it is made through, and the S3 prefix of its code and data |
 | `stage.py`           | What a job's `<RayJob>-in` and `-out` Jobs run: copies its inputs to S3, and its outputs back |

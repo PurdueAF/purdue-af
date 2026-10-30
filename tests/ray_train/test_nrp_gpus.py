@@ -146,7 +146,11 @@ async def dashboard(prometheus, monkeypatch):
     monkeypatch.setattr(gw, "NRP_PROMETHEUS_URL", prometheus.url)
     monkeypatch.setattr(gw, "NRP_WORKER", WORKER)
     async with ClientSession() as http:
-        server = TestServer(gw.dashboard_app(SimpleNamespace(http=http, handle=refuse)))
+        server = TestServer(
+            gw.dashboard_app(
+                SimpleNamespace(http=http, handle=refuse, own_cluster=refuse)
+            )
+        )
         await server.start_server()
         yield str(server.make_url("")).rstrip("/")
         await server.close()
@@ -161,6 +165,38 @@ async def test_the_gateway_answers_nrp_gpus_without_a_token(dashboard):
                 "free_gpus": 4,
                 "workers": 2,
             }
+
+
+async def test_the_gateway_answers_capacity_without_a_token(dashboard):
+    async def capacity(values):
+        return {"asked": dict(values)}
+
+    app = gw.dashboard_app(
+        SimpleNamespace(http=None, handle=refuse, own_cluster=refuse, capacity=capacity)
+    )
+    server = TestServer(app)
+    await server.start_server()
+    async with ClientSession() as session:
+        url = server.make_url("/af/capacity?af-gpus-per-worker=2")
+        async with session.get(url) as response:
+            assert response.status == 200
+            assert await response.json() == {"asked": {"af-gpus-per-worker": "2"}}
+    await server.close()
+
+
+async def test_the_gateway_says_why_it_refuses_a_shape():
+    async def capacity(values):
+        raise gw.Refused(gw.grpc.StatusCode.INVALID_ARGUMENT, "No such GPU")
+
+    app = gw.dashboard_app(
+        SimpleNamespace(http=None, handle=refuse, own_cluster=refuse, capacity=capacity)
+    )
+    server = TestServer(app)
+    await server.start_server()
+    async with ClientSession() as session:
+        async with session.get(server.make_url("/af/capacity")) as response:
+            assert (response.status, response.reason) == (400, "No such GPU")
+    await server.close()
 
 
 async def test_the_gateway_says_so_when_nrp_prometheus_does_not_answer(
