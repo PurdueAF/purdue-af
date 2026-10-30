@@ -41,10 +41,18 @@ class NrpApi:
         (context,) = config["contexts"]
         self.server = str(cluster["cluster"]["server"]).rstrip("/")
         self.namespace = str(context["context"]["namespace"])
-        self.token = str(user["user"]["token"])
+        self.token = str(user["user"].get("token", ""))
+        # Beside the kubeconfig, where its renewal keeps the token current (../interlink/README.md).
+        self.token_file = kubeconfig.parent / "token"
         authority = base64.b64decode(cluster["cluster"]["certificate-authority-data"])
         self.tls = ssl.create_default_context(cadata=authority.decode())
         self.http: ClientSession | None = None
+
+    def bearer(self) -> str:
+        try:
+            return self.token_file.read_text().strip()
+        except FileNotFoundError:
+            return self.token
 
     def path(self, kind: str) -> str:
         group = "/api/v1" if kind == "pods" else "/apis/ray.io/v1"
@@ -59,7 +67,7 @@ class NrpApi:
     ) -> tuple[int, Any]:
         if self.http is None:
             self.http = ClientSession(connector=TCPConnector(ssl=self.tls))
-        headers = {"Authorization": f"Bearer {self.token}"}
+        headers = {"Authorization": f"Bearer {self.bearer()}"}
         if method == "PATCH":
             headers["Content-Type"] = "application/merge-patch+json"
         async with self.http.request(
@@ -80,7 +88,7 @@ class NrpApi:
             self.http = ClientSession(connector=TCPConnector(ssl=self.tls))
         async with self.http.get(
             self.server + path,
-            headers={"Authorization": f"Bearer {self.token}"},
+            headers={"Authorization": f"Bearer {self.bearer()}"},
             timeout=ClientTimeout(total=None, sock_connect=10),
         ) as r:
             async for line in r.content:

@@ -857,6 +857,21 @@ serverFiles:
                 Its liveness probe restarts it once its reconcilers stop taking
                 work, so Dask scaling stalled until the restart. Check: kubectl
                 -n cms logs deploy/controller-dask-gateway --previous
+          - alert: AFNrpTokenRenewalFailing
+            # Since its last success, or since it was created if it never succeeded.
+            expr: time() - max by (cronjob) (kube_cronjob_status_last_successful_time{namespace="cms",cronjob="interlink-nrp-token-renewal"} or kube_cronjob_created{namespace="cms",cronjob="interlink-nrp-token-renewal"}) > 3 * 86400
+            for: 1h
+            labels:
+              severity: warning
+              component: scale-out
+            annotations:
+              summary: The NRP token has not been renewed for {{ $value | humanizeDuration }}
+              description: >
+                The daily interlink-nrp-token-renewal CronJob mints the token of
+                30 days with which the interlink-nrp node and the ray-train
+                gateway reach NRP. Once it expires, nothing runs on NRP. Check:
+                kubectl -n cms get jobs | grep interlink-nrp-token-renewal, and
+                the logs of the latest; to renew by hand, see apps/interlink/README.md.
 
       # Can we still see what the facility is doing? -------------------------
       # node_filesystem_*{job="loki"} comes from the fs-exporter sidecar in loki/values.yaml.

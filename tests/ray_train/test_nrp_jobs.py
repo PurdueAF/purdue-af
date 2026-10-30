@@ -124,3 +124,13 @@ def test_an_owner_key_names_no_one_and_tells_a_person_from_an_account():
     assert person != account
     assert "demo" not in person + account
     assert len(person) <= 63
+
+
+def test_the_api_takes_the_renewed_token_beside_its_kubeconfig_at_each_call(tmp_path):
+    api = nrp.NrpApi.__new__(nrp.NrpApi)
+    api.token, api.token_file = "from-kubeconfig", tmp_path / "token"
+    assert api.bearer() == "from-kubeconfig"
+    api.token_file.write_text("renewed\n")
+    assert api.bearer() == "renewed"
+    api.token_file.write_text("renewed again\n")
+    assert api.bearer() == "renewed again"

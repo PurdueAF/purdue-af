@@ -37,6 +37,12 @@ rules:
   - apiGroups: [""]
     resources: [events]
     verbs: [get, list]
+  # its own next token, which the token-renewal CronJob on Geddes mints with
+  # the current one (../token-renewal)
+  - apiGroups: [""]
+    resources: [serviceaccounts/token]
+    resourceNames: [interlink-plugin]
+    verbs: [create]
   # Jobs on NRP of the ray-train gateway (apps/ray-train/nrp_jobs.py), which
   # suspends and resumes them and keeps their progress in their annotations
   - apiGroups: [ray.io]

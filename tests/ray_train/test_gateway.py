@@ -20,6 +20,7 @@ import sys
 import time
 import types
 from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import grpc
@@ -2757,6 +2758,7 @@ async def nrp_env(env, monkeypatch):
     api = gw.nrp_jobs.NrpApi.__new__(gw.nrp_jobs.NrpApi)
     api.server = str(servers[0].make_url("")).rstrip("/")
     api.namespace, api.token, api.http = "interlink-cms", "t", None
+    api.token_file = Path("/nonexistent/token")
     api.tls = ssl.create_default_context()
     env.gateway.nrp, env.gateway.bucket = api, FakeBucket()
     monkeypatch.setattr(

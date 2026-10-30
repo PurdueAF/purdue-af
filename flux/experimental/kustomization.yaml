@@ -66,6 +66,8 @@ resources:
   - ../../apps/interlink/hammer/helmrelease.yaml
   - ../../apps/interlink/nrp/helmrelease.yaml
   - ../../apps/interlink/nrp/secret-s3.yaml
+  - ../../apps/interlink/nrp/token-renewal/rbac.yaml
+  - ../../apps/interlink/nrp/token-renewal/cronjob.yaml
   - ../../apps/interlink/traefik/helmrepo.yaml
   - ../../apps/interlink/traefik/helmrelease.yaml
 
@@ -93,6 +95,10 @@ generatorOptions:
   disableNameSuffixHash: true
 
 configMapGenerator:
+  - name: interlink-nrp-token-renewal
+    files:
+      - renew.py=../../apps/interlink/nrp/token-renewal/renew.py
+
   - name: pixi-global-sync
     options:
       annotations:

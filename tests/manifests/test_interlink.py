@@ -268,6 +268,25 @@ def test_plugin_opens_the_kubeconfig_where_it_is_mounted(kubernetes_clusters):
         )
 
 
+def test_token_renewal_mounts_the_kubeconfig_as_the_plugin_does(kubernetes_clusters):
+    """Its exec user reads the token at the plugin's path, in the plugin's image."""
+    app = kubernetes_clusters["nrp"]
+    renewal = INTERLINK / "nrp" / "token-renewal"
+    cronjob = yaml.safe_load((renewal / "cronjob.yaml").read_text())
+    pod = cronjob["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+    (container,) = pod["containers"]
+    assert container["image"] == app["values"]["plugin"]["image"]
+    plugin_mount = {m["name"]: m for m in app["values"]["plugin"]["extraVolumeMounts"]}[
+        "kubeconfig"
+    ]
+    mount = {m["name"]: m for m in container["volumeMounts"]}["kubeconfig"]
+    assert mount["mountPath"] == plugin_mount["mountPath"]
+    volumes = {v["name"]: v for v in pod["volumes"]}
+    plugin_volumes = {v["name"]: v for v in app["values"]["extraVolumes"]}
+    assert volumes["kubeconfig"] == plugin_volumes["kubeconfig"]
+    assert f'MOUNT = Path("{mount["mountPath"]}")' in (renewal / "renew.py").read_text()
+
+
 def test_plugin_config_carries_the_metadata_fastapi_requires(kubernetes_clusters):
     """The plugin passes [app] name/description/version straight into its
     FastAPI constructor, which asserts a non-empty version — a key trimmed
