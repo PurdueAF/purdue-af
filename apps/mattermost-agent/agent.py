@@ -62,6 +62,8 @@ SORRY = (
 )
 LIMITED = "You have reached my limit of questions for now. Please try again later."
 NOT_MEMBER = "I answer direct messages from members of {channel} only."
+NOT_ALL_MEMBERS = "I answer here only if everyone in this conversation is in {channel}."
+NOT_READY = "I am not in {channel} yet, so I cannot answer here."
 
 
 class Unauthorized(Exception):
@@ -235,9 +237,10 @@ class Mattermost:
 
     async def channels(
         self, user_id: str, team_name: str, channel_name: str
-    ) -> tuple[str | None, set[str]]:
-        """The bot's public channel of that name, and its direct messages."""
-        home, direct = None, set()
+    ) -> tuple[str | None, set[str], set[str]]:
+        """The bot's public channel of that name, its direct messages and its
+        group messages."""
+        home, direct, groups = None, set(), set()
         for team in await self.get("/users/me/teams"):
             if team["display_name"] != team_name:
                 continue
@@ -246,7 +249,13 @@ class Mattermost:
                     home = c["id"]
                 elif c["type"] == "D":
                     direct.add(c["id"])
-        return home, direct
+                elif c["type"] == "G":
+                    groups.add(c["id"])
+        return home, direct, groups
+
+    async def members(self, channel: str) -> list[str]:
+        found = await self.get(f"/channels/{channel}/members", per_page=200)
+        return [m["user_id"] for m in found]
 
     async def is_member(self, channel: str, user_id: str) -> bool:
         response = await self.client.get(
@@ -363,6 +372,7 @@ class Agent:
         self.cursors: dict[str, int] = {}
         self.home: str | None = None
         self.direct: set[str] = set()
+        self.groups: set[str] = set()
         self.channels_at = 0.0
         self.asked: defaultdict[str, deque[float]] = defaultdict(deque)
         self.warned: set[str] = set()
@@ -376,7 +386,7 @@ class Agent:
 
     def wanted(self, post: dict[str, Any], cursor: int) -> bool:
         """A new post by a person: any in a direct message, one that mentions
-        the bot elsewhere. Posts of other bots are left out, so that two bots
+        the bot elsewhere, group messages included. Posts of other bots are left out, so that two bots
         cannot keep answering each other."""
         props = post.get("props") or {}
         return (
@@ -405,19 +415,20 @@ class Agent:
         now = time.monotonic()
         if not self.channels_at or now - self.channels_at > CHANNELS_SECONDS:
             first = not self.channels_at
-            self.home, direct = await self.mattermost.channels(
+            self.home, direct, groups = await self.mattermost.channels(
                 self.me["id"], self.team_name, self.channel_name
             )
             if self.home is None:
                 log.warning("not in %s", self.channel_name)
             if not first:
-                # A direct message that appeared since the last look is all new.
-                self.cursors.update(dict.fromkeys(direct - self.direct, 1))
-            self.direct = direct
+                # A conversation that appeared since the last look is all new.
+                known = self.direct | self.groups
+                self.cursors.update(dict.fromkeys((direct | groups) - known, 1))
+            self.direct, self.groups = direct, groups
             self.channels_at = now
         started = []
         polled = [self.home] if self.home else []
-        for channel in polled + sorted(self.direct):
+        for channel in polled + sorted(self.direct | self.groups):
             cursor = self.cursors.get(channel)
             if cursor is None:
                 self.cursors[channel] = await self.mattermost.latest(channel)
@@ -432,17 +443,35 @@ class Agent:
                     started.append(task)
         return started
 
+    def private(self, post: dict[str, Any]) -> bool:
+        return post["channel_id"] in self.direct | self.groups
+
+    async def refusal(self, post: dict[str, Any]) -> str | None:
+        """Why a private conversation gets no answer, if it does not."""
+        if not self.private(post):
+            return None
+        if self.home is None:
+            return NOT_READY
+        if post["channel_id"] in self.direct:
+            people, refused = [post["user_id"]], NOT_MEMBER
+        else:
+            people = await self.mattermost.members(post["channel_id"])
+            refused = NOT_ALL_MEMBERS
+        for person in people:
+            if person != self.me["id"]:
+                if not await self.mattermost.is_member(self.home, person):
+                    return refused
+        return None
+
     async def handle(self, post: dict[str, Any]) -> None:
         user = post["user_id"]
-        direct = post["channel_id"] in self.direct
-        root = post["root_id"] if direct else post["root_id"] or post["id"]
+        root = post["root_id"] if self.private(post) else post["root_id"] or post["id"]
         try:
-            if direct and not (
-                self.home and await self.mattermost.is_member(self.home, user)
-            ):
-                notice = NOT_MEMBER.format(channel=self.channel_name)
+            refused = await self.refusal(post)
+            if refused:
+                notice = refused.format(channel=self.channel_name)
                 await self.mattermost.reply(post, root, notice)
-                log.info("post %s: not a member", post["id"])
+                log.info("post %s: refused", post["id"])
                 return
             if not self.allowed(user, time.monotonic()):
                 if user not in self.warned:
@@ -506,7 +535,7 @@ class Agent:
 
     async def answer(self, post: dict[str, Any]) -> str:
         root = post["root_id"] or post["id"]
-        if post["channel_id"] in self.direct:
+        if self.private(post):
             thread = await self.mattermost.recent(post["channel_id"], MAX_THREAD_POSTS)
         else:
             thread = await self.mattermost.thread(post["id"])

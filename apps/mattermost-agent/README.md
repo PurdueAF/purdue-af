@@ -31,7 +31,8 @@ conversation's text, never who wrote it, and a reply cannot mention anyone.
 by the display names Mattermost shows, and its account must belong to it. Each
 direct message checks the sender's membership at that moment, so leaving the
 channel ends access. Removing the account from the channel stops the bot in
-both. Group messages are not answered. A new `docs/docs/` page is added to
+both. In a group message it answers an @mention, when everyone there is a member
+at that moment. A new `docs/docs/` page is added to
 `mattermost-agent-docs` in [`flux/experimental`](../../flux/experimental/kustomization.yaml).
 
 Tuning, all in `agent.py`: `POLL_SECONDS`, `USER_LIMIT` and
