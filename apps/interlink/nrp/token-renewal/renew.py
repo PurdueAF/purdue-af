@@ -12,10 +12,12 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from kubernetes import client, config
 
 SECRET = "kubeconfig-nrp-interlink"
 # Where the plugin mounts the Secret (../values.yaml), so the exec command finds the token there too.
 MOUNT = Path("/interlink-kubernetes-plugin/private/k8s")
+NAMESPACE_FILE = Path("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 LIFETIME_S = 30 * 86400
 # Prints the ExecCredential of the token in TOKEN_FILE, valid for ten minutes: a client
 # runs it again after that, and so reads a renewed token.
@@ -46,8 +48,6 @@ def encoded(text: str) -> str:
 
 
 def main() -> None:
-    from kubernetes import client, config
-
     path = MOUNT / "kubeconfig.yaml"
     kubeconfig = yaml.safe_load(path.read_text())
     (user,) = kubeconfig["users"]
@@ -62,9 +62,7 @@ def main() -> None:
     )
     here = client.Configuration()
     config.load_incluster_config(client_configuration=here)
-    namespace = Path(
-        "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-    ).read_text()
+    namespace = NAMESPACE_FILE.read_text().strip()
     client.CoreV1Api(client.ApiClient(here)).patch_namespaced_secret(
         SECRET,
         namespace,

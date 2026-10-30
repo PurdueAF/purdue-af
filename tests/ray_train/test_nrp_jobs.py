@@ -134,3 +134,34 @@ def test_the_api_takes_the_renewed_token_beside_its_kubeconfig_at_each_call(tmp_
     assert api.bearer() == "renewed"
     api.token_file.write_text("renewed again\n")
     assert api.bearer() == "renewed again"
+
+
+def test_the_api_reads_a_kubeconfig_whose_user_has_no_token_of_its_own(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "kubeconfig.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "clusters": [
+                    {
+                        "cluster": {
+                            "server": "https://nrp.example:6443/",
+                            "certificate-authority-data": "Q0E=",
+                        }
+                    }
+                ],
+                "users": [{"name": "interlink-plugin", "user": {"exec": {}}}],
+                "contexts": [{"context": {"namespace": "interlink-cms"}}],
+            }
+        )
+    )
+    monkeypatch.setattr(nrp.ssl, "create_default_context", lambda cadata: cadata)
+    api = nrp.NrpApi(path)
+    assert (api.server, api.namespace, api.tls) == (
+        "https://nrp.example:6443",
+        "interlink-cms",
+        "CA",
+    )
+    assert api.token_file == tmp_path / "token"
+    assert api.bearer() == ""
