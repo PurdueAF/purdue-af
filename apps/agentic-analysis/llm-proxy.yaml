@@ -18,6 +18,7 @@ spec:
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
+      terminationGracePeriodSeconds: 630
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

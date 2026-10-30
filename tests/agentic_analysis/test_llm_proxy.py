@@ -5,9 +5,15 @@ models.toml."""
 import dataclasses
 import http.server
 import json
+import os
+import re
+import signal
 import socket
+import subprocess
+import sys
 import threading
 import time
+import types
 
 import httpx
 import pytest
@@ -32,6 +38,7 @@ cut_seconds = 0.2
 backoff_seconds = 0.01
 backoff_max_seconds = 0.05
 cut_retries = 2
+drain_seconds = 5
 
 [models.m]
 context = 1_000_000
@@ -695,22 +702,185 @@ def test_a_session_keeps_a_backend_per_role(proxy):
     assert str(proxy.pick(worker, "s1", anything)) == "m#high"
 
 
-def test_the_proxy_exits_once_its_mounted_files_change(tmp_path):
+def test_the_proxy_stops_once_its_mounted_files_change(tmp_path):
     mount_configmap(tmp_path, "1", {"models.toml": "a"})
-    exited = threading.Event()
+    stopped = threading.Event()
     watch = threading.Thread(
         target=llm._watch,
-        args=([tmp_path / "models.toml"], 0.02, lambda code: exited.set()),
+        args=([tmp_path / "models.toml"], lambda reason: stopped.set(), 0.02),
     )
     watch.start()
     time.sleep(0.1)
-    assert not exited.is_set()
+    assert not stopped.is_set()
 
     mount_configmap(tmp_path, "2", {"models.toml": "b"})
 
-    assert exited.wait(2)
+    assert stopped.wait(2)
     watch.join(2)
     assert not watch.is_alive()
+
+
+def _in_flight(proxy, server):
+    """Asks in a thread, and returns it with where its reply lands, once the
+    proxy holds the request."""
+    replies = []
+    asking = threading.Thread(target=lambda: replies.append(_ask(proxy, ASK)))
+    asking.start()
+    while not server.in_flight and asking.is_alive():
+        time.sleep(0.005)
+    return asking, replies
+
+
+def test_a_restart_answers_the_requests_in_flight_and_refuses_new_ones(
+    tmp_path, upstream, capsys
+):
+    running, server = _serve(tmp_path, _config(upstream.url))
+    upstream.stream(SAID, delay=0.3)
+    asking, replies = _in_flight(running, server)
+    left = []
+    stopping = threading.Thread(target=llm._stop, args=(server, "changed", left.append))
+
+    stopping.start()
+    while not server.draining:
+        time.sleep(0.005)
+    refused = _ask(running, ASK)
+    assert not left
+
+    assert refused.status_code == 503
+    assert refused.headers["retry-after"] == str(llm.RETRY_AFTER)
+    stopping.join(5)
+    asking.join(5)
+    assert left == [0]
+    assert replies[0].status_code == 200 and _events(replies[0])
+    assert len(upstream.bodies) == 1
+    restart = json.loads(capsys.readouterr().out.splitlines()[-1])
+    assert restart == {"kind": "restart", "reason": "changed", "unanswered": 0}
+    server.shutdown()
+
+
+def test_a_restart_stops_waiting_for_a_request_that_takes_too_long(tmp_path, upstream):
+    _, server = _serve(tmp_path, _config(upstream.url))
+
+    assert server.admit()
+    assert server.drain(0.01) == 1
+
+    assert not server.admit()
+    assert server.in_flight == 1
+    server.shutdown()
+
+
+def test_a_restart_ends_a_request_waiting_out_a_failing_model(tmp_path, upstream):
+    settings = _config(upstream.url)
+    for name, value in (
+        ("hold_hours", "1"),
+        ("backoff_seconds", "60"),
+        ("backoff_max_seconds", "60"),
+    ):
+        settings = re.sub(rf"^{name} = .*$", f"{name} = {value}", settings, flags=re.M)
+    running, server = _serve(tmp_path, settings)
+    upstream.status(500)
+    asking, replies = _in_flight(running, server)
+    while not upstream.bodies:
+        time.sleep(0.005)
+
+    started = time.monotonic()
+    assert server.drain(5) == 0
+
+    assert time.monotonic() - started < 2
+    asking.join(5)
+    assert "restarting" in _error(_events(replies[0])[0])["error"]["message"]
+    server.shutdown()
+
+
+@pytest.fixture
+def started(tmp_path, upstream):
+    """The proxy as the container runs it, past its first line."""
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    config = tmp_path / "models.toml"
+    config.write_text(_config(upstream.url).replace("port = 0", f"port = {port}"))
+    process = subprocess.Popen(
+        [sys.executable, APP / "llm_proxy.py"],
+        env={
+            **os.environ,
+            "LLM_PROXY_CONFIG": str(config),
+            "NRP_API_KEY": "nrp-key",
+            "LLM_PROXY_TOKEN": TOKEN,
+        },
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    assert json.loads(process.stdout.readline())["kind"] == "start"
+    process.url = f"http://127.0.0.1:{port}"
+    yield process
+    process.kill()
+    process.wait()
+
+
+def test_sigterm_ends_a_proxy_with_nothing_in_flight(started):
+    started.send_signal(signal.SIGTERM)
+
+    assert json.loads(started.stdout.readline()) == {
+        "kind": "restart",
+        "reason": "terminated",
+        "unanswered": 0,
+    }
+    assert started.wait(5) == 0
+
+
+def test_a_proxy_told_to_end_serves_on_until_its_request_is_answered(started, upstream):
+    upstream.stream(SAID, delay=1.0)
+    replies = []
+    asking = threading.Thread(target=lambda: replies.append(_ask(started, ASK)))
+    asking.start()
+    assert json.loads(started.stdout.readline())["kind"] == "arrived"
+
+    started.send_signal(signal.SIGTERM)
+    time.sleep(0.2)
+
+    assert httpx.get(started.url + "/healthz", timeout=0.5).status_code == 200
+    assert _ask(started, ASK).status_code == 503
+    asking.join(5)
+    assert replies[0].status_code == 200 and _events(replies[0])
+    assert started.wait(5) == 0
+
+
+def test_a_request_leaves_a_line_as_it_arrives_and_another_as_it_ends(
+    proxy, upstream, capsys
+):
+    upstream.stream(SAID)
+    headers = {
+        "Authorization": f"Bearer {TOKEN}",
+        "x-af-session": "ses_2",
+        "x-af-agent": "executor",
+        "x-af-parent": "ses_1",
+    }
+
+    httpx.post(
+        proxy.url + "/v1/chat/completions", json=ASK, headers=headers, timeout=30
+    ).raise_for_status()
+
+    arrived, ended = map(json.loads, capsys.readouterr().out.splitlines())
+    assert (arrived["kind"], ended["kind"]) == ("arrived", "llm")
+    assert arrived["start"] == ended["start"]
+    for line in (arrived, ended):
+        assert (line["role"], line["session"], line["agent"], line["parent"]) == (
+            "worker",
+            "ses_2",
+            "executor",
+            "ses_1",
+        )
+
+
+def test_a_line_of_the_log_is_one_write(monkeypatch):
+    writes = []
+    stdout = types.SimpleNamespace(write=writes.append, flush=lambda: None)
+    monkeypatch.setattr(sys, "stdout", stdout)
+
+    llm._say({"kind": "llm"})
+
+    assert writes == ['{"kind": "llm"}\n']
 
 
 # --- wiring ---
@@ -726,6 +896,7 @@ def test_the_deployment_runs_the_mounted_proxy_with_both_secrets():
 
     assert deployment["spec"]["replicas"] == 1
     assert deployment["spec"]["strategy"]["type"] == "Recreate"
+    assert spec["terminationGracePeriodSeconds"] > settings.drain_seconds
     assert container["command"] == ["python", f"{mount['mountPath']}/llm_proxy.py"]
     assert mount["mountPath"] != "/app"
     assert volume["configMap"]["name"] == deployment["metadata"]["name"]

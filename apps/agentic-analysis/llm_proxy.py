@@ -4,6 +4,7 @@ request within NRP's fair use as models.toml sets out."""
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import hmac
 import http.server
@@ -11,7 +12,9 @@ import json
 import os
 import random
 import re
+import signal
 import statistics
+import sys
 import threading
 import time
 import tomllib
@@ -35,6 +38,8 @@ WINDOW = 900.0
 # Seconds a waiting request takes to rise by one queue class.
 AGING = 600.0
 STICKY = 10_000
+# Seconds a client is asked to wait before it asks a restarting proxy again.
+RETRY_AFTER = 30
 DATA_URL = re.compile(rb'"data:image/[A-Za-z0-9.+-]+;base64,[A-Za-z0-9+/=]*"')
 Cancelled = Callable[[], bool]
 
@@ -56,6 +61,7 @@ class Settings:
     backoff_seconds: float
     backoff_max_seconds: float
     cut_retries: int
+    drain_seconds: float
 
 
 @dataclass(frozen=True)
@@ -145,6 +151,12 @@ def load(path: Path) -> Config:
             rank=r["class"],
         )
     return Config(settings, models, roles)
+
+
+def _say(record: dict[str, Any]) -> None:
+    """A line of the log, in one write: the requests' threads share it."""
+    sys.stdout.write(json.dumps(record, default=str) + "\n")
+    sys.stdout.flush()
 
 
 def _quantile(values: list[float], q: float) -> float:
@@ -483,6 +495,7 @@ class Proxy:
         # By role too: a compaction comes with the session of the agent it compacts.
         self.sticky: OrderedDict[tuple[str, str], Backend] = OrderedDict()
         self.lock = threading.Lock()
+        self.stopping = threading.Event()
         self.client = client or httpx.Client(
             timeout=httpx.Timeout(connect=15, read=300, write=60, pool=60),
             limits=httpx.Limits(max_connections=128, max_keepalive_connections=32),
@@ -678,7 +691,11 @@ class Proxy:
                     return failure(
                         503, "server_error", "the model kept failing"
                     ), record
-                time.sleep(wait)
+                # A model that keeps failing would hold a restart to its end.
+                if self.stopping.wait(wait):
+                    return failure(
+                        503, "server_error", "the proxy is restarting"
+                    ), record
                 continue
             if reply.status != 200:
                 return reply, record
@@ -741,15 +758,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
         given = self.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         return hmac.compare_digest(given.encode(), self.server.proxy.token.encode())
 
-    def _send(self, status: int, body: bytes, kind: str = "application/json") -> None:
+    def _send(
+        self,
+        status: int,
+        body: bytes,
+        kind: str = "application/json",
+        headers: tuple[tuple[str, str], ...] = (),
+    ) -> None:
         self.send_response(status)
         self.send_header("Content-Type", kind)
         self.send_header("Content-Length", str(len(body)))
+        for name, value in headers:
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
 
-    def _refuse(self, status: int, code: str, message: str) -> None:
-        self._send(status, error_body(failure(status, code, message)))
+    def _refuse(
+        self,
+        status: int,
+        code: str,
+        message: str,
+        headers: tuple[tuple[str, str], ...] = (),
+    ) -> None:
+        reply = error_body(failure(status, code, message))
+        self._send(status, reply, headers=headers)
 
     def do_GET(self) -> None:
         proxy = self.server.proxy
@@ -815,21 +847,36 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 413, "context_length_exceeded", "over the models' fair-use size"
             )
             return
-        session = self.headers.get("x-af-session", "")
-        started = time.time()
-        if body.get("stream"):
-            reply, record = self._stream(role, raw, body, session)
-        else:
-            reply, record = proxy.forward(role, raw, body, session)
-            try:
-                if reply.status == 200:
-                    self._send(200, json.dumps(reply.message(role.name)).encode())
-                else:
-                    self._send(reply.status, error_body(reply))
-            except OSError:
-                record["client_gone"] = True
-        record.update(kind="llm", start=started, images=sent, body_bytes=length)
-        print(json.dumps(record, default=str), flush=True)
+        if not self.server.admit():
+            wait = (("Retry-After", str(RETRY_AFTER)),)
+            self._refuse(503, "server_error", "the proxy is restarting", wait)
+            return
+        try:
+            session = self.headers.get("x-af-session", "")
+            started = time.time()
+            who = {
+                "agent": self.headers.get("x-af-agent", ""),
+                "parent": self.headers.get("x-af-parent", ""),
+            }
+            arrived = {"role": role.name, "session": session, **who}
+            _say({"kind": "arrived", "start": started, **arrived})
+            if body.get("stream"):
+                reply, record = self._stream(role, raw, body, session)
+            else:
+                reply, record = proxy.forward(role, raw, body, session)
+                try:
+                    if reply.status == 200:
+                        self._send(200, json.dumps(reply.message(role.name)).encode())
+                    else:
+                        self._send(reply.status, error_body(reply))
+                except OSError:
+                    record["client_gone"] = True
+            record.update(
+                kind="llm", start=started, images=sent, body_bytes=length, **who
+            )
+            _say(record)
+        finally:
+            self.server.finished()
 
     def _stream(
         self, role: Role, raw: bytes, body: dict[str, Any], session: str
@@ -889,24 +936,58 @@ class Server(http.server.ThreadingHTTPServer):
 
     def __init__(self, address: tuple[str, int], proxy: Proxy) -> None:
         self.proxy = proxy
+        self.draining = False
+        self.in_flight = 0
+        self.changed = threading.Condition()
         super().__init__(address, Handler)
+
+    def admit(self) -> bool:
+        """Counts a request in, unless the proxy is draining."""
+        with self.changed:
+            if self.draining:
+                return False
+            self.in_flight += 1
+            return True
+
+    def finished(self) -> None:
+        with self.changed:
+            self.in_flight -= 1
+            self.changed.notify_all()
+
+    def drain(self, seconds: float) -> int:
+        """Admits no more requests and waits up to `seconds` for those in
+        flight. Returns how many are left."""
+        self.proxy.stopping.set()
+        with self.changed:
+            self.draining = True
+            self.changed.wait_for(lambda: not self.in_flight, seconds)
+            return self.in_flight
 
 
 def _digest(paths: list[Path]) -> str:
     return hashlib.sha256(b"".join(p.read_bytes() for p in paths)).hexdigest()
 
 
-def _watch(
-    paths: list[Path], every: float = 30.0, leave: Callable[[int], object] = os._exit
+def _stop(
+    server: Server, reason: str, leave: Callable[[int], object] = os._exit
 ) -> None:
-    """Exits once the mounted code or config changes, for the kubelet to start
-    it anew: a ConfigMap update reaches the files but not the running process."""
+    """Exits once the requests in flight are answered, or `drain_seconds` on."""
+    left = server.drain(server.proxy.config.settings.drain_seconds)
+    _say({"kind": "restart", "reason": reason, "unanswered": left})
+    leave(0)
+
+
+def _watch(
+    paths: list[Path], stop: Callable[[str], object], every: float = 30.0
+) -> None:
+    """Stops the proxy once the mounted code or config changes, for the kubelet
+    to start it anew: a ConfigMap update reaches the files but not the running
+    process."""
     seen = _digest(paths)
     while True:
         time.sleep(every)
         if _digest(paths) != seen:
-            print(json.dumps({"kind": "restart", "reason": "changed"}), flush=True)
-            leave(0)
+            stop("changed")
             return
 
 
@@ -914,10 +995,16 @@ def main() -> None:
     config = load(CONFIG)
     proxy = Proxy(config, os.environ["NRP_API_KEY"], os.environ["LLM_PROXY_TOKEN"])
     watched = [Path(__file__), CONFIG]
-    threading.Thread(target=_watch, args=(watched,), daemon=True).start()
     server = Server(("", config.settings.port), proxy)
-    start = {"kind": "start", "port": config.settings.port, "roles": list(config.roles)}
-    print(json.dumps(start), flush=True)
+    stop = functools.partial(_stop, server)
+
+    def terminated(*_: object) -> None:
+        threading.Thread(target=stop, args=("terminated",), daemon=True).start()
+
+    # Without a handler, the signal does not reach the container's first process.
+    signal.signal(signal.SIGTERM, terminated)
+    threading.Thread(target=_watch, args=(watched, stop), daemon=True).start()
+    _say({"kind": "start", "port": config.settings.port, "roles": list(config.roles)})
     server.serve_forever()
 
 

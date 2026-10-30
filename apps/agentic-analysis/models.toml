@@ -17,6 +17,9 @@ cut_seconds = 1200
 backoff_seconds = 30
 backoff_max_seconds = 600
 cut_retries = 3
+# How long a restart waits for the requests in flight, within the Deployment's
+# terminationGracePeriodSeconds.
+drain_seconds = 600
 
 # Per model: `budget` is the tokens all its requests in flight may hold
 # (0.9 of the 35% of its context), `output_per_minute` 0.85 of NRP's per-key
