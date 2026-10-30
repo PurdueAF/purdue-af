@@ -163,6 +163,9 @@ plain language, for example:
 * "Create a Dask cluster" — the agent walks you through multiple-choice
   questions (worker environment, worker size, and worker count) before creating
   it
+* "How many GPUs are free for 4 workers with T4s?"
+* "Train `train.py` on 4 GPUs on NRP, with `/work/users/<username>/events` as
+  input"
 * "Show the last 30 minutes of error logs from my notebook"
 * "Is the AF healthy?" — what is affecting the facility, if anything, and for
   how long
@@ -179,6 +182,9 @@ The available tools cover:
 * **Dask clusters** — list, create, inspect, check worker counts and CPU/memory
   usage, scale, and shut down your [Dask Gateway](guide-dask-gateway.md)
   clusters.
+* **Ray** — see how many GPUs are free for a worker shape, at Purdue and on
+  NRP; submit, follow, stop and delete your [Ray jobs](guide-ray-train.md); and
+  start, inspect and stop your own Ray cluster.
 * **Logs** — query your JupyterLab / VS Code server logs and Dask worker and
   scheduler logs, with time ranges and filters.
 

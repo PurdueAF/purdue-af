@@ -2,7 +2,7 @@
 
 A remote [MCP](https://modelcontextprotocol.io) server through which any
 MCP-capable agent manages a user's AF session: start and stop it, inspect Dask
-clusters, storage and logs. Connecting, what it can do, troubleshooting:
+clusters, storage and logs, and run Ray jobs. Connecting, what it can do, troubleshooting:
 [the user guide](../../docs/docs/guide-agentic-interface.md). The agent-facing
 playbook is [the skill](../../.claude/skills/purdue-af-agentic-interface/SKILL.md).
 

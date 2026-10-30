@@ -333,7 +333,11 @@ def test_only_sessions_reach_the_gateway_and_only_the_gateway_reaches_clusters()
 
     gateway = policies["ray-train-gateway"]
     assert gateway["podSelector"]["matchLabels"].items() <= gateway_labels.items()
-    rule, scrape = gateway["ingress"]
+    rule, agentic, scrape = gateway["ingress"]
+    assert agentic["from"] == [
+        {"podSelector": {"matchLabels": {"app": "agentic-interface"}}}
+    ]
+    assert agentic["ports"] == [{"protocol": "TCP", "port": gw.DASHBOARD_PORT}]
     assert rule["ports"] == [{"protocol": "TCP", "port": port} for port in ports]
     assert rule["from"] == [
         {

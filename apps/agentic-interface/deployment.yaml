@@ -54,6 +54,8 @@ spec:
                   fieldPath: metadata.namespace
             - name: DASK_GATEWAY_URL
               value: "http://api-dask-gateway.cms.svc.cluster.local:8000"
+            - name: RAY_GATEWAY_URL
+              value: "http://ray-train-gateway.cms.svc.cluster.local:8265"
           resources:
             requests:
               cpu: "100m"

@@ -30,7 +30,7 @@ from metrics import (
     record_request,
 )
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
-from tools import dask, health, logs, profiles, prompts, session, storage
+from tools import dask, health, logs, profiles, prompts, ray, session, storage
 
 logger = logging.getLogger(__name__)
 
@@ -342,6 +342,10 @@ mcp = InstrumentedMCPServer(
         "use list_dask_clusters / list_dask_cluster_options / create_dask_cluster / "
         "get_dask_worker_count / get_dask_cluster_usage / scale_dask_cluster / "
         "stop_dask_cluster for Dask; "
+        "use get_ray_capacity / submit_ray_job / list_ray_jobs / get_ray_job / "
+        "stop_ray_job / delete_ray_job for Ray jobs on GPUs, and "
+        "get_ray_cluster / start_ray_cluster / stop_ray_cluster for the user's "
+        "own Ray cluster; "
         "use get_session_status / start_af_session / stop_af_session for pod lifecycle. "
         "Each tool result names the next step. "
         f"The current purdue-af-agentic-interface skill is version {SKILL_VERSION}, "
@@ -359,6 +363,7 @@ logs.register(mcp)
 storage.register(mcp)
 health.register(mcp)
 dask.register(mcp)
+ray.register(mcp)
 profiles.register(mcp)
 session.register(mcp)
 prompts.register(mcp)

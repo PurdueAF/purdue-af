@@ -26,7 +26,9 @@ AF_MAX_WORKERS. A user whose session holds a GPU starts and submits to none.
 A workload account's token gets the account a cluster of its own
 (../dask-gateway/README.md#workload-accounts). `GET /af/nrp-gpus` on the Jobs
 API's port answers how many GPUs NRP Nautilus has free for Ray workers, by
-region (nrp_gpus.py). `GET /metrics` on METRICS_PORT names, for the dashboards,
+region (nrp_gpus.py), and `GET /af/capacity` how many workers of a shape fit at
+either site. `/af/cluster` reads (GET), starts (POST) and stops (DELETE) the
+caller's own cluster, as Ray Client's first call would start it. `GET /metrics` on METRICS_PORT names, for the dashboards,
 the owner of each job's cluster, whose name has none. The settings are in config.yaml.
 """
 
@@ -71,7 +73,14 @@ from aiohttp import (
     web,
 )
 from gpu_queries import ALLOC_QUERY, GPU_METRICS, PREEMPTIBLE_QUERY, USED_QUERY
-from nrp_gpus import as_dict, free_gpus, most_when_empty, placement, worker_of
+from nrp_gpus import (
+    as_dict,
+    free_gpus,
+    most_in_one_group,
+    most_when_empty,
+    placement,
+    worker_of,
+)
 from nrp_gpus import nodes as nrp_nodes
 from nrp_gpus import query as nrp_query
 from yarl import URL
@@ -254,6 +263,9 @@ JOBS = f"/apis/batch/v1/namespaces/{NAMESPACE}/jobs"
 UNPREFIXED = {name.removeprefix(SETTING_PREFIX) for name in SETTINGS}
 RAM_ANNOTATION = "purdue-af/ray-worker-memory"
 REMOVED_IDLE = "Your Ray cluster was removed after it went idle: run ray.shutdown(), then ray.init() again."
+REMOVED_BY_USER = (
+    "Your Ray cluster was stopped: run ray.shutdown(), then ray.init() again."
+)
 REMOVED_UNPROVISIONED = "Your Ray cluster was removed, as not all of its GPUs started in time: ask for fewer workers, or try again later."
 STOPPED_UNPROVISIONED = "The job was stopped, as not all of its GPUs started in time: ask for fewer workers, or try again later."
 JOB_STARTING = "Its Ray cluster is starting."
@@ -2440,6 +2452,110 @@ class Gateway:
             )
             return mix
 
+    async def own_cluster(self, request: web.Request) -> web.Response:
+        """The caller's own cluster: read, started in the shape of the headers, or stopped."""
+        try:
+            user, shape = await self.caller(
+                {key.lower(): value for key, value in request.headers.items()}
+            )
+            if request.method == "POST":
+                await self.cluster_for(user, shape)
+            cluster = await self.cluster(user.cluster)
+            if cluster is None or cluster["metadata"].get("deletionTimestamp"):
+                if request.method == "DELETE":
+                    raise Refused(grpc.StatusCode.NOT_FOUND, "You have no Ray cluster.")
+                return web.json_response({"exists": False})
+            refuse_others(cluster, user)
+            if request.method == "DELETE":
+                if request.query.get("force") != "true" and await self.busy(cluster):
+                    raise Refused(
+                        grpc.StatusCode.FAILED_PRECONDITION,
+                        "Your Ray cluster runs tasks or jobs: wait for them, or stop it anyway.",
+                    )
+                await self.delete(user.cluster, REMOVED_BY_USER)
+                self.last_used.pop(user.cluster, None)
+                return web.json_response({"exists": False})
+            status = cluster.get("status") or {}
+            shape = cluster_shape(cluster)
+            return web.json_response(
+                {
+                    "exists": True,
+                    "name": user.cluster,
+                    "ready": head_ready(cluster),
+                    "busy": await self.busy(cluster),
+                    "workers": int(shape.workers or 0),
+                    "workers_ready": int(status.get("readyWorkerReplicas") or 0),
+                    "min_gpu_memory_gb": float(shape.memory),
+                    "gpus_per_worker": int(shape.per_worker),
+                    "cpus_per_worker": shape.cpus,
+                    "ram_per_worker_gb": shape.ram,
+                    "environment": shape.env,
+                }
+            )
+        except Refused as e:
+            text = e.text.removesuffix(".")
+            return web.Response(status=HTTP_STATUS[e.code], reason=text, text=text)
+
+    async def capacity(self, values: Mapping[str, str]) -> dict[str, Any]:
+        """How many workers of the GPU memory and GPUs per worker that `values` ask for
+        fit now at either site, and the most a job there may ask for."""
+        memory = requested_memory(values.get(MEMORY_METADATA, ""))
+        per_worker = requested_per_worker(values.get(PER_WORKER_METADATA, ""), memory)
+        shape = Shape("", "1", memory, "", "", per_worker, "1")
+        each = int(per_worker)
+        free = await self.free_gpus()
+        kinds = [
+            {
+                "resource": f.resource,
+                "memory_gb": f.memory,
+                "workers_most": f.budget // each,
+                "workers_free": None if free is None else free[f.resource][0] // each,
+                "workers_preemptible": (
+                    None if free is None else free[f.resource][1] // each
+                ),
+            }
+            for f in shape.flavors
+        ]
+        return {
+            "purdue": {
+                "known": free is not None,
+                "workers_free": sum(k["workers_free"] or 0 for k in kinds),
+                "workers_preemptible": sum(
+                    k["workers_preemptible"] or 0 for k in kinds
+                ),
+                "workers_most": sum(k["workers_most"] for k in kinds),
+                "kinds": kinds,
+            },
+            "nrp": await self.nrp_capacity() if each == NRP_WORKER.gpus else None,
+        }
+
+    async def nrp_capacity(self) -> dict[str, Any]:
+        """The workers of a job on NRP that fit now, by region and GPU model."""
+        worker = dataclasses.asdict(NRP_WORKER)
+        try:
+            found, most = await asyncio.gather(
+                nrp_nodes(self.http, NRP_PROMETHEUS_URL, NRP_WORKER),
+                most_when_empty(self.http, NRP_PROMETHEUS_URL, NRP_WORKER),
+            )
+        except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
+            log.warning("asking NRP's Prometheus: %r", e)
+            return {"known": False, "worker": worker}
+        groups: dict[tuple[str, str], int] = collections.defaultdict(int)
+        for node in found:
+            groups[(node.region, node.model)] += node.workers
+        return {
+            "known": bool(most),
+            "worker": worker,
+            "workers_free": most_in_one_group(found),
+            "workers_most": most,
+            "groups": [
+                {"region": region, "model": model, "workers": workers}
+                for (region, model), workers in sorted(
+                    groups.items(), key=lambda group: -group[1]
+                )
+            ],
+        }
+
     async def free_gpus(self) -> dict[str, tuple[int, int]] | None:
         """Of each GPU resource, those no pod holds, and those preemptible pods hold,
         which the Hub's profile form counts as free; None if Prometheus does not say."""
@@ -2872,8 +2988,17 @@ def dashboard_app(gateway: Gateway) -> web.Application:
             return web.Response(status=503, text="NRP's Prometheus did not answer")
         return web.json_response(as_dict(regions))
 
+    async def capacity(request: web.Request) -> web.Response:
+        """The workers of a shape that fit at either site: as public as the above."""
+        try:
+            return web.json_response(await gateway.capacity(request.query))
+        except Refused as e:
+            return web.Response(status=HTTP_STATUS[e.code], reason=e.text, text=e.text)
+
     app = web.Application()
     app.router.add_get("/af/nrp-gpus", nrp_gpus)
+    app.router.add_get("/af/capacity", capacity)
+    app.router.add_route("*", "/af/cluster", gateway.own_cluster)
     app.router.add_route("*", "/{path:.*}", gateway.handle)
     return app
 

@@ -1,11 +1,11 @@
 ---
 name: purdue-af-agentic-interface
-description: Manage a Purdue Analysis Facility session — start/stop/restart the JupyterHub pod, and inspect Dask clusters, storage, and logs. Use whenever the user mentions Purdue AF, their analysis-facility session, AF Dask clusters, or AF logs/storage.
+description: Manage a Purdue Analysis Facility session — start/stop/restart the JupyterHub pod, run Ray jobs on GPUs, and inspect Dask clusters, storage, and logs. Use whenever the user mentions Purdue AF, their analysis-facility session, AF Dask clusters, Ray jobs or GPUs, or AF logs/storage.
 ---
 
 # Purdue Analysis Facility — Agentic Interface
 
-Skill version: `0.5`
+Skill version: `0.6`
 
 > **Setup** — this skill drives the `purdue-af-agentic-interface` MCP server.
 > Inside a Purdue AF session it is registered at startup with the session's own
@@ -45,12 +45,28 @@ answer for anything the platform tracks centrally:
   Prometheus scrape — a low count right after a scale means the scrape has not
   caught up, not that the scale failed.
 
+- `get_ray_capacity` before `submit_ray_job`, with the shape the job needs: it
+  says how many workers are free at Purdue and on NRP, and so which site to
+  name. `submit_ray_job` refuses an exact number of workers that is not free.
+- `submit_ray_job` for work that runs by itself; `start_ray_cluster` only for
+  interactive work from a notebook, whose `ray.init` call it returns. A cluster
+  holds its GPUs while up, so `stop_ray_cluster` when that work is done.
+- A Ray job on NRP sees none of `/work`, `/depot` or `/eos`: its code goes in
+  `files`, its data through `inputs` and `output`, and the script reads
+  `AF_INPUTS` and `AF_OUTPUT`. The Ray guide has a script for each use case;
+  a script of `cuda` needs `entrypoint_gpus=1`, one of Ray Train, Tune or Data
+  needs none.
+
 ## Actions that cost the user something
 
 - **`restart_af_session` / `stop_af_session` kill the process you are running
   in** when you are inside the AF session itself. Say so and get agreement
   first; you will lose the conversation. Storage (home, `/work`) is preserved.
 - **`stop_dask_cluster` is irreversible** — running work is lost.
+- **`stop_ray_job` is irreversible** — the job keeps only what it saved.
+  `stop_ray_cluster` with `force` loses the cluster's running work the same way.
+- **Idle GPUs on NRP** stop a job, and NRP bans a namespace that keeps them
+  idle: never leave a job there waiting on something other than its GPUs.
 - Only **one active Dask cluster per user** is allowed, so creating one may
   require stopping the existing one.
 

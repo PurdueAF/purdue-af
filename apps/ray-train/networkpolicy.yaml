@@ -25,6 +25,14 @@ spec:
         - protocol: TCP
           port: 8265
     - from:
+        # The agentic interface, for each user's own calls
+        - podSelector:
+            matchLabels:
+              app: agentic-interface
+      ports:
+        - protocol: TCP
+          port: 8265
+    - from:
         # Rancher Prometheus, via the scrape-metrics ServiceMonitor
         - namespaceSelector:
             matchLabels:
