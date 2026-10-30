@@ -29,6 +29,9 @@ celery:
       - name: eos-purdue
         hostPath:
           path: /eos/purdue
+      - name: cvmfs
+        persistentVolumeClaim:
+          claimName: cvmfs
     volumeMounts:
       - name: work
         mountPath: /work
@@ -36,6 +39,10 @@ celery:
         mountPath: /krab-outputs
       - name: eos-purdue
         mountPath: /eos/purdue
+        mountPropagation: HostToContainer
+        readOnly: true
+      - name: cvmfs
+        mountPath: /cvmfs
         mountPropagation: HostToContainer
         readOnly: true
     # Needs a CERN password in a kerberos-credentials Secret.
