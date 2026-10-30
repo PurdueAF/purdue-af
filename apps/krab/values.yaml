@@ -8,7 +8,7 @@ rabbitmqCredentials:
 celery:
   createSecret: false
   worker:
-    # The AF nodes, which mount /eos. Unschedulable until upstream reads celery.worker.tolerations.
+    # The AF nodes, which mount /eos.
     nodeSelector:
       node/type: null
       cms-af-prod: "true"
@@ -17,7 +17,7 @@ celery:
         operator: Equal
         value: cms-af
         effect: NoSchedule
-    # The Dask burst workers' class. Ignored until upstream reads celery.worker.priorityClassName.
+    # The Dask burst workers' class.
     priorityClassName: low-priority-preemptible
     # A run writes its output here when its output_directory is under /krab-outputs.
     volumes:
@@ -108,7 +108,7 @@ dagster:
       - name: krab-code-location
         image:
           repository: gitlab-registry.cern.ch/bgalewsk/krab
-          tag: master
+          tag: worker-k8s-config
           pullPolicy: Always
         dagsterApiGrpcArgs:
           - --module-name
