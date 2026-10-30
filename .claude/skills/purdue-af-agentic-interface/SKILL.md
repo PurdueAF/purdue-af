@@ -5,7 +5,7 @@ description: Manage a Purdue Analysis Facility session — start/stop/restart th
 
 # Purdue Analysis Facility — Agentic Interface
 
-Skill version: `0.6`
+Skill version: `0.7`
 
 > **Setup** — this skill drives the `purdue-af-agentic-interface` MCP server.
 > Inside a Purdue AF session it is registered at startup with the session's own
