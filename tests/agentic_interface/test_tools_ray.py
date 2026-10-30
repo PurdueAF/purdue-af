@@ -103,9 +103,9 @@ async def test_capacity_of_a_shape_nrp_has_no_workers_of(tools):
 
 @respx.mock
 async def test_capacity_passes_on_the_gateways_refusal(tools):
-    respx.get(CAPACITY).respond(400, text="No GPU of a Ray cluster has 99 GB")
+    respx.get(CAPACITY).respond(400, text="No GPU of a Ray cluster has 99 GB.")
     message = await failure(tools["get_ray_capacity"](min_gpu_memory_gb=99))
-    assert "No GPU of a Ray cluster has 99 GB" in message
+    assert message.endswith("No GPU of a Ray cluster has 99 GB.")
 
 
 @respx.mock
