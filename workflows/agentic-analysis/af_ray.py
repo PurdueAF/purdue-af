@@ -1,6 +1,6 @@
 """Gives an analysis's scripts the facility's GPUs through Ray (apps/ray-train),
-running the environment they run in. The runner installs it into each
-analysis's environment; the task pod's workload account token says whose Ray
+running the environment they run in. The plugin af_opencode.js keeps it in
+each analysis's environment; the task pod's workload account token says whose Ray
 cluster it is."""
 
 import os

@@ -129,8 +129,10 @@ XDG = {
 MARK = "AF_TURN"
 # Subagents that run at once; another `task` call waits for a seat.
 SEATS = 8
-# pyroscope-io's wheels bound Python; only conda-forge builds xrootd's bindings.
-CONDA = ("python<3.15", "xrootd")
+# Every analysis's Python: TensorFlow, which zfit needs, has no wheels for 3.14, and on 3.11 the Dask image's user packages shadow the environment's.
+PYTHON = "3.12"
+# Only conda-forge builds xrootd's bindings.
+CONDA = (f"python={PYTHON}", "xrootd")
 # The helpers' and XRootD's; the gateway also asks for prometheus-client.
 PACKAGES = (
     "pyroscope-io",
@@ -139,6 +141,8 @@ PACKAGES = (
     "prometheus-client",
     "fsspec-xrootd",
 )
+# What has every Python process of an environment start af_profiling.
+HOOK = "af_profiling.pth"
 CORES = 8
 RETRIES = 5
 # Turns a run resumes after a reply that ran out of output tokens.
@@ -218,6 +222,9 @@ the JFC checkout it is in for its files.
 analysis's pixi environment, `.pixi/envs/default`, as `pixi run which NAME` \
 shows; one in neither is not installed, and `pixi add NAME` adds it. Tectonic \
 keeps the TeX files and fonts it fetches in `~/.cache/tectonic`.
+- The analysis's pixi environment stays on Python {python}: its tools and the \
+facility's Dask run on it, and another version rebuilds the environment and \
+splits the analysis's results across two interpreters.
 
 ## Files, figures and PDFs
 
@@ -435,34 +442,21 @@ def _prepare(home: Path, analysis: Analysis) -> Path:
         _run("pixi", "add", "--no-install", *CONDA, cwd=work)
         _run("pixi", "add", "--pypi", *PACKAGES, cwd=work)
         staged.touch()
-    # Each turn gets the helpers its rules name, a workspace staged earlier too.
-    try:
-        _install(work)
-    except (OSError, subprocess.CalledProcessError) as failed:
-        _log(f"the helpers are not installed: {failed}")
     return work
 
 
-def _install(work: Path) -> None:
-    """Puts af_profiling, af_dask and af_ray into the analysis's environment,
-    and has every Python process of it start af_profiling, by a .pth file."""
-    # The environment's own interpreter: pixi would re-solve the agent's manifest.
-    where = subprocess.run(
-        [
-            str(work / ".pixi/envs/default/bin/python"),
-            "-c",
-            "import sysconfig; print(sysconfig.get_path('purelib'))",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    packages = Path(where.stdout.strip().splitlines()[-1])
+def _helpers(local: Path) -> Path:
+    """Writes what every environment of an analysis holds into `local`, for the
+    plugin to put there: af_profiling, af_dask, af_ray and HOOK. Returns the
+    directory."""
+    helpers = local / "helpers"
+    helpers.mkdir()
     for module in (af_profiling, af_dask, af_ray):
-        shutil.copy(str(module.__file__), packages / f"{module.__name__}.py")
-    (packages / "af_profiling.pth").write_text(
-        "import af_profiling; af_profiling.start()\n"
-    )
+        (helpers / f"{module.__name__}.py").write_text(
+            Path(str(module.__file__)).read_text()
+        )
+    (helpers / HOOK).write_text("import af_profiling; af_profiling.start()\n")
+    return helpers
 
 
 def _roles() -> dict[str, dict[str, Any]]:
@@ -588,7 +582,11 @@ def _setup(
     facility = config / "AGENTS.md"
     facility.write_text(
         FACILITY.format(
-            cores=CORES, hours=COMMAND_HOURS, minutes=COMMAND_MINUTES, root=ROOT
+            cores=CORES,
+            hours=COMMAND_HOURS,
+            minutes=COMMAND_MINUTES,
+            python=PYTHON,
+            root=ROOT,
         )
     )
     for file in (plugin_file, facility):
@@ -599,6 +597,8 @@ def _setup(
     role_of = {"orchestrator": "orchestrator"} | {n: r for n, (r, _) in AGENTS.items()}
     plugin = {
         "records": str(state / "records.jsonl"),
+        "helpers": str(_helpers(local)),
+        "hook": HOOK,
         "tasks": str(state / "tasks"),
         "seats": SEATS,
         "images": {name: roles[role]["images"] for name, role in role_of.items()},
@@ -736,6 +736,9 @@ class _Watch:
                 continue
             if record.get("kind") == "loaded":
                 self.loaded = True
+            elif record.get("kind") == "helpers":
+                failed = record.get("error")
+                _log(f"helpers in {record.get('packages')}: {failed or 'put there'}")
             # The main session's events come on stdout.
             elif record.get("parent") and (said := _narrate(record)):
                 _log(f"  {said}")

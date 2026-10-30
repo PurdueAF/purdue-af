@@ -145,6 +145,49 @@ function carried(messages) {
   return images;
 }
 
+function entries(directory) {
+  try {
+    return fs.readdirSync(directory, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+// Puts the runner's helpers into the analysis's environments that lack them, a rebuild having taken them out, or into all with `every`.
+function install(directory, every = false) {
+  const envs = path.join(directory, ".pixi", "envs");
+  for (const env of entries(envs))
+    for (const version of entries(path.join(envs, env.name, "lib"))) {
+      const packages = path.join(
+        envs,
+        env.name,
+        "lib",
+        version.name,
+        "site-packages",
+      );
+      // Conda's lib/python3.1 links to the real one.
+      if (!version.isDirectory() || !version.name.startsWith("python"))
+        continue;
+      if (!fs.existsSync(packages)) continue;
+      if (!every && fs.existsSync(path.join(packages, settings.hook))) continue;
+      let error = null;
+      try {
+        // The hook last: its presence says the others are there.
+        const files = entries(settings.helpers)
+          .map((entry) => entry.name)
+          .filter((name) => name !== settings.hook);
+        for (const name of [...files, settings.hook])
+          fs.copyFileSync(
+            path.join(settings.helpers, name),
+            path.join(packages, name),
+          );
+      } catch (failed) {
+        error = String(failed);
+      }
+      record({ kind: "helpers", packages, error });
+    }
+}
+
 // A subagent's task: its session's first message, kept for after a compaction takes it out of the context.
 function task(session, messages) {
   const file = path.join(settings.tasks, session);
@@ -192,6 +235,7 @@ export default {
   server: async (input) => {
     fs.mkdirSync(settings.tasks, { recursive: true });
     record({ kind: "loaded", pid: process.pid });
+    install(input.directory, true);
     return {
       "chat.headers": async ({ sessionID, agent }, output) => {
         record({ kind: "beat", session: sessionID });
@@ -240,9 +284,11 @@ export default {
               );
           }
           await sit(callID);
-        } else if (tool === "bash" && typeof args.timeout === "number")
-          args.timeout = Math.min(args.timeout, settings.timeout);
-        else if (tool === "read")
+        } else if (tool === "bash") {
+          install(input.directory);
+          if (typeof args.timeout === "number")
+            args.timeout = Math.min(args.timeout, settings.timeout);
+        } else if (tool === "read")
           guard(
             sessionID,
             callID,

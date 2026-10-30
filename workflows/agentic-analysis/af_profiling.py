@@ -1,6 +1,6 @@
 """Sends CPU profiles of the Python process it starts in to Pyroscope. The
-runner installs it into each analysis's environment with a .pth file, so
-that every script the agent runs there is profiled while it runs."""
+plugin af_opencode.js keeps it in each analysis's environment with a .pth
+file, so that every script the agent runs there is profiled while it runs."""
 
 import atexit
 import os
