@@ -21,3 +21,10 @@ datasources:
         url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
         access: proxy
         isDefault: false
+      # NRP Nautilus's public Prometheus, for Ray jobs that run there (../../ray-train/README.md).
+      - name: prometheus-nrp
+        uid: prometheus-nrp
+        type: prometheus
+        url: https://prometheus.nrp-nautilus.io
+        access: proxy
+        isDefault: false
