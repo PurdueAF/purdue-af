@@ -35,6 +35,10 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: prometheus
+        # (e) PurdueAF Agent, on Mattermost (apps/mattermost-agent).
+        - podSelector:
+            matchLabels:
+              app: mattermost-agent
       ports:
         - protocol: TCP
           port: 8888

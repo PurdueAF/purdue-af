@@ -1,0 +1,47 @@
+# No ingress: the agent only connects out, to the agentic interface, the LLM proxy and Mattermost.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mattermost-agent
+spec:
+  podSelector:
+    matchLabels:
+      app: mattermost-agent
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    # Any resolver: the cluster's runs outside this namespace.
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app: agentic-interface
+      ports:
+        - protocol: TCP
+          port: 8888
+    - to:
+        - podSelector:
+            matchLabels:
+              app: agentic-analysis-llm-proxy
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Mattermost, outside the cluster's and Geddes' addresses.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 100.64.0.0/10
+              - 169.254.0.0/16
+              - 128.211.160.0/24
+      ports:
+        - protocol: TCP
+          port: 443

@@ -1,0 +1,114 @@
+# agent.py from the mattermost-agent ConfigMap, on the agentic interface's image for its MCP client.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mattermost-agent
+  labels:
+    app: mattermost-agent
+spec:
+  replicas: 1
+  # One poller: two would answer every mention twice.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mattermost-agent
+  template:
+    metadata:
+      labels:
+        app: mattermost-agent
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+        - key: hub.jupyter.org/dedicated
+          operator: Equal
+          value: cms-af
+          effect: NoSchedule
+      containers:
+        - name: agent
+          image: geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-interface:latest
+          command: ["python", "/agent/agent.py"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: MATTERMOST_URL
+              value: "https://mattermost.web.cern.ch"
+            - name: MATTERMOST_TEAM
+              value: "CMS Experiment"
+            - name: MATTERMOST_CHANNEL
+              value: "Purdue Analysis Facility"
+            - name: MATTERMOST_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: mattermost-agent
+                  key: token
+            - name: MCP_URL
+              value: "http://agentic-interface.cms.svc.cluster.local:8888/services/agentic-interface/mcp"
+            - name: HUB_TOKEN_FILE
+              value: /etc/hub-token/token
+            - name: LLM_PROXY_URL
+              value: "http://agentic-analysis-llm-proxy:8080"
+            - name: LLM_PROXY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agentic-analysis-llm-proxy
+                  key: client-token
+            - name: LLM_ROLE
+              value: facility-assistant
+            - name: DOCS_DIR
+              value: /docs
+            - name: PROMPT_FILE
+              value: /agent/system-prompt.md
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", 'test -n "$(find /tmp/heartbeat -mmin -3)"']
+            initialDelaySeconds: 60
+            periodSeconds: 60
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: code
+              mountPath: /agent
+              readOnly: true
+            - name: docs
+              mountPath: /docs
+              readOnly: true
+            - name: hub-token
+              mountPath: /etc/hub-token
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: code
+          configMap:
+            name: mattermost-agent
+        - name: docs
+          configMap:
+            name: mattermost-agent-docs
+        # One key of the z2jh `hub` Secret, updated in place once the Hub registers the service.
+        - name: hub-token
+          secret:
+            secretName: hub
+            optional: true
+            items:
+              - key: hub.services.mattermost-agent.apiToken
+                path: token
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
