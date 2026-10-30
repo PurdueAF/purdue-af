@@ -41,6 +41,9 @@ RAY_GATEWAY_URL = os.environ.get(
 # Shared pixi env pre-built for everyone.
 GLOBAL_PIXI_PROJECT = os.environ.get("DASK_GLOBAL_PIXI_PROJECT", "/work/pixi/global")
 
+# The public dashboard, from the grafana-public-dashboards ConfigMap.
+DASHBOARD_PATH = os.environ.get("DASHBOARD_PATH", "/dashboards/default.json")
+
 # The agent skill, bundled so the server can announce its current version.
 SKILL_PATH = os.environ.get("SKILL_PATH", "/app/SKILL.md")
 

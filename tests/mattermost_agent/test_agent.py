@@ -367,7 +367,9 @@ async def test_tools_are_limited_to_the_facility_ones_and_docs(make):
     assert results[0] == "**Healthy**"
     assert "no tool" in results[1]
     assert "Home is backed up." in results[2]
-    assert "storage: Storage" in llm.bodies[0]["messages"][0]["content"]
+    system = llm.bodies[0]["messages"][0]["content"]
+    assert "storage: Storage" in system
+    assert "This conversation is in the channel." in system
 
 
 async def test_the_last_turn_gets_no_tools_so_that_it_must_answer(make):

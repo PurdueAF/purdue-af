@@ -40,6 +40,7 @@ CHANNELS_SECONDS = 60.0
 # Everything else on the MCP server acts on the caller's own session and data.
 FACILITY_TOOLS = {
     "get_facility_health",
+    "get_facility_metrics",
     "list_af_profiles",
     "list_dask_cluster_options",
 }
@@ -56,10 +57,7 @@ EXPIRY_MARGIN_SECONDS = 300.0
 DOC_TITLE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 # Before a name, so a reply can never ping @channel, @all or a person.
 AT_NAME = re.compile(r"(?<![\w.])@(?=[\w.-])")
-SORRY = (
-    "I could not answer this just now. Please try again in a few minutes, or see "
-    "https://analysis-facility.physics.purdue.edu/support/."
-)
+SORRY = "I could not answer this just now. Please try again in a few minutes."
 LIMITED = "You have reached my limit of questions for now. Please try again later."
 NOT_MEMBER = "I answer direct messages from members of {channel} only."
 NOT_ALL_MEMBERS = "I answer here only if everyone in this conversation is in {channel}."
@@ -539,7 +537,11 @@ class Agent:
             thread = await self.mattermost.recent(post["channel_id"], MAX_THREAD_POSTS)
         else:
             thread = await self.mattermost.thread(post["id"])
-        system = f"{self.prompt_file.read_text()}\n\nPages:\n{self.docs.index()}"
+        place = "a private conversation" if self.private(post) else "the channel"
+        system = (
+            f"{self.prompt_file.read_text()}\n\nThis conversation is in {place}."
+            f"\n\nPages:\n{self.docs.index()}"
+        )
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system},
             *self.thread_messages(thread, post),

@@ -54,6 +54,8 @@ spec:
                   fieldPath: metadata.namespace
             - name: DASK_GATEWAY_URL
               value: "http://api-dask-gateway.cms.svc.cluster.local:8000"
+            - name: DASHBOARD_PATH
+              value: /dashboards/default.json
             - name: RAY_GATEWAY_URL
               value: "http://ray-train-gateway.cms.svc.cluster.local:8265"
           resources:
@@ -78,10 +80,21 @@ spec:
             # Writable /tmp under readOnlyRootFilesystem; HOME points here too.
             - name: tmp
               mountPath: /tmp
+            - name: dashboards
+              mountPath: /dashboards
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 64Mi
+        # From the core root; get_facility_metrics reads it on each call.
+        - name: dashboards
+          configMap:
+            name: grafana-public-dashboards
+            optional: true
+            items:
+              - key: default.json
+                path: default.json
       serviceAccountName: agentic-interface
       nodeSelector:
         cms-af-prod: "true"
