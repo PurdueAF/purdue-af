@@ -1,0 +1,51 @@
+# Daily, so that a token of 30 days outlives weeks of failed runs (AFNrpTokenRenewalFailing).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: interlink-nrp-token-renewal
+spec:
+  schedule: "17 6 * * *"
+  concurrencyPolicy: Forbid
+  suspend: false
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          enableServiceLinks: false
+          serviceAccountName: interlink-nrp-token-renewal
+          restartPolicy: Never
+          nodeSelector: { "cms-af-prod": "true" }
+          tolerations:
+            - key: "hub.jupyter.org/dedicated"
+              operator: "Equal"
+              value: "cms-af"
+              effect: "NoSchedule"
+          containers:
+            - name: renew
+              # The plugin's own image (../values.yaml): its Python has the Kubernetes client and runs the exec command.
+              image: "geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-kubernetes-plugin:1.2.0"
+              command: ["python", "/scripts/renew.py"]
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 256Mi
+              volumeMounts:
+                - name: kubeconfig
+                  mountPath: /interlink-kubernetes-plugin/private/k8s
+                  readOnly: true
+                - name: script
+                  mountPath: /scripts
+          volumes:
+            - name: kubeconfig
+              secret:
+                secretName: kubeconfig-nrp-interlink
+                defaultMode: 0400
+            - name: script
+              configMap:
+                name: interlink-nrp-token-renewal

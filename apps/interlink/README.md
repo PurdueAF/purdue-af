@@ -110,7 +110,21 @@ then uncomment its entry in the kustomization.
 The NRP kubeconfig is the `kubeconfig-nrp-interlink` Secret in `cms`, minted
 by [`nrp/to-deploy-at-nrp/generate-nrp-kubeconfig.sh`](nrp/to-deploy-at-nrp/generate-nrp-kubeconfig.sh)
 against the RBAC in the same directory, applied to NRP out of band. Its token
-is time-bounded: rerun the script and re-create the Secret before it expires.
+lasts 30 days. The daily CronJob in
+[`nrp/token-renewal`](nrp/token-renewal) mints the next one with it and writes
+it into the Secret as the key `token`, beside a `kubeconfig.yaml` whose user
+reads that file through an `exec` command; the plugin and the ray-train gateway
+read the renewed token without a restart. `AFNrpTokenRenewalFailing` fires
+after three days without a renewal. Once the token has expired, rerun the
+script, replace the Secret with its output, and renew at once, which puts the
+Secret back in the form the plugin reads:
+
+```bash
+kubectl -n cms create secret generic kubeconfig-nrp-interlink \
+  --from-file=kubeconfig.yaml="$HOME/.kube/nrp-interlink-cms.yaml" \
+  --dry-run=client -o yaml | kubectl -n cms replace -f -
+kubectl -n cms create job --from=cronjob/interlink-nrp-token-renewal interlink-nrp-token-renewal-now
+```
 
 ## Verifying a node
 
