@@ -2909,6 +2909,23 @@ async def test_a_job_on_nrp_is_refused_while_nrp_prometheus_shows_no_nodes(nrp_e
     assert nrp_env.nrp.jobs == {}
 
 
+async def test_a_job_on_nrp_is_refused_while_nrp_prometheus_does_not_answer(nrp_env):
+    del nrp_env.answers[nrp_gpus.ALLOCATABLE]
+    status, reason, _ = await nrp_submit(nrp_env)
+    assert status == 503
+    assert "none of its GPU nodes" in reason
+    assert nrp_env.nrp.jobs == {}
+
+
+@pytest.mark.parametrize("workers", ["0", "-1", "two", "1.5", "007"])
+async def test_a_job_on_nrp_asks_for_a_whole_number_of_workers(nrp_env, workers):
+    for header in (gw.WORKERS_METADATA, gw.MOST_METADATA):
+        status, reason, _ = await nrp_submit(nrp_env, **{header: workers})
+        assert status == 400
+        assert "whole number of workers" in reason
+    assert nrp_env.nrp.jobs == {}
+
+
 async def test_the_code_a_job_on_nrp_uploads_reaches_it_through_its_s3_prefix(nrp_env):
     env = nrp_env
     path = "/api/packages/gcs/_ray_pkg_1.zip"
