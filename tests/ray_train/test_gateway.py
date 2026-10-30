@@ -3047,7 +3047,7 @@ async def test_capacity_is_unknown_rather_than_zero_without_metrics(
 
 
 async def test_capacity_refuses_a_shape_no_gpu_has(nrp_env):
-    with pytest.raises(gw.Refused):
+    with pytest.raises(gw.Refused, match="has 4000 GB"):
         await nrp_env.gateway.capacity({gw.MEMORY_METADATA: "4000"})
 
 

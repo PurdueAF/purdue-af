@@ -49,7 +49,7 @@ def _auth() -> dict[str, str]:
 def _http_failure(resp: httpx.Response, action: str) -> Failure:
     """What a non-2xx gateway answer means: its text is written for the user."""
     code = resp.status_code
-    detail = response_detail(resp, limit=500) or "no reason given"
+    detail = (response_detail(resp, limit=500) or "no reason given").rstrip(".")
     if code in (401, 403):
         return AuthError(f"Error: not authorised to {action} — {detail}.")
     if code == 429:

@@ -938,7 +938,7 @@ def requested_memory(value: str) -> str:
     if not enough:
         raise Refused(
             grpc.StatusCode.INVALID_ARGUMENT,
-            f"No GPU of a Ray cluster has {value} GB: the largest has {max(f.memory for f in FLAVORS):g} GB.",
+            f"No GPU of a Ray cluster has {wanted:g} GB: the largest has {max(f.memory for f in FLAVORS):g} GB.",
         )
     return f"{min(enough):g}"
 
@@ -2059,7 +2059,7 @@ class Gateway:
                             raise
                         raise Refused(
                             grpc.StatusCode.NOT_FOUND,
-                            f"You have no job {about[1]}: a job's record goes with delete_job, or {int(JOB_RECORD_S // 86400)} days after the job ends.",
+                            f"You have no job {about[1]}: a job's record goes when it is deleted, or {int(JOB_RECORD_S // 86400)} days after the job ends.",
                         ) from e
                 else:
                     job, cluster = found
