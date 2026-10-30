@@ -4,6 +4,8 @@ each analysis's environment; the task pod's DASK_GATEWAY__* variables name the
 gateway, and its workload account's token whose clusters they are."""
 
 import fcntl
+import functools
+import inspect
 import os
 import sys
 import tempfile
@@ -12,6 +14,8 @@ import time
 import warnings
 from pathlib import Path
 from typing import Any
+
+from af_profiling import command
 
 try:
     from dask_gateway.auth import GatewayAuth
@@ -91,9 +95,57 @@ def client(workers: int = 50, cores: float = 1, memory: float = 4) -> Any:
         )
     cluster.adapt(minimum=0, maximum=workers)
     dask = cluster.get_client()
+    _tag_tasks(dask)
     if os.environ.get("X509_USER_PROXY"):
         _hand_proxy(dask, Path(os.environ["X509_USER_PROXY"]))
     return dask
+
+
+def _tagged(function: Any, tags: dict[str, str]) -> Any:
+    """`function` as a task that profiles under `tags`, named as its `task`
+    tag. Sent whole to the worker, which needs nothing of this module for it."""
+
+    # Not its attributes: they would be pickled apart from how `function` pickles.
+    @functools.wraps(function, updated=())
+    def task(*args: Any, **kwargs: Any) -> Any:
+        try:
+            from pyroscope import tag_wrapper
+        except Exception:
+            return function(*args, **kwargs)
+        with tag_wrapper(tags):
+            return function(*args, **kwargs)
+
+    task.__name__ = tags["task"]
+    return task
+
+
+def _name(function: Any) -> str:
+    while isinstance(function, functools.partial):
+        function = function.func
+    name: str = getattr(function, "__name__", type(function).__name__)
+    return name.strip("<>")
+
+
+def _tag_tasks(dask: Any) -> None:
+    """Has the tasks started with `dask.submit` and `dask.map` profile under
+    the agent's command that started them, and their own name."""
+    submit, start_all = dask.submit, dask.map
+
+    def tagged(function: Any) -> Any:
+        # Dask treats a class or a coroutine function by what it is, which a wrapper hides.
+        if isinstance(function, type) or inspect.iscoroutinefunction(function):
+            return function
+        return _tagged(function, {**command(), "task": _name(function)})
+
+    @functools.wraps(submit)
+    def tagged_submit(func: Any, *args: Any, **kwargs: Any) -> Any:
+        return submit(tagged(func), *args, **kwargs)
+
+    @functools.wraps(start_all)
+    def tagged_map(func: Any, *iterables: Any, **kwargs: Any) -> Any:
+        return start_all(tagged(func), *iterables, **kwargs)
+
+    dask.submit, dask.map = tagged_submit, tagged_map
 
 
 def _running(gateway: Any, project: str, cores: float, memory: float) -> Any:

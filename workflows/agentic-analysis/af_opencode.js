@@ -266,10 +266,11 @@ export default {
               if (told) part.text = told;
             }
       },
-      "shell.env": async ({ sessionID }, output) => {
+      "shell.env": async ({ sessionID, callID }, output) => {
         Object.assign(output.env, settings.env);
         output.env.AF_SESSION = sessionID ?? "";
         output.env.AF_AGENT = agents.get(sessionID) ?? "";
+        output.env.AF_CALL = callID ?? "";
       },
       "tool.execute.before": async ({ tool, sessionID, callID }, { args }) => {
         record({ kind: "beat", session: sessionID });

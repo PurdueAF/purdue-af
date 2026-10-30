@@ -84,6 +84,13 @@ under `service_name="agentic-analysis"` and tagged with its `analysis`, `workspa
 `PACKAGES`; the helpers the plugin keeps there include a `.pth` file, `HOOK`,
 that starts `af_profiling`.
 
+A process also carries `lock`, the hash of the environment's lock file, and
+`session`, `agent` and `call`, the agent's command it runs in. Its `script` is
+`spawned` where `multiprocessing` started it, as Dask does a worker. A task
+started with `submit` or `map` of the client `af_dask` returns, other than a
+class or a coroutine function, brings its command's three tags to its worker,
+and its function's name as `task`.
+
 ## Running
 
 From an AF session, in a checkout of this repository, with the directory of an

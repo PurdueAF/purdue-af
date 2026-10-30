@@ -3,7 +3,9 @@ wiring to apps/agentic-analysis, and the analyses beside it. Git, pixi, the down
 agent are replaced per test."""
 
 import base64
+import contextlib
 import fcntl
+import functools
 import http.server
 import io
 import ipaddress
@@ -662,7 +664,12 @@ def test_the_helpers_start_the_profiler_in_every_python_of_the_environment(tmp_p
     options = json.loads(seen.read_text())
     assert options["application_name"] == "agentic-analysis"
     assert options["server_address"] == "http://pyroscope:4040"
-    assert options["tags"] == {"analysis": "zz", "workspace": "ws", "script": "-c"}
+    assert options["tags"] == {
+        "analysis": "zz",
+        "workspace": "ws",
+        "script": "-c",
+        "lock": "unknown",
+    }
 
 
 @pytest.fixture
@@ -694,6 +701,69 @@ def pyroscope(monkeypatch):
     monkeypatch.setattr(profiling.atexit, "register", calls.at_exit.append)
     calls.module = module
     return calls
+
+
+def test_a_process_profiles_under_the_agents_command_it_runs_in(pyroscope, monkeypatch):
+    monkeypatch.setenv("PYROSCOPE_SERVER", "http://pyroscope:4040")
+    monkeypatch.setenv("AF_SESSION", "ses_1")
+    monkeypatch.setenv("AF_AGENT", "executor")
+    monkeypatch.setenv("AF_CALL", "call_1")
+
+    profiling.start()
+
+    tags = pyroscope.configured[0]["tags"]
+    assert (tags["session"], tags["agent"], tags["call"]) == (
+        "ses_1",
+        "executor",
+        "call_1",
+    )
+
+
+def test_a_process_of_no_command_leaves_those_tags_to_its_tasks(pyroscope, monkeypatch):
+    monkeypatch.setenv("PYROSCOPE_SERVER", "http://pyroscope:4040")
+    for name in ("AF_SESSION", "AF_AGENT", "AF_CALL"):
+        monkeypatch.delenv(name, raising=False)
+
+    profiling.start()
+
+    assert not pyroscope.configured[0]["tags"].keys() & {"session", "agent", "call"}
+
+
+def test_a_process_profiles_under_the_lock_file_of_its_environment(
+    tmp_path, pyroscope, monkeypatch
+):
+    prefix = tmp_path / ".pixi/envs/default"
+    prefix.mkdir(parents=True)
+    (tmp_path / "pixi.lock").write_text("version: 6")
+    monkeypatch.setattr(sys, "prefix", str(prefix))
+    monkeypatch.setenv("PYROSCOPE_SERVER", "http://pyroscope:4040")
+
+    profiling.start()
+    first = pyroscope.configured[0]["tags"]["lock"]
+
+    (tmp_path / "pixi.lock").write_text("version: 7")
+    monkeypatch.setattr(profiling, "started", False)
+    profiling.start()
+    assert first not in ("unknown", pyroscope.configured[1]["tags"]["lock"])
+
+
+@pytest.mark.parametrize(
+    "argv, script",
+    [
+        (["/work/phase3/select.py", "--all"], "select.py"),
+        (["-c"], "-c"),
+        ([""], "python"),
+        # How multiprocessing starts a child, as Dask's nanny does a worker.
+        (["-c", "--multiprocessing-fork"], "spawned"),
+    ],
+)
+def test_a_process_is_named_by_its_script(pyroscope, monkeypatch, argv, script):
+    monkeypatch.setenv("PYROSCOPE_SERVER", "http://pyroscope:4040")
+    monkeypatch.setattr(sys, "argv", argv)
+
+    profiling.start()
+
+    assert pyroscope.configured[0]["tags"]["script"] == script
 
 
 def test_the_profiler_starts_once_and_only_where_a_server_is_named(
@@ -850,6 +920,11 @@ def gateway(tmp_path, monkeypatch):
                 register_plugin=lambda plugin, name: state.client.plugins.append(
                     (name, plugin)
                 ),
+                # A future's result: the function called as a worker would call it.
+                submit=lambda func, *args, **kwargs: func(*args, **kwargs),
+                map=lambda func, *iterables, **kwargs: [
+                    func(*items) for items in zip(*iterables)
+                ],
             )
             return state.client
 
@@ -919,6 +994,136 @@ def test_a_script_starts_the_analysis_cluster_on_its_environment(gateway, monkey
     ]
     assert gateway.adapted == ("new", {"minimum": 0, "maximum": 12})
     assert gateway.client.plugins == []
+
+
+@pytest.fixture
+def worker_tags(monkeypatch):
+    """pyroscope-io as a worker runs it: the tags each task ran under."""
+    seen = []
+    module = types.ModuleType("pyroscope")
+
+    @contextlib.contextmanager
+    def tag_wrapper(tags):
+        seen.append(tags)
+        yield
+
+    module.tag_wrapper = tag_wrapper
+    monkeypatch.setitem(sys.modules, "pyroscope", module)
+    for name, value in (
+        ("AF_SESSION", "ses_1"),
+        ("AF_AGENT", "executor"),
+        ("AF_CALL", "call_1"),
+    ):
+        monkeypatch.setenv(name, value)
+    return seen
+
+
+def fill(events):
+    return events * 2
+
+
+COMMAND_TAGS = {"session": "ses_1", "agent": "executor", "call": "call_1"}
+
+
+def test_a_task_profiles_under_the_command_that_submitted_it(gateway, worker_tags):
+    dask = clusters.client()
+
+    assert dask.submit(fill, 3) == 6
+    assert dask.map(fill, [1, 2]) == [2, 4]
+    assert dask.submit(lambda: 1) == 1
+
+    assert worker_tags == [
+        {**COMMAND_TAGS, "task": "fill"},
+        {**COMMAND_TAGS, "task": "fill"},
+        {**COMMAND_TAGS, "task": "fill"},
+        {**COMMAND_TAGS, "task": "lambda"},
+    ]
+
+
+class Filler:
+    def __init__(self):
+        self.lock = threading.Lock()
+
+    def __call__(self, events):
+        return events * 2
+
+
+@pytest.mark.parametrize(
+    "function, name",
+    [
+        (fill, "fill"),
+        (functools.partial(fill, 2), "fill"),
+        (functools.partial(functools.partial(fill), 2), "fill"),
+        (Filler(), "Filler"),
+    ],
+)
+def test_a_task_is_named_after_its_function_for_dask_and_the_profiles(
+    gateway, worker_tags, function, name
+):
+    wrapped = []
+    dask = types.SimpleNamespace(
+        submit=lambda func, *args, **kwargs: wrapped.append(func),
+        map=lambda func, *iterables, **kwargs: wrapped.append(func),
+    )
+    clusters._tag_tasks(dask)
+
+    dask.submit(function)
+
+    assert wrapped[0].__name__ == name
+    wrapped[0]() if isinstance(function, functools.partial) else wrapped[0](1)
+    assert worker_tags == [{**COMMAND_TAGS, "task": name}]
+
+
+def test_a_task_leaves_its_functions_attributes_to_the_function():
+    assert clusters._tagged(Filler(), {"task": "fill"}).__dict__.keys() == {
+        "__wrapped__"
+    }
+
+
+def test_a_task_takes_its_tags_where_it_was_submitted(worker_tags, monkeypatch):
+    dask = types.SimpleNamespace(
+        submit=lambda func, *args, **kwargs: lambda: func(*args, **kwargs),
+        map=None,
+    )
+    clusters._tag_tasks(dask)
+    on_the_worker = dask.submit(fill, 3)
+    for name in COMMAND_TAGS:
+        monkeypatch.delenv(f"AF_{name.upper()}")
+
+    assert on_the_worker() == 6
+
+    assert worker_tags == [{**COMMAND_TAGS, "task": "fill"}]
+
+
+@pytest.mark.parametrize("broken", ["missing", "raising"])
+def test_a_task_goes_on_where_its_environment_cannot_profile_it(
+    gateway, monkeypatch, tmp_path, broken
+):
+    monkeypatch.delitem(sys.modules, "pyroscope", raising=False)
+    if broken == "missing":
+        monkeypatch.setitem(sys.modules, "pyroscope", None)
+    else:
+        (tmp_path / "pyroscope.py").write_text("raise OSError('no library')\n")
+        monkeypatch.syspath_prepend(str(tmp_path))
+
+    assert clusters.client().submit(fill, 3) == 6
+
+
+def test_a_class_and_a_coroutine_function_reach_dask_as_they_are(gateway, worker_tags):
+    started = []
+    dask = types.SimpleNamespace(
+        submit=lambda func, *args, **kwargs: started.append(func),
+        map=lambda func, *iterables, **kwargs: started.append(func),
+    )
+    clusters._tag_tasks(dask)
+
+    async def fetch():
+        pass
+
+    dask.submit(dict)
+    dask.map(fetch, [1])
+
+    assert started == [dict, fetch]
 
 
 def test_the_gateway_gets_the_accounts_token_read_again_for_every_request(
@@ -1841,6 +2046,46 @@ def test_a_subagents_reply_a_failed_task_left_reaches_the_task_resumed(tmp_path)
     )
 
     assert result.startswith("Done.") and result.count("At the gate.") == 1
+
+
+# Runs the plugin in argv[2] on a command of an agent's, and prints the environment it gives it.
+SHELL = """
+const [plugin] = process.argv.slice(2);
+const hooks = await (await import(plugin)).default.server({ directory: "/" });
+await hooks["chat.headers"]({ sessionID: "ses_1", agent: "executor" }, { headers: {} });
+const output = { env: {} };
+await hooks["shell.env"]({ cwd: "/", sessionID: "ses_1", callID: "call_1" }, output);
+process.stdout.write(JSON.stringify(output.env));
+"""
+
+
+@NODE
+def test_a_command_knows_its_session_agent_and_call(tmp_path):
+    plugin = tmp_path / "af_opencode.mjs"
+    plugin.write_text(runner.PLUGIN.read_text())
+    (tmp_path / "shell.mjs").write_text(SHELL)
+    settings = {
+        "records": str(tmp_path / "records.jsonl"),
+        "tasks": str(tmp_path / "tasks"),
+        "seats": 1,
+        "images": {},
+        "env": {},
+    }
+    env = json.loads(
+        subprocess.run(
+            ["node", tmp_path / "shell.mjs", plugin],
+            env={**os.environ, "AF_PLUGIN": json.dumps(settings)},
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    )
+
+    assert env == {
+        "AF_SESSION": "ses_1",
+        "AF_AGENT": "executor",
+        "AF_CALL": "call_1",
+    }
 
 
 # Runs the plugin in argv[2] on the steps in argv[3]: an event, a request's headers or messages, or the orchestrator resuming ses_2; prints what each request's messages carry in place of OpenCode's prompt to go on.
