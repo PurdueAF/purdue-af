@@ -12,6 +12,9 @@ once. You submit the script from a notebook and read its output there.
 | Train a model too large for one GPU | A part of the model                         | [A model larger than a GPU](#a-model-larger-than-a-gpu) |
 | Apply a trained model to a dataset  | A copy of the model, on a share of the rows | [Batch inference](#batch-inference)                     |
 
+When Purdue's GPUs are busy, or you need more of them, a job can
+[run on NRP](#more-gpus-on-nrp) instead.
+
 ## Before you start
 
 Available to all users.
@@ -471,6 +474,86 @@ events.map_batches(
 Submit it as for [data-parallel training](#data-parallel-training):
 `af-max-workers` is the number of GPUs to score on.
 
+## More GPUs on NRP
+
+[NRP Nautilus](https://nrp.ai/) is a national
+GPU cluster with many more GPUs than Purdue. A job runs there when you submit
+it with `af-site`. Available to all users.
+
+NRP does not see `/work` or `/depot`, so you name the directory your job reads
+and the directory its results go to. The first is copied to NRP before the job
+starts, and what the job writes comes back when it ends.
+
+```python
+client = JobSubmissionClient(
+    "http://ray-train-gateway:8265",
+    headers={
+        "af-site": "nrp",
+        "af-max-workers": "4",
+        "af-inputs": "/work/users/<username>/events",
+        "af-output": "/work/users/<username>/results",
+    },
+)
+job = client.submit_job(entrypoint="python train.py", runtime_env={"working_dir": "."})
+```
+
+The job finds the two places in `AF_INPUTS` and `AF_OUTPUT`. The numbered
+comments mark what changes in the script of
+[Data-parallel training](#data-parallel-training), with its data in Parquet
+files:
+
+```python
+trainer = TorchTrainer(
+    train_func,
+    # 1. The data comes from AF_INPUTS.
+    datasets={"train": ray.data.read_parquet(os.environ["AF_INPUTS"])},
+    scaling_config=ScalingConfig(
+        num_workers=(1, int(os.environ["AF_MAX_WORKERS"])),
+        use_gpu=True,
+    ),
+    run_config=RunConfig(
+        # 2. The checkpoints go to AF_OUTPUT.
+        storage_path=os.environ["AF_OUTPUT"],
+        failure_config=FailureConfig(max_failures=10),
+    ),
+)
+```
+
+A script that works on plain files copies them next to itself first, and its
+results back:
+
+```python
+# train.py
+import os
+from pathlib import Path
+
+import pyarrow.fs
+import torch
+
+Path("/tmp/inputs").mkdir()
+pyarrow.fs.copy_files(os.environ["AF_INPUTS"], "/tmp/inputs")
+
+model = torch.nn.Linear(20, 1).to("cuda")
+...
+
+Path("/tmp/results").mkdir()
+torch.save(model.state_dict(), "/tmp/results/model.pt")
+pyarrow.fs.copy_files("/tmp/results", os.environ["AF_OUTPUT"])
+```
+
+Good to know on NRP:
+
+* **Keep your GPUs busy.** NRP asks for it: a job with a GPU under 40% busy
+  over 30 minutes is stopped.
+* **Starting.** A job can take up to half an hour to start, and is stopped if
+  it has not by then.
+* **Workers.** Each has one GPU, 4 CPU cores and 16 GB of memory. All the GPUs
+  of a job are of one model, which you do not choose.
+* **Environment.** Jobs run the Python (pixi global) environment. Add packages
+  with `runtime_env={"pip": ["<package>"]}`.
+* **Results.** They arrive in `af-output` when the job ends, also if it fails
+  or you stop it. It reads RUNNING until they have.
+
 ## Settings
 
 The `headers` of the `JobSubmissionClient` say what your jobs run on. A
@@ -486,6 +569,9 @@ value is a string:
 | `af-cpus-per-worker`   | CPU cores of each worker, up to `"16"`                          | `"8"`                |
 | `af-ram-per-worker-gb` | Memory of each worker in GB, up to `"64"`                       | `"32"`               |
 | `af-env`               | [An environment of your own](#your-own-environment)             | Python (pixi global) |
+| `af-site`              | `"nrp"` to [run on NRP](#more-gpus-on-nrp)                      | Purdue               |
+| `af-inputs`            | A directory your job reads, in `AF_INPUTS`                      |                      |
+| `af-output`            | A directory for its results, in `AF_OUTPUT`                     |                      |
 
 Each job runs with the settings it was submitted with.
 
