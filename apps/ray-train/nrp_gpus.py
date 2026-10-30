@@ -142,7 +142,8 @@ def open_nodes(
     models: list[dict[str, Any]],
     worker: Worker,
 ) -> list[Node]:
-    """The nodes with room for a worker, of a known region and GPU model."""
+    """The nodes with room for a worker, of a known region and GPU model; with no
+    `requested`, the room each would have empty."""
     free, held, closed = free_by_node(allocatable, requested, unschedulable)
     region_of = regions_of(regions)
     model_of = {s["metric"]["Hostname"]: s["metric"]["modelName"] for s in models}
@@ -207,6 +208,20 @@ async def nodes(http: ClientSession, prometheus: str, worker: Worker) -> list[No
         )
     )
     return open_nodes(allocatable, requested, unschedulable, regions, models, worker)
+
+
+async def most_when_empty(http: ClientSession, prometheus: str, worker: Worker) -> int:
+    """The most workers one job may have: those nodes of one region and GPU model
+    that take pods have room for when nothing else runs on them."""
+    allocatable, unschedulable, regions, models = await asyncio.gather(
+        *(
+            query(http, prometheus, promql)
+            for promql in (ALLOCATABLE, UNSCHEDULABLE, REGIONS, MODELS)
+        )
+    )
+    return most_in_one_group(
+        open_nodes(allocatable, [], unschedulable, regions, models, worker)
+    )
 
 
 def worker_of(template: dict[str, Any]) -> Worker:

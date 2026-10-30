@@ -204,18 +204,6 @@ def workers_of(job: dict[str, Any]) -> int:
     return int(group["replicas"])
 
 
-def held_gpus(job: dict[str, Any]) -> int:
-    """The GPUs a RayJob's workers ask for."""
-    total = 0
-    for group in job["spec"]["rayClusterSpec"].get("workerGroupSpecs") or []:
-        for container in group["template"]["spec"]["containers"]:
-            requests = (container.get("resources") or {}).get("requests") or {}
-            total += int(group.get("replicas", 0)) * int(
-                requests.get("nvidia.com/gpu", 0)
-            )
-    return total
-
-
 class Bucket:
     """The NRP S3 bucket of the gateway's nrp-s3 keys; boto3 reads the endpoint from AWS_ENDPOINT_URL."""
 

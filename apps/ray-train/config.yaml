@@ -49,10 +49,9 @@ ldapBase: ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
 accountKeptVolumes: [log-volume, cvmfs]
 
 # NRP Nautilus (apps/interlink/nrp), where a job runs with af-site: nrp (rayjob-nrp.yaml): its public Prometheus,
-# by which nrp_gpus.py counts the workers that fit where, the most GPUs all AF jobs there hold together, and how
-# long a job's cluster may take to start, its nodes pulling the image first, before the job is removed.
+# by which nrp_gpus.py counts the workers that fit where, and how long a job's cluster may take to start, its
+# nodes pulling the image first, before the job is removed.
 nrpPrometheusUrl: https://prometheus.nrp-nautilus.io
-nrpGpuBudget: 20
 nrpStartTimeoutSeconds: 1800
 # A running job on NRP any of whose GPUs was busy less than this percentage, on average over the window, is stopped:
 # NRP asks for 40% or more, and bans a namespace that keeps GPUs idle.

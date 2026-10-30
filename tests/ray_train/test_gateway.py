@@ -2869,7 +2869,10 @@ async def test_a_job_on_nrp_of_up_to_some_workers_takes_those_with_room(nrp_env)
 
 async def test_a_job_on_nrp_waits_for_room_and_is_stopped_if_none_comes(nrp_env):
     env = nrp_env
-    submission = await nrp_submitted(env, **{gw.WORKERS_METADATA: "5"})
+    env.answers[nrp_gpus.REQUESTED] = [
+        nrp_sample(1, node="west-2", resource="nvidia_com_gpu")
+    ]
+    submission = await nrp_submitted(env, **{gw.WORKERS_METADATA: "4"})
     job = nrp_job(env)
     assert job["spec"]["suspend"] is True
     found = await details(env, submission)
@@ -2885,13 +2888,23 @@ async def test_a_job_on_nrp_waits_for_room_and_is_stopped_if_none_comes(nrp_env)
     assert (found["status"], found["message"]) == ("STOPPED", gw.STOPPED_NO_ROOM)
 
 
-async def test_jobs_on_nrp_hold_no_more_gpus_than_the_budget(nrp_env, monkeypatch):
-    monkeypatch.setattr(gw, "NRP_GPU_BUDGET", 3)
-    await nrp_submitted(nrp_env, **{gw.WORKERS_METADATA: "2"})
-    status, reason, _ = await nrp_submit(nrp_env, **{gw.WORKERS_METADATA: "2"})
+async def test_a_job_on_nrp_asks_for_no_more_workers_than_one_group_holds_empty(
+    nrp_env,
+):
+    status, reason, _ = await nrp_submit(nrp_env, **{gw.WORKERS_METADATA: "5"})
     assert status == 429
-    assert "hold 2 of the 3" in reason
-    await nrp_submitted(nrp_env)
+    assert "at most 4" in reason
+    # Room taken by other pods still counts: such a job waits for it.
+    await nrp_submitted(nrp_env, **{gw.WORKERS_METADATA: "4"})
+    await nrp_submitted(nrp_env, **{gw.WORKERS_METADATA: "4"})
+
+
+async def test_a_job_on_nrp_is_refused_while_nrp_prometheus_shows_no_nodes(nrp_env):
+    nrp_env.answers[nrp_gpus.ALLOCATABLE] = []
+    status, reason, _ = await nrp_submit(nrp_env)
+    assert status == 503
+    assert "none of its GPU nodes" in reason
+    assert nrp_env.nrp.jobs == {}
 
 
 async def test_the_code_a_job_on_nrp_uploads_reaches_it_through_its_s3_prefix(nrp_env):

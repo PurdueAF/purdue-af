@@ -73,7 +73,6 @@ def test_a_job_runs_its_submission_suspended_until_placed():
     assert spec["entrypointNumGpus"] == 1
     assert json.loads(spec["entrypointResources"]) == {"custom": 1}
     assert nrp.workers_of(job) == 3
-    assert nrp.held_gpus(job) == 3
 
 
 def test_a_placed_job_runs_its_workers_on_its_nodes_and_its_head_in_their_region():
