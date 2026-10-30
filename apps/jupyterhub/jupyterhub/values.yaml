@@ -388,6 +388,10 @@ hub:
     prometheus: {}
     # Token only, in the same Secret: read by the Ray Train gateway (apps/ray-train).
     ray-train-gateway: {}
+    # Its token, in the same Secret, with no role, is PurdueAF Agent's identity; its route, the Mattermost login (apps/mattermost-agent).
+    mattermost-agent:
+      url: "http://mattermost-agent.${namespace}.svc.cluster.local:8080"
+      display: false
   loadRoles:
     # read:servers!user lets a session see itself; delete:servers!server lets it shut itself down.
     server:

@@ -86,6 +86,13 @@ resources:
   - ../../apps/agentic-interface/service.yaml
   - ../../apps/agentic-interface/networkpolicy.yaml
 
+  # PurdueAF Agent: answers @mentions on CERN Mattermost.
+  - ../../apps/mattermost-agent/deployment.yaml
+  - ../../apps/mattermost-agent/networkpolicy.yaml
+  - ../../apps/mattermost-agent/pvc.yaml
+  - ../../apps/mattermost-agent/service.yaml
+  - ../../apps/mattermost-agent/secret.yaml
+
   - ../../apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml
   - ../../apps/monitoring/af-monitoring/daemonset-af-node-probe.yaml
   - ../../apps/monitoring/af-monitoring/af-node-monitor-rbac.yaml
@@ -175,6 +182,49 @@ configMapGenerator:
   - name: kuberay-operator-config
     files:
       - values.yaml=../../apps/ray/operator/values.yaml
+
+  - name: mattermost-agent
+    options:
+      annotations:
+        # code and its prompt, not manifests — keep Flux substitution away
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../apps/mattermost-agent/agent.py
+      - ../../apps/mattermost-agent/system-prompt.md
+
+  - name: mattermost-agent-docs
+    options:
+      annotations:
+        # pages full of ${...} — keep Flux substitution away
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../docs/docs/data-access.md
+      - ../../docs/docs/getting-started.md
+      - ../../docs/docs/gpus.md
+      - ../../docs/docs/guide-agentic-interface.md
+      - ../../docs/docs/guide-cern-eos.md
+      - ../../docs/docs/guide-combine.md
+      - ../../docs/docs/guide-conda.md
+      - ../../docs/docs/guide-dask-gateway.md
+      - ../../docs/docs/guide-dask.md
+      - ../../docs/docs/guide-eos-write.md
+      - ../../docs/docs/guide-file-transfer.md
+      - ../../docs/docs/guide-ide-connection.md
+      - ../../docs/docs/guide-mc-gen.md
+      - ../../docs/docs/guide-pixi.md
+      - ../../docs/docs/guide-ray-train.md
+      - ../../docs/docs/guide-roofit-cuda.md
+      - ../../docs/docs/guide-rucio.md
+      - ../../docs/docs/guide-ssh-access.md
+      - ../../docs/docs/hardware.md
+      - ../../docs/docs/index.md
+      - ../../docs/docs/interface.md
+      - ../../docs/docs/login-methods.md
+      - ../../docs/docs/scaling-out.md
+      - ../../docs/docs/software.md
+      - ../../docs/docs/storage.md
+      - ../../docs/docs/support.md
+      - ../../docs/docs/troubleshooting.md
 
   - name: agentic-analysis-llm-proxy
     options:

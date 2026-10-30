@@ -163,3 +163,11 @@ context = 50_000
 compact_at = 40_000
 images = 0
 class = 4
+
+# PurdueAF Agent (apps/mattermost-agent): someone is waiting in a thread.
+[roles.facility-assistant]
+backends = ["deepseek-v4-flash", "qwen3-small#medium"]
+context = 60_000
+compact_at = 50_000
+images = 0
+class = 0

@@ -71,6 +71,7 @@ Whether each component on the cluster is running what is on `main`
 ![kuberay-operator][experimental-ray-operator]
 ![ray-train][experimental-ray-train]
 ![krab][experimental-krab]
+![mattermost-agent][experimental-mattermost-agent]
 
 **Images** — which tag each one ships on: [RELEASING.md](RELEASING.md).
 
@@ -132,6 +133,7 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-sonic-supersonic-interlink-nrp]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-sonic-supersonic-interlink-nrp.json
 [experimental-ray-operator]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-ray-operator.json
 [experimental-ray-train]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-ray-train.json
+[experimental-mattermost-agent]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-mattermost-agent.json
 [experimental-krab]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-krab.json
 [image-purdue-af]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-purdue-af.json
 [image-agentic-interface]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-agentic-interface.json
