@@ -172,6 +172,24 @@ solutions. If your problem is not listed here, please
     Submit from a session started without a GPU — see
     [Before you start](guide-ray-train.md#before-you-start).
 
+??? failure "A job on NRP stops with \"NRP asks each GPU for 40%\""
+
+    A GPU of your job sat idle: use more data loaders or larger batches, or
+    run it at Purdue — see [More GPUs on NRP](guide-ray-train.md#more-gpus-on-nrp).
+
+??? failure "A job on NRP stops with \"NRP had no room\" or \"did not start in time\""
+
+    NRP was too busy: ask for fewer workers, or try again later.
+
+??? failure "A job on NRP stops with \"Copying its inputs to NRP failed\""
+
+    Check that `af-inputs` is a directory you can read.
+
+??? failure "A submission fails with \"would be made at the top of\""
+
+    `af-inputs` and `af-output` go inside a directory of yours, such as
+    `/work/users/<username>/results`, not directly in `/work` or `/depot/cms`.
+
 ??? failure "A submission fails with \"No token\""
 
     Your session has no `RAY_AUTH_TOKEN`: restart it.
