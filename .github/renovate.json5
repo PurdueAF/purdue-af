@@ -333,9 +333,11 @@
     },
     {
       // traefik chart >=42 requires kubeVersion >=1.30; cluster is on 1.29.
+      // Its package name is the OCI path; docker versioning has no range
+      // support — use a regex pin.
       matchManagers: ['flux'],
-      matchPackageNames: ['traefik'],
-      allowedVersions: '<42.0.0',
+      matchPackageNames: ['ghcr.io/traefik/helm/traefik'],
+      allowedVersions: '/^41\\./',
     },
     {
       // Hold Triton at 26.04 for Geddes GPU nodes on NVIDIA driver R580.
@@ -523,6 +525,14 @@
       matchPackageNames: ['wrapt'],
       matchFileNames: ['pixi/global/pixi.toml'],
       allowedVersions: '/^1\\./',
+    },
+    {
+      // The bokeh cap in pixi/global/pixi.toml, which Renovate reads as an
+      // ordinary range and would raise. Relax with that cap.
+      // Regex: this allowedVersions replaces the stable-only one above.
+      matchPackageNames: ['bokeh'],
+      matchFileNames: ['pixi/global/pixi.toml'],
+      allowedVersions: '/^3\\.9\\.\\d+$/',
     },
   ],
 }
