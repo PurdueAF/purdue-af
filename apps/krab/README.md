@@ -6,7 +6,7 @@ in [`helm/README.md`](https://gitlab.cern.ch/bgalewsk/krab/-/blob/master/helm/RE
 
 | File | Contents |
 | --- | --- |
-| `gitrepo.yaml` | the upstream repository, branch `master` |
+| `gitrepo.yaml` | the upstream repository, branch `worker_k8s_config` |
 | `helmrelease.yaml` | the `krab` release of its `helm/` chart |
 | `values.yaml` | overrides of the chart's NGT values for Geddes |
 | `pvc.yaml` | `krab-outputs`, mounted at `/krab-outputs` in the Celery workers |
@@ -24,7 +24,8 @@ kubectl -n cms port-forward svc/krab-rabbitmq 15672:15672
 Purdue EOS is mounted read-only at `/eos/purdue` in the run pods and the Celery workers, so a
 run's `input_globs` can name files under `/eos/purdue/store`.
 
-Upstream commits to `master` reach the cluster on the next reconcile; `values.yaml` overrides the
+Upstream commits to that branch reach the cluster on the next reconcile; the chart comes from the
+branch and the code location image from its `worker-k8s-config` tag. `values.yaml` overrides the
 upstream `helm/values.yaml`, so a change there can need one here.
 
 ## CERN credentials

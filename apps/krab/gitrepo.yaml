@@ -7,4 +7,4 @@ spec:
   interval: 1m
   url: https://gitlab.cern.ch/bgalewsk/krab.git
   ref:
-    branch: master
+    branch: worker_k8s_config
