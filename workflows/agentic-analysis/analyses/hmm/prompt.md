@@ -32,7 +32,7 @@ data, the H→µµ signal samples and the simulated backgrounds as CMS NanoAOD
 datasets, one private production by the directory of its files; the signal
 samples' cross sections; and each period's integrated luminosity,
 certified-luminosity JSON and single-muon trigger, with their sources. Find a
-dataset's files with DAS and read them through XCache.
+dataset's files with DAS.
 
 Resources: process the data on Dask Gateway with as many cores as help, up to
 1000. A model that trains on GPUs does so through Ray, on at most 10 GPUs at

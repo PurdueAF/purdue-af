@@ -41,7 +41,7 @@ Before each turn the runner configures OpenCode afresh from the proxy's
   `$HOME`, goes to the workspace's `opencode/quarantine`;
 - `FACILITY`, which the agent and every subagent read beside the analysis's
   `CLAUDE.md`: how this facility runs subagents, bounds and finds commands,
-  keeps an analysis's files, splits and reviews figures and treats PDFs, reads CMS data through XCache with the grid proxy the task pods
+  keeps an analysis's files, splits and reviews figures and treats PDFs, reads CMS data from Purdue's EOS and over AAA with the grid proxy the task pods
   hold, processes it on
   [Dask Gateway](../../apps/dask-gateway) with `af_dask.client()`, and trains
   on GPUs through [Ray](../../apps/ray-train) with `af_ray.client()`. Those

@@ -3,7 +3,7 @@
 The CMS H→µµ search with the full Run 2 dataset as an
 [`agentic-analysis`](../..) analysis, at full scale: the analysis of
 arXiv:2009.04363 done anew with the JFC methodology on the Ultra-Legacy
-NanoAOD, read through Purdue's XCache.
+NanoAOD.
 
 | File            | What it is                                                                                              |
 | --------------- | ------------------------------------------------------------------------------------------------------- |
