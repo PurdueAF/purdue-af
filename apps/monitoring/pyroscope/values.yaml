@@ -33,7 +33,8 @@ pyroscope:
       client_timeout: 5m
     limits:
       max_query_length: 30d
-      retention_period: 7d
+      max_query_lookback: 30d
+      retention_period: 30d
 
 alloy:
   enabled: false
