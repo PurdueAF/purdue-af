@@ -258,12 +258,14 @@ marker drawn for it. The findings follow from those measurements and the \
 intended content.
 - Error bars smaller than their marker are not missing.
 
-## Read CMS data through XCache
+## Read CMS data
 
-Read CMS datasets with uproot from \
-`root://xcache.cms.rcac.purdue.edu//store/...`, the dataset's file names after \
-the prefix. XCache asks for a grid proxy: this container and the analysis's \
-Dask workers hold the facility's, with which DAS answers too \
+Read CMS datasets with uproot, the dataset's file names after the prefix: a \
+file Purdue's EOS holds from `root://eos.cms.rcac.purdue.edu//store/...`, any \
+other over AAA from `root://cmsxrootd.fnal.gov//store/...`. `xrdfs \
+root://eos.cms.rcac.purdue.edu stat /store/...` says whether EOS holds a file. \
+AAA asks for a grid proxy: this container and the analysis's Dask workers hold \
+the facility's, with which DAS answers too \
 (`/cvmfs/cms.cern.ch/common/dasgoclient`). Never copy the proxy anywhere. The \
 environment has xrootd and fsspec-xrootd.
 
@@ -295,6 +297,9 @@ fits, such as toys, are tasks too.
 submits a task, as `dask.submit(lambda: 1).result(timeout=300)`, instead of \
 waiting for workers.
 - A pass runs in the foreground, with a `timeout` long enough for it.
+- A read over XRootD sometimes times out on a file the next try reads: start \
+its task with `retries=3`. A pass says which files it did not read, and never \
+leaves them out unsaid.
 - Workers see {root} as you do, and no other storage but /cvmfs, but start \
 elsewhere: give them absolute paths.
 - Workers run as you and write where you do.

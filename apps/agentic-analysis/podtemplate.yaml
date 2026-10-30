@@ -52,7 +52,7 @@ template:
             value: traefik-dask-gateway:8786
           - name: DASK_GATEWAY__AUTH__TYPE
             value: af_dask.AccountAuth
-          # The facility's grid proxy, which af-x509-secrets renews, for XCache and DAS.
+          # The facility's grid proxy, which af-x509-secrets renews, for AAA and DAS.
           - name: X509_USER_PROXY
             value: /etc/grid-security-ro/x509up
           - name: X509_CERT_DIR

@@ -53,7 +53,7 @@ periods:
       - process: Z/γ* → ℓℓ, 105 < m < 160 GeV, VBF filter, aMC@NLO
         paths:
           - /store/user/rasharma/customNanoAODv15/hadded/UL2016APV/DYJets_NanoAOD/
-        note: "a private NanoAODv15 production at Purdue, made with the generator configuration of CMS request HIG-RunIIFall18wmLHEGS-00874 (DYJetsToLL_M-105To160_VBFFilter_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8; https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get/HIG-RunIIFall18wmLHEGS-00874). It is not in DAS: list its files with `xrdfs root://eos.cms.rcac.purdue.edu ls` on the path, and read them through XCache like the others"
+        note: "a private NanoAODv15 production at Purdue, made with the generator configuration of CMS request HIG-RunIIFall18wmLHEGS-00874 (DYJetsToLL_M-105To160_VBFFilter_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8; https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get/HIG-RunIIFall18wmLHEGS-00874). It is not in DAS: list its files with `xrdfs root://eos.cms.rcac.purdue.edu ls` on the path, and read them from there"
       - process: electroweak Z + 2 jets, Z → ℓℓ
         datasets:
           - /EWKZ2Jets_ZToLL_M-50_TuneCP5_withDipoleRecoil_13TeV-madgraph-pythia8/RunIISummer20UL16NanoAODAPVv15-150X_mcRun2_asymptotic_preVFP_v1-v1/NANOAODSIM
@@ -194,7 +194,7 @@ periods:
       - process: Z/γ* → ℓℓ, 105 < m < 160 GeV, VBF filter, aMC@NLO
         paths:
           - /store/user/rasharma/customNanoAODv15/hadded/UL2016/DYJets_NanoAOD/
-        note: "a private NanoAODv15 production at Purdue, made with the generator configuration of CMS request HIG-RunIIFall18wmLHEGS-00874 (DYJetsToLL_M-105To160_VBFFilter_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8; https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get/HIG-RunIIFall18wmLHEGS-00874). It is not in DAS: list its files with `xrdfs root://eos.cms.rcac.purdue.edu ls` on the path, and read them through XCache like the others"
+        note: "a private NanoAODv15 production at Purdue, made with the generator configuration of CMS request HIG-RunIIFall18wmLHEGS-00874 (DYJetsToLL_M-105To160_VBFFilter_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8; https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get/HIG-RunIIFall18wmLHEGS-00874). It is not in DAS: list its files with `xrdfs root://eos.cms.rcac.purdue.edu ls` on the path, and read them from there"
       - process: electroweak Z + 2 jets, Z → ℓℓ
         datasets:
           - /EWKZ2Jets_ZToLL_M-50_TuneCP5_withDipoleRecoil_13TeV-madgraph-pythia8/RunIISummer20UL16NanoAODv15-150X_mcRun2_asymptotic_v1-v1/NANOAODSIM
@@ -338,7 +338,7 @@ periods:
       - process: Z/γ* → ℓℓ, 105 < m < 160 GeV, VBF filter, aMC@NLO
         paths:
           - /store/user/rasharma/customNanoAODv15/hadded/UL2017/DYJets_NanoAOD/
-        note: "a private NanoAODv15 production at Purdue, made with the generator configuration of CMS request HIG-RunIIFall18wmLHEGS-00874 (DYJetsToLL_M-105To160_VBFFilter_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8; https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get/HIG-RunIIFall18wmLHEGS-00874). It is not in DAS: list its files with `xrdfs root://eos.cms.rcac.purdue.edu ls` on the path, and read them through XCache like the others"
+        note: "a private NanoAODv15 production at Purdue, made with the generator configuration of CMS request HIG-RunIIFall18wmLHEGS-00874 (DYJetsToLL_M-105To160_VBFFilter_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8; https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get/HIG-RunIIFall18wmLHEGS-00874). It is not in DAS: list its files with `xrdfs root://eos.cms.rcac.purdue.edu ls` on the path, and read them from there"
       - process: electroweak Z + 2 jets, Z → ℓℓ
         datasets:
           - /EWKZ2Jets_ZToLL_M-50_TuneCP5_withDipoleRecoil_13TeV-madgraph-pythia8/RunIISummer20UL17NanoAODv15-150X_mc2017_realistic_v1-v1/NANOAODSIM
@@ -481,7 +481,7 @@ periods:
       - process: Z/γ* → ℓℓ, 105 < m < 160 GeV, VBF filter, aMC@NLO
         paths:
           - /store/user/rasharma/customNanoAODv15/hadded/UL2018/DYJets_NanoAOD/
-        note: "a private NanoAODv15 production at Purdue, made with the generator configuration of CMS request HIG-RunIIFall18wmLHEGS-00874 (DYJetsToLL_M-105To160_VBFFilter_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8; https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get/HIG-RunIIFall18wmLHEGS-00874). It is not in DAS: list its files with `xrdfs root://eos.cms.rcac.purdue.edu ls` on the path, and read them through XCache like the others"
+        note: "a private NanoAODv15 production at Purdue, made with the generator configuration of CMS request HIG-RunIIFall18wmLHEGS-00874 (DYJetsToLL_M-105To160_VBFFilter_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8; https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get/HIG-RunIIFall18wmLHEGS-00874). It is not in DAS: list its files with `xrdfs root://eos.cms.rcac.purdue.edu ls` on the path, and read them from there"
       - process: electroweak Z + 2 jets, Z → ℓℓ
         datasets:
           - /EWKZ2Jets_ZToLL_M-50_TuneCP5_withDipoleRecoil_13TeV-madgraph-pythia8/RunIISummer20UL18NanoAODv15-150X_mc2018_realistic_v1-v1/NANOAODSIM

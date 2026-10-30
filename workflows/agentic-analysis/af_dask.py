@@ -27,7 +27,7 @@ except ImportError:
 # The variable naming the file that holds the workload account's token, which af_ray reads too.
 TOKEN_FILE = "AF_ACCOUNT_TOKEN_FILE"
 
-# The gateway requires PATH; the rest make workers profile and verify XCache as the scripts do.
+# The gateway requires PATH; the rest make workers profile and verify XRootD servers as the scripts do.
 PASSED = (
     "PATH",
     "PYROSCOPE_SERVER",
