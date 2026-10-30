@@ -1,6 +1,6 @@
 """Gives an analysis's scripts a Dask cluster on the facility's Dask Gateway
-that runs the environment they run in. The runner installs it into each
-analysis's environment; the task pod's DASK_GATEWAY__* variables name the
+that runs the environment they run in. The plugin af_opencode.js keeps it in
+each analysis's environment; the task pod's DASK_GATEWAY__* variables name the
 gateway, and its workload account's token whose clusters they are."""
 
 import fcntl
@@ -17,7 +17,7 @@ try:
     from dask_gateway.auth import GatewayAuth
     from distributed import WorkerPlugin
 except ImportError:
-    # The runner imports this module without Dask to install it.
+    # The runner imports this module without Dask.
     GatewayAuth = WorkerPlugin = object
 
 # The variable naming the file that holds the workload account's token, which af_ray reads too.

@@ -585,9 +585,6 @@ def _fake_tools(monkeypatch, data):
     monkeypatch.setattr(runner, "_checkout", checkout)
     monkeypatch.setattr(runner, "_run", run)
     monkeypatch.setattr(runner, "_data", lambda analysis: data)
-    monkeypatch.setattr(
-        runner, "_install", lambda work: calls.append(("install", work))
-    )
     return calls
 
 
@@ -606,10 +603,9 @@ def test_prepare_stages_the_analysis_into_its_scaffold(root, monkeypatch):
     assert (work / "prompt.md").read_text() == "search for ZZ"
     assert (work / "docs/paper.pdf").is_file()
     assert (work / "ntuplize.py").is_file()
-    assert calls[-3:] == [
+    assert calls[-2:] == [
         ("pixi", "add", "--no-install", *runner.CONDA),
         ("pixi", "add", "--pypi", *runner.PACKAGES),
-        ("install", work),
     ]
 
 
@@ -635,15 +631,9 @@ def test_prepare_stages_an_analysis_that_brings_its_own_files(root, monkeypatch)
     assert not (work / "data").exists()
 
 
-def test_the_environment_gets_the_helpers_and_every_python_starts_the_profiler(
-    tmp_path, monkeypatch
-):
+def test_the_helpers_start_the_profiler_in_every_python_of_the_environment(tmp_path):
     packages, seen = tmp_path / "site-packages", tmp_path / "seen.json"
     packages.mkdir()
-    python = tmp_path / ".pixi/envs/default/bin/python"
-    python.parent.mkdir(parents=True)
-    python.write_text(f"#!/bin/sh\necho {packages}\n")
-    python.chmod(0o755)
     (packages / "pyroscope.py").write_text(
         "import json, os\n"
         "def configure(**options):\n"
@@ -653,7 +643,8 @@ def test_the_environment_gets_the_helpers_and_every_python_starts_the_profiler(
         "    pass\n"
     )
 
-    runner._install(tmp_path)
+    for helper in runner._helpers(tmp_path).iterdir():
+        shutil.copy(helper, packages)
     for module in (profiling, clusters, gpus):
         installed = packages / f"{module.__name__}.py"
         assert installed.read_text() == open(module.__file__).read()
@@ -741,17 +732,6 @@ def test_a_profiler_that_cannot_start_leaves_the_script_alone(
     assert pyroscope.at_exit == []
 
 
-def test_a_turn_goes_on_when_the_helpers_cannot_be_installed(root, monkeypatch):
-    _fake_tools(monkeypatch, root)
-
-    def broken(work):
-        raise subprocess.CalledProcessError(1, "python")
-
-    monkeypatch.setattr(runner, "_install", broken)
-
-    assert runner._prepare(root / "run", ANALYSIS) == root / "run/jfc/analyses/zz"
-
-
 def test_prepare_puts_the_scope_of_an_analysis_after_its_prompt(root, monkeypatch):
     _fake_tools(monkeypatch, root)
     narrowed = runner.Analysis(**{**vars(ANALYSIS), "scope": "Two samples only."})
@@ -773,9 +753,7 @@ def test_prepare_stages_only_the_prompt_of_an_analysis_that_names_nothing_else(
     assert sorted(path.name for path in work.iterdir()) == ["prompt.md"]
 
 
-def test_prepare_leaves_a_staged_workspace_to_the_agent_but_its_helpers(
-    root, monkeypatch
-):
+def test_prepare_leaves_a_staged_workspace_to_the_agent(root, monkeypatch):
     calls = _fake_tools(monkeypatch, root)
     work = runner._prepare(root / "run", ANALYSIS)
     (work / "prompt.md").unlink()
@@ -784,8 +762,7 @@ def test_prepare_leaves_a_staged_workspace_to_the_agent_but_its_helpers(
 
     assert runner._prepare(root / "run", ANALYSIS) == work
 
-    # The helpers of each turn's rules reach a workspace staged before them.
-    assert calls == [("install", work)]
+    assert calls == []
     assert (work / "experiment_log.md").is_file()
 
 
@@ -804,16 +781,15 @@ def test_prepare_redoes_a_setup_that_died_before_its_last_step(root, monkeypatch
     monkeypatch.setattr(runner, "_run", run)
     calls.clear()
 
-    work = runner._prepare(root / "run", ANALYSIS)
+    runner._prepare(root / "run", ANALYSIS)
 
     assert [call[:2] for call in calls[:2]] == [
         ("checkout", "jfc"),
         ("checkout", "source"),
     ]
-    assert calls[-3:] == [
+    assert calls[-2:] == [
         ("pixi", "add", "--no-install", *runner.CONDA),
         ("pixi", "add", "--pypi", *runner.PACKAGES),
-        ("install", work),
     ]
 
 
@@ -1294,6 +1270,7 @@ def test_setup_writes_opencodes_configuration_read_only_off_the_workspace(
         cores=runner.CORES,
         hours=runner.COMMAND_HOURS,
         minutes=runner.COMMAND_MINUTES,
+        python=runner.PYTHON,
         root=runner.ROOT,
     )
     for file in (plugin_file, Path(facility)):
@@ -1308,6 +1285,7 @@ def test_setup_writes_opencodes_configuration_read_only_off_the_workspace(
     )
     plugin = json.loads(env["AF_PLUGIN"])
     assert plugin["records"] == str(home / "opencode" / "records.jsonl")
+    assert (Path(plugin["helpers"]) / plugin["hook"]).is_file()
     assert plugin["tasks"] == str(home / "opencode" / "tasks")
     assert plugin["seats"] == runner.SEATS
     assert plugin["timeout"] == runner.COMMAND_HOURS * 3_600_000
@@ -2125,6 +2103,125 @@ def test_an_image_too_large_for_a_request_of_its_role_is_refused(tmp_path):
     assert [outcome == "shown" for outcome in shown] == [False, True, False, True, True]
 
 
+SITE = ".pixi/envs/default/lib/python3.12/site-packages"
+# Where a rebuild on another Python leaves an environment's packages.
+MOVED = ".pixi/envs/default/lib/python3.11/site-packages"
+# Runs the plugin in argv[2] on the analysis in argv[3], for argv[4]'s steps: "bash" as a command starts, or an environment's rebuild, the directory to empty.
+BUILT = """
+import fs from "node:fs";
+const [plugin, directory, steps] = process.argv.slice(2);
+const hooks = await (await import(plugin)).default.server({ directory });
+for (const step of JSON.parse(fs.readFileSync(steps)))
+  if (step === "bash")
+    await hooks["tool.execute.before"](
+      { tool: "bash", sessionID: "ses_1", callID: "call_1" },
+      { args: { command: "true" } },
+    );
+  else {
+    fs.rmSync(step, { recursive: true, force: true });
+    fs.mkdirSync(step, { recursive: true });
+  }
+"""
+
+
+def _run_plugin(tmp_path, steps, helpers=None):
+    """The analysis the plugin ran on, and the records it wrote, once it has
+    gone through `steps`."""
+    plugin, work = tmp_path / "af_opencode.mjs", tmp_path / "work"
+    plugin.write_text(runner.PLUGIN.read_text())
+    (tmp_path / "built.mjs").write_text(BUILT)
+    (tmp_path / "steps.json").write_text(
+        json.dumps([step if step == "bash" else str(work / step) for step in steps])
+    )
+    (tmp_path / "local").mkdir(exist_ok=True)
+    settings = {
+        "records": str(tmp_path / "records.jsonl"),
+        "tasks": str(tmp_path / "tasks"),
+        "helpers": str(helpers or runner._helpers(tmp_path / "local")),
+        "hook": runner.HOOK,
+        "seats": 1,
+        "images": {},
+    }
+    (work / SITE).mkdir(parents=True, exist_ok=True)
+    # Conda's alias of the Python directory.
+    alias = work / SITE.replace("python3.12", "python3.1")
+    if not alias.parent.is_symlink():
+        alias.parent.symlink_to("python3.12")
+    subprocess.run(
+        ["node", tmp_path / "built.mjs", plugin, work, tmp_path / "steps.json"],
+        env={**os.environ, "AF_PLUGIN": json.dumps(settings)},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return work, [
+        record
+        for line in (tmp_path / "records.jsonl").read_text().splitlines()
+        if (record := json.loads(line))["kind"] == "helpers"
+    ]
+
+
+@NODE
+def test_a_turn_puts_the_helpers_into_the_environment(tmp_path):
+    work, (record,) = _run_plugin(tmp_path, [])
+
+    assert record == {
+        "t": record["t"],
+        "kind": "helpers",
+        "packages": str(work / SITE),
+        "error": None,
+    }
+    assert sorted(path.name for path in (work / SITE).iterdir()) == sorted(
+        path.name for path in (tmp_path / "local/helpers").iterdir()
+    )
+
+
+@NODE
+def test_a_command_finds_the_helpers_a_rebuild_took_out(tmp_path):
+    work, records = _run_plugin(tmp_path, [MOVED, "bash", "bash"])
+
+    assert [record["packages"] for record in records] == [
+        str(work / SITE),
+        str(work / MOVED),
+    ]
+    assert (work / MOVED / runner.HOOK).is_file()
+    assert (work / MOVED / "af_dask.py").is_file()
+
+
+@NODE
+def test_a_command_leaves_helpers_that_are_there_and_a_turn_renews_them(tmp_path):
+    work, _ = _run_plugin(tmp_path, ["bash"])
+    (work / SITE / "af_dask.py").write_text("older")
+
+    _run_plugin(tmp_path, ["bash"], tmp_path / "local/helpers")
+
+    assert "account_token" in (work / SITE / "af_dask.py").read_text()
+
+
+@NODE
+def test_helpers_that_cannot_be_put_there_leave_the_command_to_run(tmp_path):
+    _, (record, again) = _run_plugin(tmp_path, [SITE, "bash"], tmp_path / "no-helpers")
+
+    assert "ENOENT" in again["error"]
+    assert record["error"] == again["error"]
+
+
+def test_a_turn_logs_where_the_helpers_went_and_why_they_did_not(
+    tmp_path, workspace, capsys
+):
+    records = (
+        {"kind": "loaded"},
+        {"kind": "helpers", "packages": "/env/a", "error": None},
+        {"kind": "helpers", "packages": "/env/b", "error": "EACCES"},
+    )
+
+    _run(tmp_path, workspace, _step({"text": "done"}), records=records)
+
+    logged = capsys.readouterr().out
+    assert "helpers in /env/a: put there" in logged
+    assert "helpers in /env/b: EACCES" in logged
+
+
 @pytest.fixture
 def quick(monkeypatch):
     monkeypatch.setattr(runner, "POLL", 0.05)
@@ -2362,6 +2459,7 @@ def test_each_turn_reads_the_runners_facility_rules(root, stretch, monkeypatch):
             cores=runner.CORES,
             hours=runner.COMMAND_HOURS,
             minutes=runner.COMMAND_MINUTES,
+            python=runner.PYTHON,
             root=runner.ROOT,
         )
     ]

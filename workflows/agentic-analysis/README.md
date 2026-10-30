@@ -60,7 +60,9 @@ Before each turn the runner configures OpenCode afresh from the proxy's
   ended its turn to end it again, and a subagent in the middle of its task to
   go on with that task, as the orchestrator gave and resumed it, and nothing
   beyond it; gives commands the pod's
-  own XDG directories and holds their timeout to `COMMAND_HOURS`; and records
+  own XDG directories and holds their timeout to `COMMAND_HOURS`; puts the
+  three helpers into the analysis's environment at the turn's start, and back
+  into it before any command after a rebuild took them out; and records
   each request and command as it starts and what the subagents do, which the
   task's log follows.
 
@@ -78,9 +80,9 @@ agent's sessions, its subagents' tasks and the plugin's records in
 Every Python process in an analysis's environment, its Dask cluster's
 included, sends CPU profiles to [Pyroscope](../../apps/monitoring/pyroscope),
 under `service_name="agentic-analysis"` and tagged with its `analysis`, `workspace` and
-`script`. The setup keeps that environment's Python within the versions
-`pyroscope-io` ships wheels for, adds `CONDA` and `PACKAGES`, and installs the
-three helpers, with a `.pth` file that starts `af_profiling`.
+`script`. The setup puts that environment on `PYTHON` and adds `CONDA` and
+`PACKAGES`; the helpers the plugin keeps there include a `.pth` file, `HOOK`,
+that starts `af_profiling`.
 
 ## Running
 
@@ -133,7 +135,8 @@ A directory `analyses/<name>` with an `analysis.toml`:
 
 All in `agentic_analysis.py`:
 
-- `JFC` pins the methodology by commit.
+- `JFC` pins the methodology by commit, and `PYTHON` the version every
+  analysis runs.
 - `AGENTS` puts each JFC role on a role of the proxy's; `PERMISSION`, `SEATS`
   and `FACILITY` are what every agent works under.
 - `env` holds what a task pod reserves; `RETRIES` and the timeout of `advance`
