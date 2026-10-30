@@ -59,6 +59,10 @@ request within NRP's fair use:
 
 `/v1/models` lists the roles, `/config` their contexts, image counts and the
 body cap for the runner, `/status` each model's slots and load, `/healthz`
-that it runs. Each request it forwards leaves one JSON line in its log. The proxy exits once the kubelet's
-copy of either file differs from the one it started with, and starts again with
-it.
+that it runs. Each request it forwards leaves a JSON line in its log as it
+arrives and another, with what it took, as it ends, both naming its role,
+session, agent and parent session. On SIGTERM, or once the kubelet's copy of
+either file differs from the one it started with, the proxy answers further
+requests with a 503 to retry later, gives those in flight up to `drain_seconds`
+and exits. The kubelet then starts it again, or the Deployment replaces a pod
+that was being deleted.
