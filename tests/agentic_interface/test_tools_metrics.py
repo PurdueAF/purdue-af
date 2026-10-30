@@ -152,6 +152,15 @@ async def test_allowed_labels_name_the_series(tool):
 
 
 @respx.mock
+async def test_a_ratio_with_no_denominator_is_left_out(tool):
+    rows = {"free": [sample("NaN", node="a"), sample(2, node="b")]}
+    respx.get(PROM).mock(side_effect=lambda r: answer(r, rows))
+    out = await tool(section="Nodes")
+    assert "- Free: b: 2" in out
+    assert "nan" not in out.lower()
+
+
+@respx.mock
 async def test_a_panels_series_are_capped(tool):
     count = metrics.MAX_SERIES + 5
     rows = {"free": [sample(1, node=f"n{i}") for i in range(count)]}
