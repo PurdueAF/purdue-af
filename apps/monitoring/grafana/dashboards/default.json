@@ -1293,8 +1293,8 @@
         "h": 8
       },
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "datasource",
+        "uid": "-- Mixed --"
       },
       "targets": [
         {
@@ -1344,9 +1344,42 @@
           "range": false,
           "instant": true,
           "format": "table"
+        },
+        {
+          "refId": "NA",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "label_replace(sum((min by (node) (label_replace(floor(sum by (node) (kube_node_status_allocatable{resource=\"nvidia_com_gpu\"})), \"r\", \"gpu\", \"\", \"\") or label_replace(floor(sum by (node) (kube_node_status_allocatable{resource=\"cpu\"}) / 4), \"r\", \"cpu\", \"\", \"\") or label_replace(floor(sum by (node) (kube_node_status_allocatable{resource=\"memory\"}) / 17179869184), \"r\", \"memory\", \"\", \"\")) and on(node) ((sum by (node) (kube_node_status_allocatable{resource=\"nvidia_com_gpu\"}) > 0) unless on(node) (count by (node) (kube_node_spec_taint{effect=~\"NoSchedule|NoExecute\"}) or max by (node) (kube_node_spec_unschedulable) == 1 or max by (node) (kube_node_status_condition{condition=\"Ready\", status=\"true\"}) == 0)))), \"resource\", \"nrp\", \"\", \"\")",
+          "legendFormat": "",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "refId": "NC",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "label_replace((sum((min by (node) (label_replace(floor((sum by (node) (kube_node_status_allocatable{resource=\"nvidia_com_gpu\"}) - (sum by (node) (kube_pod_container_resource_requests{resource=\"nvidia_com_gpu\"} and on(namespace, pod) cluster:namespace:pod_memory:active:kube_pod_container_resource_requests) or sum by (node) (kube_node_status_allocatable{resource=\"nvidia_com_gpu\"}) * 0))), \"r\", \"gpu\", \"\", \"\") or label_replace(floor((sum by (node) (kube_node_status_allocatable{resource=\"cpu\"}) - (sum by (node) (cluster:namespace:pod_cpu:active:kube_pod_container_resource_requests) or sum by (node) (kube_node_status_allocatable{resource=\"cpu\"}) * 0)) / 4), \"r\", \"cpu\", \"\", \"\") or label_replace(floor((sum by (node) (kube_node_status_allocatable{resource=\"memory\"}) - (sum by (node) (cluster:namespace:pod_memory:active:kube_pod_container_resource_requests) or sum by (node) (kube_node_status_allocatable{resource=\"memory\"}) * 0)) / 17179869184), \"r\", \"memory\", \"\", \"\")) and on(node) ((sum by (node) (kube_node_status_allocatable{resource=\"nvidia_com_gpu\"}) > 0) unless on(node) (count by (node) (kube_node_spec_taint{effect=~\"NoSchedule|NoExecute\"}) or max by (node) (kube_node_spec_unschedulable) == 1 or max by (node) (kube_node_status_condition{condition=\"Ready\", status=\"true\"}) == 0))) > 0) or sum((min by (node) (label_replace(floor(sum by (node) (kube_node_status_allocatable{resource=\"nvidia_com_gpu\"})), \"r\", \"gpu\", \"\", \"\") or label_replace(floor(sum by (node) (kube_node_status_allocatable{resource=\"cpu\"}) / 4), \"r\", \"cpu\", \"\", \"\") or label_replace(floor(sum by (node) (kube_node_status_allocatable{resource=\"memory\"}) / 17179869184), \"r\", \"memory\", \"\", \"\")) and on(node) ((sum by (node) (kube_node_status_allocatable{resource=\"nvidia_com_gpu\"}) > 0) unless on(node) (count by (node) (kube_node_spec_taint{effect=~\"NoSchedule|NoExecute\"}) or max by (node) (kube_node_spec_unschedulable) == 1 or max by (node) (kube_node_status_condition{condition=\"Ready\", status=\"true\"}) == 0)))) * 0), \"resource\", \"nrp\", \"\", \"\")",
+          "legendFormat": "",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "refId": "ND",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "label_replace(1 - ((sum((min by (node) (label_replace(floor((sum by (node) (kube_node_status_allocatable{resource=\"nvidia_com_gpu\"}) - (sum by (node) (kube_pod_container_resource_requests{resource=\"nvidia_com_gpu\"} and on(namespace, pod) cluster:namespace:pod_memory:active:kube_pod_container_resource_requests) or sum by (node) (kube_node_status_allocatable{resource=\"nvidia_com_gpu\"}) * 0))), \"r\", \"gpu\", \"\", \"\") or label_replace(floor((sum by (node) (kube_node_status_allocatable{resource=\"cpu\"}) - (sum by (node) (cluster:namespace:pod_cpu:active:kube_pod_container_resource_requests) or sum by (node) (kube_node_status_allocatable{resource=\"cpu\"}) * 0)) / 4), \"r\", \"cpu\", \"\", \"\") or label_replace(floor((sum by (node) (kube_node_status_allocatable{resource=\"memory\"}) - (sum by (node) (cluster:namespace:pod_memory:active:kube_pod_container_resource_requests) or sum by (node) (kube_node_status_allocatable{resource=\"memory\"}) * 0)) / 17179869184), \"r\", \"memory\", \"\", \"\")) and on(node) ((sum by (node) (kube_node_status_allocatable{resource=\"nvidia_com_gpu\"}) > 0) unless on(node) (count by (node) (kube_node_spec_taint{effect=~\"NoSchedule|NoExecute\"}) or max by (node) (kube_node_spec_unschedulable) == 1 or max by (node) (kube_node_status_condition{condition=\"Ready\", status=\"true\"}) == 0))) > 0) or sum((min by (node) (label_replace(floor(sum by (node) (kube_node_status_allocatable{resource=\"nvidia_com_gpu\"})), \"r\", \"gpu\", \"\", \"\") or label_replace(floor(sum by (node) (kube_node_status_allocatable{resource=\"cpu\"}) / 4), \"r\", \"cpu\", \"\", \"\") or label_replace(floor(sum by (node) (kube_node_status_allocatable{resource=\"memory\"}) / 17179869184), \"r\", \"memory\", \"\", \"\")) and on(node) ((sum by (node) (kube_node_status_allocatable{resource=\"nvidia_com_gpu\"}) > 0) unless on(node) (count by (node) (kube_node_spec_taint{effect=~\"NoSchedule|NoExecute\"}) or max by (node) (kube_node_spec_unschedulable) == 1 or max by (node) (kube_node_status_condition{condition=\"Ready\", status=\"true\"}) == 0)))) * 0)) / sum((min by (node) (label_replace(floor(sum by (node) (kube_node_status_allocatable{resource=\"nvidia_com_gpu\"})), \"r\", \"gpu\", \"\", \"\") or label_replace(floor(sum by (node) (kube_node_status_allocatable{resource=\"cpu\"}) / 4), \"r\", \"cpu\", \"\", \"\") or label_replace(floor(sum by (node) (kube_node_status_allocatable{resource=\"memory\"}) / 17179869184), \"r\", \"memory\", \"\", \"\")) and on(node) ((sum by (node) (kube_node_status_allocatable{resource=\"nvidia_com_gpu\"}) > 0) unless on(node) (count by (node) (kube_node_spec_taint{effect=~\"NoSchedule|NoExecute\"}) or max by (node) (kube_node_spec_unschedulable) == 1 or max by (node) (kube_node_status_condition{condition=\"Ready\", status=\"true\"}) == 0)))), \"resource\", \"nrp\", \"\", \"\")",
+          "legendFormat": "",
+          "format": "table",
+          "instant": true
         }
       ],
-      "description": "Whole T4 cards and A100 MIG slices are separate resources. Pick a type with free devices in the session profile.",
+      "description": "Whole T4 cards and A100 MIG slices are separate resources. Pick a type with free devices in the session profile. NRP, remote: Ray workers of 1 GPU that fit on NRP Nautilus now (Free) and on its empty nodes (Total).",
       "transformations": [
         {
           "id": "joinByField",
@@ -1356,10 +1389,46 @@
           }
         },
         {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "alias": "Free",
+            "reduce": {
+              "reducer": "lastNotNull",
+              "include": ["Value #C", "Value #NC"]
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "alias": "Total",
+            "reduce": {
+              "reducer": "lastNotNull",
+              "include": ["Value #A", "Value #NA"]
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "alias": "In use",
+            "reduce": {
+              "reducer": "lastNotNull",
+              "include": ["Value #D", "Value #ND"]
+            },
+            "replaceFields": false
+          }
+        },
+        {
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "pattern": "^(resource|Value #C|Value #A|Value #D)$"
+              "names": ["resource", "Free", "Total", "In use"]
             }
           }
         },
@@ -1368,16 +1437,13 @@
           "options": {
             "excludeByName": {},
             "renameByName": {
-              "resource": "Type",
-              "Value #C": "Free",
-              "Value #A": "Total",
-              "Value #D": "In use"
+              "resource": "Type"
             },
             "indexByName": {
               "resource": 0,
-              "Value #C": 1,
-              "Value #A": 2,
-              "Value #D": 3
+              "Free": 1,
+              "Total": 2,
+              "In use": 3
             }
           }
         }
@@ -1440,6 +1506,11 @@
                         "text": "A100 MIG 7g.40gb",
                         "color": "text",
                         "index": 4
+                      },
+                      "nrp": {
+                        "text": "NRP, remote",
+                        "color": "text",
+                        "index": 5
                       }
                     }
                   }
@@ -1584,7 +1655,7 @@
       "gridPos": {
         "x": 10,
         "y": 9,
-        "w": 5,
+        "w": 4,
         "h": 8
       },
       "datasource": {
@@ -1683,9 +1754,9 @@
       "type": "histogram",
       "title": "Home directory usage over users",
       "gridPos": {
-        "x": 15,
+        "x": 14,
         "y": 9,
-        "w": 5,
+        "w": 4,
         "h": 8
       },
       "datasource": {
@@ -1783,9 +1854,9 @@
       "type": "stat",
       "title": "Dask Gateway",
       "gridPos": {
-        "x": 20,
+        "x": 18,
         "y": 9,
-        "w": 4,
+        "w": 6,
         "h": 4
       },
       "datasource": {
@@ -1869,11 +1940,11 @@
     {
       "id": 61,
       "type": "stat",
-      "title": "Ray",
+      "title": "Ray on Geddes",
       "gridPos": {
-        "x": 20,
+        "x": 18,
         "y": 13,
-        "w": 4,
+        "w": 3,
         "h": 4
       },
       "datasource": {
@@ -1883,17 +1954,16 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count(kube_pod_info{namespace=\"cms\",pod=~\"ray-(train|job)-.+-head-.+\"}) or vector(0)",
           "legendFormat": "clusters",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true
+          "expr": "count(kube_pod_info{namespace=\"cms\",pod=~\"ray-train-.+-head-.+\"}) or vector(0)"
         },
         {
           "refId": "B",
+          "legendFormat": "jobs",
+          "expr": "count(kube_pod_info{namespace=\"cms\",pod=~\"ray-job-.+-head-.+\"}) or vector(0)"
+        },
+        {
+          "refId": "C",
           "expr": "count(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\",pod=~\"ray-(train|job)-.+-worker-.+\",priority_class!=\"medium-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",phase=\"Running\"} == 1)) or vector(0)",
           "legendFormat": "guaranteed workers",
           "datasource": {
@@ -1904,7 +1974,7 @@
           "instant": true
         },
         {
-          "refId": "C",
+          "refId": "D",
           "expr": "count(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\",pod=~\"ray-(train|job)-.+-worker-.+\",priority_class=\"medium-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",phase=\"Running\"} == 1)) or vector(0)",
           "legendFormat": "preemptible workers",
           "datasource": {
@@ -1915,7 +1985,72 @@
           "instant": true
         }
       ],
-      "description": "Users' Ray clusters right now, and their running workers. Preemptible workers are those past a cluster's first: a session or another user's first worker takes their GPUs.",
+      "description": "Users' Ray clusters and jobs at Purdue right now, and their running workers. Preemptible workers are those past a cluster's first: a session or another user's first worker takes their GPUs.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#5794F2",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "horizontal",
+        "justifyMode": "auto",
+        "wideLayout": true,
+        "showPercentChange": false,
+        "text": {
+          "titleSize": 14,
+          "valueSize": 24
+        }
+      }
+    },
+    {
+      "id": 75,
+      "type": "stat",
+      "title": "Ray on NRP",
+      "gridPos": {
+        "x": 21,
+        "y": 13,
+        "w": 3,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-nrp"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "jobs",
+          "expr": "count(group by (rayjob)(label_replace((kube_pod_status_phase{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+\",phase=~\"Pending|Running\"} == 1), \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\"))) or vector(0)"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "workers",
+          "expr": "count(kube_pod_status_phase{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+-gpu-worker-.+\",phase=\"Running\"} == 1) or vector(0)"
+        }
+      ],
+      "description": "Ray jobs running on NRP Nautilus right now, and their workers, one GPU each.",
       "fieldConfig": {
         "defaults": {
           "mappings": [],
@@ -6057,7 +6192,7 @@
     {
       "id": 64,
       "type": "state-timeline",
-      "title": "Cluster activity by user",
+      "title": "Activity by user, and of jobs on NRP",
       "gridPos": {
         "x": 0,
         "y": 92,
@@ -6065,8 +6200,8 @@
         "h": 6
       },
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus-rancher"
+        "type": "datasource",
+        "uid": "-- Mixed --"
       },
       "targets": [
         {
@@ -6079,9 +6214,18 @@
           },
           "range": true,
           "instant": false
+        },
+        {
+          "refId": "N",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "sum without (rayjob) (label_replace(max by (rayjob)(label_replace(avg_over_time(DCGM_FI_DEV_GPU_UTIL{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+-gpu-worker-.+\"}[5m]) >= bool 1, \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")) or on(rayjob) count by (rayjob)(label_replace((kube_pod_status_phase{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+\",phase=~\"Pending|Running\"} == 1), \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")) * 0 + 2, \"user\", \"job $1 on NRP\", \"rayjob\", \"ray-job-([0-9a-f]+)\"))",
+          "legendFormat": "{{ user }}"
         }
       ],
-      "description": "Per user: teal while any GPU of their cluster is working, grey while the cluster exists but its GPUs do nothing, blank when they have no cluster. Long grey stretches are reserved GPUs doing nothing.",
+      "description": "Per user: teal while any GPU of their cluster is working, grey while the cluster exists but its GPUs do nothing, blank when they have no cluster. Long grey stretches are reserved GPUs doing nothing. A job on NRP is a row of its own, light grey while it starts.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -6111,6 +6255,11 @@
                   "text": "busy",
                   "color": "#3EBDB0",
                   "index": 1
+                },
+                "2": {
+                  "text": "starting",
+                  "color": "#8E8E8E",
+                  "index": 2
                 }
               }
             }
@@ -6125,6 +6274,10 @@
               {
                 "color": "#3EBDB0",
                 "value": 0.5
+              },
+              {
+                "color": "#8E8E8E",
+                "value": 1.5
               }
             ]
           }
@@ -6234,7 +6387,7 @@
     {
       "id": 69,
       "type": "bargauge",
-      "title": "GPU-hours used per user",
+      "title": "GPU-hours used per user, and per job on NRP",
       "gridPos": {
         "x": 14,
         "y": 92,
@@ -6242,8 +6395,8 @@
         "h": 6
       },
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus-rancher"
+        "type": "datasource",
+        "uid": "-- Mixed --"
       },
       "targets": [
         {
@@ -6256,9 +6409,19 @@
           },
           "range": false,
           "instant": true
+        },
+        {
+          "refId": "N",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "sum without (rayjob) (label_replace(sum by (rayjob)(sum_over_time(label_replace((DCGM_FI_DEV_GPU_UTIL{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+-gpu-worker-.+\"} / 100), \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")[$__range:1m])) / 60 > 0, \"user\", \"job $1 on NRP\", \"rayjob\", \"ray-job-([0-9a-f]+)\"))",
+          "legendFormat": "{{ user }}",
+          "instant": true
         }
       ],
-      "description": "Graphics-engine activity of each user's Ray workers summed over the selected time range, in GPU-hours. This is the useful work done, as opposed to GPUs merely reserved.",
+      "description": "Graphics-engine activity of each user's Ray workers summed over the selected time range, in GPU-hours. This is the useful work done, as opposed to GPUs merely reserved. On NRP, from GPU utilization, the measure NRP reports.",
       "fieldConfig": {
         "defaults": {
           "mappings": [],
@@ -6344,9 +6507,36 @@
           },
           "range": true,
           "instant": false
+        },
+        {
+          "refId": "Nr",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "sum(kube_pod_container_resource_requests{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+\",resource=\"nvidia_com_gpu\"} and on(pod) (kube_pod_status_phase{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+\",phase=~\"Pending|Running\"} == 1)) or vector(0)",
+          "legendFormat": "reserved on NRP"
+        },
+        {
+          "refId": "Nb",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "sum((DCGM_FI_DEV_GPU_UTIL{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+-gpu-worker-.+\"} / 100)) or vector(0)",
+          "legendFormat": "busy on NRP"
+        },
+        {
+          "refId": "Nw",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "sum(kube_pod_container_resource_requests{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+\",resource=\"nvidia_com_gpu\"} and on(pod) (kube_pod_status_phase{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+\",phase=\"Pending\"} == 1)) or vector(0)",
+          "legendFormat": "waited for on NRP"
         }
       ],
-      "description": "Reserved: GPUs Ray workers hold. Busy: their graphics-engine activity, in GPU-equivalents; far below reserved means the training is starved by something else, often data loading. Waited for: GPUs of workers that have no node yet.",
+      "description": "Reserved: GPUs Ray workers hold. Busy: their graphics-engine activity, in GPU-equivalents; far below reserved means the training is starved by something else, often data loading. Waited for: GPUs of workers that have no node yet. The same, in blue and purple, for jobs on NRP.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -6445,6 +6635,58 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reserved on NRP"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8AB8FF"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [6, 4]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "busy on NRP"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "waited for on NRP"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
           }
         ]
       },
@@ -6464,7 +6706,7 @@
     {
       "id": 66,
       "type": "table",
-      "title": "Clusters",
+      "title": "Clusters, and jobs on NRP",
       "gridPos": {
         "x": 0,
         "y": 98,
@@ -6607,9 +6849,97 @@
           "range": false,
           "instant": true,
           "format": "table"
+        },
+        {
+          "refId": "NA",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "sum without (rayjob) (label_replace(time() - min by (rayjob)(label_replace(kube_pod_created{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+\"} and on(pod) (kube_pod_status_phase{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+\",phase=~\"Pending|Running\"} == 1), \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")), \"user\", \"job $1 on NRP\", \"rayjob\", \"ray-job-([0-9a-f]+)\"))",
+          "legendFormat": "",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "refId": "NB",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "sum without (rayjob) (label_replace(count by (rayjob)(label_replace(kube_pod_status_phase{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+-gpu-worker-.+\",phase=\"Running\"} == 1, \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")), \"user\", \"job $1 on NRP\", \"rayjob\", \"ray-job-([0-9a-f]+)\"))",
+          "legendFormat": "",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "refId": "NC",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "sum without (rayjob) (label_replace(count by (rayjob)(label_replace(kube_pod_status_phase{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+-gpu-worker-.+\",phase=\"Pending\"} == 1, \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")), \"user\", \"job $1 on NRP\", \"rayjob\", \"ray-job-([0-9a-f]+)\"))",
+          "legendFormat": "",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "refId": "NG",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "sum without (rayjob) (label_replace(avg by (rayjob)(label_replace((DCGM_FI_DEV_GPU_UTIL{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+-gpu-worker-.+\"} / 100), \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")), \"user\", \"job $1 on NRP\", \"rayjob\", \"ray-job-([0-9a-f]+)\"))",
+          "legendFormat": "",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "refId": "NH",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "sum without (rayjob) (label_replace(sum by (rayjob)(label_replace(DCGM_FI_DEV_FB_USED{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+-gpu-worker-.+\"}, \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")) / sum by (rayjob)(label_replace(DCGM_FI_DEV_FB_USED{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+-gpu-worker-.+\"} + DCGM_FI_DEV_FB_FREE{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+-gpu-worker-.+\"}, \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")), \"user\", \"job $1 on NRP\", \"rayjob\", \"ray-job-([0-9a-f]+)\"))",
+          "legendFormat": "",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "refId": "NI",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "sum without (rayjob) (label_replace(sum by (rayjob)(label_replace(kube_pod_container_resource_requests{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+\",resource=\"cpu\"} and on(pod) (kube_pod_status_phase{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+\",phase=~\"Pending|Running\"} == 1), \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")), \"user\", \"job $1 on NRP\", \"rayjob\", \"ray-job-([0-9a-f]+)\"))",
+          "legendFormat": "",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "refId": "NJ",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "sum without (rayjob) (label_replace(sum by (rayjob)(label_replace(kube_pod_container_resource_requests{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+\",resource=\"memory\"} and on(pod) (kube_pod_status_phase{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+\",phase=~\"Pending|Running\"} == 1), \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")), \"user\", \"job $1 on NRP\", \"rayjob\", \"ray-job-([0-9a-f]+)\"))",
+          "legendFormat": "",
+          "format": "table",
+          "instant": true
+        },
+        {
+          "refId": "NK",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "sum without (rayjob) (label_replace((max by (rayjob)(label_replace(avg_over_time(DCGM_FI_DEV_GPU_UTIL{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+-gpu-worker-.+\"}[5m]) >= bool 1, \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")) or on(rayjob) count by (rayjob)(label_replace((kube_pod_status_phase{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+\",phase=~\"Pending|Running\"} == 1), \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")) * 0 + 2) and on(rayjob) group by (rayjob)(label_replace((kube_pod_status_phase{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+\",phase=~\"Pending|Running\"} == 1), \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")), \"user\", \"job $1 on NRP\", \"rayjob\", \"ray-job-([0-9a-f]+)\"))",
+          "legendFormat": "",
+          "format": "table",
+          "instant": true
         }
       ],
-      "description": "One row per user's Ray cluster. Waiting workers have no GPU yet. Preemptible GPUs are those of the workers past a cluster's first: a session or another user's first worker takes them. GPUs IDLE: no GPU of the cluster worked in the last 5 minutes; the gateway removes a cluster once it runs no task or job.",
+      "description": "One row per user's Ray cluster. Waiting workers have no GPU yet. Preemptible GPUs are those of the workers past a cluster's first: a session or another user's first worker takes them. GPUs IDLE: no GPU of the cluster worked in the last 5 minutes; the gateway removes a cluster once it runs no task or job. A job on NRP is a row of its own; its GPU compute is NRP's GPU utilization.",
       "transformations": [
         {
           "id": "joinByField",
@@ -6619,10 +6949,155 @@
           }
         },
         {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "alias": "Age",
+            "reduce": {
+              "reducer": "lastNotNull",
+              "include": ["Value #A", "Value #NA"]
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "alias": "Workers",
+            "reduce": {
+              "reducer": "lastNotNull",
+              "include": ["Value #B", "Value #NB"]
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "alias": "Waiting workers",
+            "reduce": {
+              "reducer": "lastNotNull",
+              "include": ["Value #C", "Value #NC"]
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "alias": "T4s",
+            "reduce": {
+              "reducer": "lastNotNull",
+              "include": ["Value #D", "Value #ND"]
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "alias": "A100 slices",
+            "reduce": {
+              "reducer": "lastNotNull",
+              "include": ["Value #E", "Value #NE"]
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "alias": "Preemptible GPUs",
+            "reduce": {
+              "reducer": "lastNotNull",
+              "include": ["Value #F", "Value #NF"]
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "alias": "GPU compute",
+            "reduce": {
+              "reducer": "lastNotNull",
+              "include": ["Value #G", "Value #NG"]
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "alias": "GPU memory",
+            "reduce": {
+              "reducer": "lastNotNull",
+              "include": ["Value #H", "Value #NH"]
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "alias": "Cores reserved",
+            "reduce": {
+              "reducer": "lastNotNull",
+              "include": ["Value #I", "Value #NI"]
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "alias": "RAM reserved",
+            "reduce": {
+              "reducer": "lastNotNull",
+              "include": ["Value #J", "Value #NJ"]
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "alias": "Status",
+            "reduce": {
+              "reducer": "lastNotNull",
+              "include": ["Value #K", "Value #NK"]
+            },
+            "replaceFields": false
+          }
+        },
+        {
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "pattern": "^(user|Value #A|Value #B|Value #C|Value #D|Value #E|Value #F|Value #G|Value #H|Value #I|Value #J|Value #K)$"
+              "names": [
+                "user",
+                "Age",
+                "Workers",
+                "Waiting workers",
+                "T4s",
+                "A100 slices",
+                "Preemptible GPUs",
+                "GPU compute",
+                "GPU memory",
+                "Cores reserved",
+                "RAM reserved",
+                "Status"
+              ]
             }
           }
         },
@@ -6631,32 +7106,21 @@
           "options": {
             "excludeByName": {},
             "renameByName": {
-              "user": "User",
-              "Value #A": "Age",
-              "Value #B": "Workers",
-              "Value #C": "Waiting workers",
-              "Value #D": "T4s",
-              "Value #E": "A100 slices",
-              "Value #F": "Preemptible GPUs",
-              "Value #G": "GPU compute",
-              "Value #H": "GPU memory",
-              "Value #I": "Cores reserved",
-              "Value #J": "RAM reserved",
-              "Value #K": "Status"
+              "user": "User"
             },
             "indexByName": {
               "user": 0,
-              "Value #A": 1,
-              "Value #B": 2,
-              "Value #C": 3,
-              "Value #D": 4,
-              "Value #E": 5,
-              "Value #F": 6,
-              "Value #G": 7,
-              "Value #H": 8,
-              "Value #I": 9,
-              "Value #J": 10,
-              "Value #K": 11
+              "Age": 1,
+              "Workers": 2,
+              "Waiting workers": 3,
+              "T4s": 4,
+              "A100 slices": 5,
+              "Preemptible GPUs": 6,
+              "GPU compute": 7,
+              "GPU memory": 8,
+              "Cores reserved": 9,
+              "RAM reserved": 10,
+              "Status": 11
             }
           }
         },
@@ -6703,7 +7167,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 160
+                "value": 230
               }
             ]
           },
@@ -6974,6 +7438,11 @@
                         "text": "active",
                         "color": "green",
                         "index": 1
+                      },
+                      "2": {
+                        "text": "starting",
+                        "color": "#8E8E8E",
+                        "index": 2
                       }
                     }
                   },
@@ -7009,7 +7478,7 @@
     {
       "id": 71,
       "type": "timeseries",
-      "title": "GPU compute, per cluster",
+      "title": "GPU compute, per cluster or job on NRP",
       "gridPos": {
         "x": 0,
         "y": 104,
@@ -7017,8 +7486,8 @@
         "h": 7
       },
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus-rancher"
+        "type": "datasource",
+        "uid": "-- Mixed --"
       },
       "targets": [
         {
@@ -7031,9 +7500,18 @@
           },
           "range": true,
           "instant": false
+        },
+        {
+          "refId": "N",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "sum without (rayjob) (label_replace(avg by (rayjob)(label_replace((DCGM_FI_DEV_GPU_UTIL{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+-gpu-worker-.+\"} / 100), \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")), \"user\", \"job $1 on NRP\", \"rayjob\", \"ray-job-([0-9a-f]+)\"))",
+          "legendFormat": "{{ user }}"
         }
       ],
-      "description": "Graphics-engine activity averaged over each cluster's GPUs. A flat zero is a cluster holding GPUs it does not use.",
+      "description": "Graphics-engine activity averaged over each cluster's GPUs. A flat zero is a cluster holding GPUs it does not use. On NRP, GPU utilization: NRP asks for 40% or more, and the gateway stops a job below it.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -7191,7 +7669,7 @@
     {
       "id": 73,
       "type": "timeseries",
-      "title": "Worker CPU, share of request, per cluster",
+      "title": "Worker CPU, share of request, per cluster or job on NRP",
       "gridPos": {
         "x": 12,
         "y": 104,
@@ -7199,8 +7677,8 @@
         "h": 7
       },
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus-rancher"
+        "type": "datasource",
+        "uid": "-- Mixed --"
       },
       "targets": [
         {
@@ -7213,6 +7691,15 @@
           },
           "range": true,
           "instant": false
+        },
+        {
+          "refId": "N",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "sum without (rayjob) (label_replace(sum by (rayjob)(label_replace(rate(container_cpu_usage_seconds_total{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+-gpu-worker-.+\",container=\"ray-worker\"}[5m]), \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")) / sum by (rayjob)(label_replace(kube_pod_container_resource_requests{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+-gpu-worker-.+\",container=\"ray-worker\",resource=\"cpu\"}, \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")), \"user\", \"job $1 on NRP\", \"rayjob\", \"ray-job-([0-9a-f]+)\"))",
+          "legendFormat": "{{ user }}"
         }
       ],
       "description": "Near 100% with GPUs far from busy means the workers' CPUs, usually data loading, hold the training back.",
@@ -7281,7 +7768,7 @@
     {
       "id": 74,
       "type": "timeseries",
-      "title": "Worker memory, share of limit, per cluster",
+      "title": "Worker memory, share of limit, per cluster or job on NRP",
       "gridPos": {
         "x": 18,
         "y": 104,
@@ -7289,8 +7776,8 @@
         "h": 7
       },
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus-rancher"
+        "type": "datasource",
+        "uid": "-- Mixed --"
       },
       "targets": [
         {
@@ -7303,6 +7790,15 @@
           },
           "range": true,
           "instant": false
+        },
+        {
+          "refId": "N",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-nrp"
+          },
+          "expr": "sum without (rayjob) (label_replace(max by (rayjob)(label_replace(container_memory_working_set_bytes{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+-gpu-worker-.+\",container=\"ray-worker\"} / on(pod) group_left() sum by (pod)(kube_pod_container_resource_limits{namespace=\"interlink-cms\",pod=~\"ray-job-[0-9a-f]+-.+-gpu-worker-.+\",container=\"ray-worker\",resource=\"memory\"}), \"rayjob\", \"$1\", \"pod\", \"(ray-job-[0-9a-f]+)-.+\")), \"user\", \"job $1 on NRP\", \"rayjob\", \"ray-job-([0-9a-f]+)\"))",
+          "legendFormat": "{{ user }}"
         }
       ],
       "description": "The fullest worker of each cluster. Near 100% means a worker is about to be killed for memory.",
