@@ -186,8 +186,8 @@ def test_config_registers_authenticator(spawner_ns):
     )
 
 
-def test_dask_gateway_env_set_in_cms_namespace(monkeypatch):
-    ns = load_snippet("custom-spawner.py", monkeypatch, namespace="cms")
+def test_dask_gateway_env_is_set(monkeypatch):
+    ns = load_snippet("custom-spawner.py", monkeypatch)
     env = ns["c"]["KubeSpawner"]["environment"]
     assert "DASK_GATEWAY__ADDRESS" in env
     assert "DASK_GATEWAY__PROXY_ADDRESS" in env

@@ -1,6 +1,6 @@
 # Test overlay applied ON TOP of the production values.yaml in kind.
 # Nulls out cluster-specific machinery (geddes registry, NFS/CVMFS mounts,
-# RWX storage, node placement, letsencrypt) and points the UNMODIFIED
+# RWX storage, node placement) and points the UNMODIFIED
 # production authenticator at the mock CILogon. `null` deletes the key
 # (helm map-merge semantics); lists replace wholesale.
 
@@ -38,24 +38,15 @@ hub:
       scopes: ["admin:users", "admin:servers", "read:hub"]
 
 proxy:
-  https:
-    enabled: false
   service:
     type: ClusterIP
-    extraPorts: []
   chp:
     nodeSelector: null
     tolerations: []
     resources: null
-  # autohttps is disabled above; null only the placement keys (nulling the
-  # whole traefik map risks nil-pointer errors in chart template helpers)
-  traefik:
-    nodeSelector: null
-    tolerations: []
-    extraPorts: []
 
 singleuser:
-  uid: null # AF image entrypoint drops to jovyan
+  uid: null # the image's USER, jovyan
   # Prod pins cms-af-prod for user pods + continuous image-puller; kind has
   # neither that label nor the dedicated taint — clear so pods can schedule.
   nodeSelector: null
@@ -71,7 +62,6 @@ singleuser:
     name: __PRODUCTION_IMAGE_NAME__
     tag: "__PRODUCTION_IMAGE_TAG__"
     pullPolicy: IfNotPresent # pre-pulled onto the node by setup-kind.sh
-  startTimeout: 600 # real AF image cold-start on a 2-core runner is slow
   extraContainers: [] # prod's af-pod-monitor sidecar mounts volumes removed below
   storage:
     type: none

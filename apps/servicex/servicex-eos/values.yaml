@@ -109,8 +109,6 @@ codeGen:
     enabled: false
   topcp:
     enabled: false
-  cmssw-5-3-32:
-    enabled: false
 
 transformer:
   sidecarImage: geddes2-registry.rcac.purdue.edu/cms/servicex-transformer-sidecar
@@ -160,15 +158,6 @@ logging:
 didFinder:
   rucio:
     enabled: false
-    rucio_host: http://cms-rucio.cern.ch
-    auth_host: https://cms-rucio-auth.cern.ch
-    nodeSelector:
-      cms-af-prod: "true"
-    tolerations:
-      - key: "hub.jupyter.org/dedicated"
-        operator: "Equal"
-        value: "cms-af"
-        effect: "NoSchedule"
   xrootd:
     enabled: true
     tag: "v1.8.6"
@@ -185,7 +174,6 @@ didFinder:
     enabled: false
   servicex:
     enabled: false
-gridAccount: dkondrat
 x509Secrets:
   image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/sslhep/x509-secrets
   tag: "v1.8.6"

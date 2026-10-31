@@ -14,7 +14,6 @@ import time
 from typing import Any, Optional
 
 import httpx
-from auth import clear_user_cache
 from config import HUB_API_URL, PUBLIC_URL, TOKEN_URL
 from context import require_user
 from errors import (
@@ -404,8 +403,6 @@ def register(mcp: Any) -> None:
                 "again."
             )
 
-        clear_user_cache(token)
-
         note = ""
         if selected is None and not profiles:
             note = (
@@ -449,7 +446,6 @@ def register(mcp: Any) -> None:
         if resp.status_code == 400:
             return "No session is currently running."
 
-        clear_user_cache(token)
         return (
             "Session is stopping. Storage is preserved — "
             "use start_af_session to launch a new one."
@@ -530,7 +526,6 @@ def register(mcp: Any) -> None:
                         absent_polls = 0
                         if default.get("ready", False):
                             started = default.get("started", "")
-                            clear_user_cache(token)
                             lines = [
                                 "Session is running.",
                                 f"(became ready after {attempts} poll(s))",
@@ -650,9 +645,6 @@ def register(mcp: Any) -> None:
         )
         was_running = stop.status_code != 400  # 400 = no server was running
         if was_running:
-            # The old pod is gone — invalidate cached user info so tools
-            # don't target a terminated pod for up to a cache TTL.
-            clear_user_cache(token)
             # 4. Brief pause to let Kubernetes terminate the pod before re-spawning.
             await asyncio.sleep(3)
 

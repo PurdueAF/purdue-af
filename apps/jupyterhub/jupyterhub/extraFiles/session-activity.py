@@ -3,11 +3,7 @@
 Prometheus already scrapes /hub/metrics (the `jupyterhub` job), so a collector
 on the default registry is all this needs.
 
-The dashboard's "Last active" column used to come from af_home_dir_last_accessed,
-the st_atime of the user's home directory. That measures the mount, not the
-session: on this NFS it read years stale for most users, and identical for
-everyone at once whenever a sweep touched /home. This exports what JupyterHub
-itself calls activity — the signal the cullers act on.
+It exports what JupyterHub itself calls activity, the signal the cullers act on.
 """
 
 import datetime

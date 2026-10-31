@@ -39,8 +39,6 @@ inferenceServer:
   service:
     labels:
       scrape_metrics: "true"
-    annotations:
-      metallb.universe.tf/address-pool: geddes-private-pool
   # Created and written by the model manager (apps/sonic/model-manager).
   modelRepository:
     enabled: true
@@ -66,7 +64,7 @@ envoy:
   ingress:
     enabled: false
   rate_limiter:
-    # Rejects RepositoryIndex while serverLoadMetric exceeds serverLoadThreshold.
+    # Rejects RepositoryIndex while the scaling metric per healthy replica exceeds serverAdmissionThreshold.
     prometheus_based:
       enabled: true
     listener_level:
@@ -77,7 +75,7 @@ keda:
   # RepositoryIndex raises this to 1 through the Envoy admission sidecar.
   minReplicaCount: 0
   maxReplicaCount: 10
-  # Poll often enough that the wake is not sitting behind a 30s KEDA tick.
+  # Poll often enough that the wake is not sitting behind a KEDA tick.
   pollingInterval: 1
   cooldownPeriod: 300
   scaleUp:
@@ -88,9 +86,6 @@ keda:
     stabilizationWindowSeconds: 300
     periodSeconds: 45
     stepsize: 1
-
-ingress:
-  enabled: false
 
 prometheus:
   # The AF Prometheus attaches the app/release labels the dashboard expects; FQDN for KEDA.

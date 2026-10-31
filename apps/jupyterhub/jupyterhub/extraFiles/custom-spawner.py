@@ -1,4 +1,3 @@
-import os
 from typing import Any
 
 import jupyterhub.utils
@@ -108,12 +107,11 @@ async def drop_stale_user_options(spawner: Any, user_options: dict[str, Any]) ->
 c.JupyterHub.authenticator_class = PurdueCILogonOAuthenticator
 c.KubeSpawner.apply_user_options = drop_stale_user_options
 
-if os.environ["POD_NAMESPACE"] == "cms":
-    c.KubeSpawner.environment.setdefault(
-        "DASK_GATEWAY__ADDRESS", "http://dask-gateway.geddes.rcac.purdue.edu"
-    )
-    c.KubeSpawner.environment.setdefault(
-        "DASK_GATEWAY__PROXY_ADDRESS",
-        "traefik-dask-gateway.cms.geddes.rcac.purdue.edu:8786",
-    )
-    c.KubeSpawner.environment.setdefault("DASK_GATEWAY__AUTH__TYPE", "jupyterhub")
+c.KubeSpawner.environment.setdefault(
+    "DASK_GATEWAY__ADDRESS", "http://dask-gateway.geddes.rcac.purdue.edu"
+)
+c.KubeSpawner.environment.setdefault(
+    "DASK_GATEWAY__PROXY_ADDRESS",
+    "traefik-dask-gateway.cms.geddes.rcac.purdue.edu:8786",
+)
+c.KubeSpawner.environment.setdefault("DASK_GATEWAY__AUTH__TYPE", "jupyterhub")

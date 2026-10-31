@@ -1,4 +1,4 @@
-# Base for every task pod (plugins.k8s.default-pod-template-name in values.yaml).
+# Default for a task that names no pod template (plugins.k8s.default-pod-template-name in values.yaml).
 apiVersion: v1
 kind: PodTemplate
 metadata:

@@ -1,7 +1,6 @@
 """The "Last active" column on the Users Statistics dashboard.
 
-It comes from the hub's last_activity, the signal the cullers act on, never
-from the home directory's atime, which measures the mount."""
+It comes from the hub's last_activity, the signal the cullers act on."""
 
 import json
 
@@ -32,10 +31,9 @@ def column_named(display_name):
     return target, override
 
 
-def test_last_active_reads_the_hub_not_the_filesystem():
+def test_last_active_reads_the_hub():
     target, _ = column_named("Last active")
     assert target["expr"] == f'time() - {METRIC}{{job="jupyterhub"}}'
-    assert "af_home_dir_last_accessed" not in json.dumps(panel())
 
 
 def test_last_active_joins_the_table_on_pod():

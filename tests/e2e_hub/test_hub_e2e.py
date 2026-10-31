@@ -318,9 +318,8 @@ def test_logout_clears_session(login):
 
 def test_prerelease_profile_spawns_ci_built_image(login, admin):
     """The CD gate for the AF image: the pre-release JH option must spawn the
-    exact image this pipeline built (sha-<commit> if rebuilt in this commit,
-    else the promoted :pre-release tag) and reach a running JupyterLab.
-    Only meaningful when setup-kind.sh preloaded the image (e2e-prerelease
+    exact image in PRERELEASE_IMAGE and reach a running JupyterLab.
+    Only meaningful when setup-kind.sh preloaded the image (e2e-pre-release
     CI job); elsewhere the image isn't on the node, so skip."""
     import os
 

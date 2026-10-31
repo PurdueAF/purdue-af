@@ -1,6 +1,6 @@
 """Fixtures for the hub e2e suite — requires a running kind environment.
 
-Skipped entirely unless E2E_HUB=1 (set by the Hub E2E workflow / manual runs),
+Skipped entirely unless E2E_HUB=1 (set by ci-e2e.yml / manual runs),
 so the regular unit-test job never touches these.
 """
 

@@ -47,9 +47,6 @@ log = logging.getLogger("gpu-culler")
 
 def default_namespace() -> str:
     """Namespace the hub pod runs in, from the mounted service account."""
-    override = os.environ.get("POD_NAMESPACE")
-    if override:
-        return override
     return NAMESPACE_FILE.read_text().strip()
 
 
@@ -168,11 +165,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--every", type=int, default=600, help="seconds between cull passes"
     )
-    parser.add_argument("--namespace", default=None)
     args = parser.parse_args()
     logging.basicConfig(
         level=logging.INFO,
         format="[%(name)s] %(asctime)s %(levelname)s %(message)s",
         stream=sys.stderr,
     )
-    asyncio.run(main(args.namespace or default_namespace(), args.timeout, args.every))
+    asyncio.run(main(default_namespace(), args.timeout, args.every))

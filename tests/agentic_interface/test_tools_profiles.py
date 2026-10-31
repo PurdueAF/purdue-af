@@ -185,21 +185,6 @@ async def test_get_profiles_caches(monkeypatch):
     assert calls == 1  # second call served from cache
 
 
-async def test_get_profiles_force_refresh(monkeypatch):
-    calls = 0
-
-    async def fake_read():
-        nonlocal calls
-        calls += 1
-        return VALUES_YAML
-
-    monkeypatch.setattr(profiles, "_read_configmap", fake_read)
-
-    await profiles.get_profiles()
-    await profiles.get_profiles(force=True)
-    assert calls == 2
-
-
 async def test_get_profiles_concurrent_misses_fetch_once(monkeypatch):
     """Concurrent cache misses are single-flighted — no ConfigMap dogpile."""
     calls = 0

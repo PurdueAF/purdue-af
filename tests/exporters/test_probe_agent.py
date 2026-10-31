@@ -63,7 +63,6 @@ def child(monkeypatch, tmp_path, body: str) -> None:
 
 
 WRITES_OK = """
-    RESULT_PATH.parent.mkdir(parents=True, exist_ok=True)
     RESULT_PATH.write_text(json.dumps({"ok": True, "timestamp": time.time()}))
 """
 
@@ -99,7 +98,6 @@ def test_child_is_told_where_to_read_and_write(env, monkeypatch):
         env,
         """
         prev = json.loads(PREV_RESULT_PATH.read_text())
-        RESULT_PATH.parent.mkdir(parents=True, exist_ok=True)
         RESULT_PATH.write_text(json.dumps({"ok": True, "seen": prev["last_fio_ts"]}))
         """,
     )
@@ -160,7 +158,6 @@ def test_late_child_cannot_overwrite_the_published_verdict(env, monkeypatch):
         env,
         """
         time.sleep(1.5)
-        RESULT_PATH.parent.mkdir(parents=True, exist_ok=True)
         RESULT_PATH.write_text(json.dumps({"ok": True, "stale": True}))
         """,
     )

@@ -33,9 +33,8 @@ PRODUCTION_IMAGE_NAME=${PRODUCTION_IMAGE%:*}
 PRODUCTION_IMAGE_TAG=${PRODUCTION_IMAGE##*:}
 
 # Pre-pull a real AF image onto the kind node so it is present before the
-# spawn window (crictl pull straight into containerd — faster than docker
-# pull + kind load). Skips if already on the node; passes ghcr creds when
-# provided (private-image / rate-limit safety).
+# spawn window. Skips if already on the node; passes ghcr creds when
+# provided (rate-limit safety).
 preload_node() {
 	local image=$1
 	if docker exec "${CLUSTER}-control-plane" crictl inspecti "$image" >/dev/null 2>&1; then
@@ -58,8 +57,7 @@ kubectl get namespace "$NS" >/dev/null 2>&1 || kubectl create namespace "$NS"
 # Real AF images (~5 GB compressed each): pre-loaded onto the node only for
 # the job that actually spawns them, so local fast runs (and the other job)
 # never pull 13 GB they will not use. Each job sets the marker for its own
-# image; the e2e-pre-release job also `kind load`s its image beforehand
-# (host daemon needs it for the CVMFS check), so preload_node no-ops there.
+# image.
 if [ -n "${PRERELEASE_IMAGE:-}" ]; then
 	preload_node "$PRERELEASE_IMAGE"
 fi
@@ -116,7 +114,6 @@ kubectl -n "$NS" apply -f "$E2E_DIR/mock-ldap.yaml"
 
 echo "==> render production values the way Flux does"
 # Same mechanism as .github/workflows/validate-manifests.sh, with kind-appropriate vars.
-# Use the production namespace so set-user-info / custom-spawner hit the same paths as cms.
 export namespace=cms
 export enable_ingresses=false
 export jupyterhub_enable_ingress=false

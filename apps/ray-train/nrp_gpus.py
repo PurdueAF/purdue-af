@@ -163,9 +163,9 @@ def most_in_one_group(nodes: list[Node]) -> int:
     return max(groups.values(), default=0)
 
 
-def placement(nodes: list[Node], wanted: int, least: int) -> list[Node] | None:
+def placement(nodes: list[Node], least: int) -> list[Node] | None:
     """The nodes a job's workers may run on: all of the region and GPU model with room
-    for the most, the roomiest first, so that the scheduler finds room on another
+    for the most, so that the scheduler finds room on another
     when a job placed from the same reading took one; None if no such pair has room for `least`."""
     groups: dict[tuple[str, str], list[Node]] = defaultdict(list)
     for node in nodes:
@@ -175,7 +175,7 @@ def placement(nodes: list[Node], wanted: int, least: int) -> list[Node] | None:
     best = max(groups.values(), key=lambda group: sum(n.workers for n in group))
     if sum(n.workers for n in best) < least:
         return None
-    return sorted(best, key=lambda n: (-n.workers, n.name))
+    return best
 
 
 async def query(
@@ -225,8 +225,8 @@ async def most_when_empty(http: ClientSession, prometheus: str, worker: Worker) 
 
 
 def worker_of(template: dict[str, Any]) -> Worker:
-    """The requests of the template's worker, a RayJob's or a RayCluster's spec."""
-    spec = template["spec"].get("rayClusterSpec", template["spec"])
+    """The requests of the template's worker."""
+    spec = template["spec"]["rayClusterSpec"]
     (group,) = spec["workerGroupSpecs"]
     (container,) = group["template"]["spec"]["containers"]
     requests = container["resources"]["requests"]

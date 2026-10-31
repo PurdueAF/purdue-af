@@ -9,8 +9,6 @@ name: CI e2e
 #                    exactly as the repo deploys it to the cms namespace,
 #                    spawning the REAL image pinned in values.yaml
 #                    (singleuser.image.tag) — the "e2e = production" gate.
-#                    Lightweight profiles still cover the fast hub-config
-#                    tests; one profile spawns the pinned production image.
 #   e2e-pre-release  certifies the PRE-RELEASE channel: same stack, but
 #                    spawns the REAL AF image built in stage 1 for the
 #                    CURRENT input state — never a previously promoted
@@ -83,9 +81,6 @@ jobs:
           PRODUCTION_IMAGE: ${{ steps.image.outputs.image }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          ghcr-login: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-          ghcr-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run e2e tests (hub config + production image)
         if: steps.memo.outputs.hit != 'true'
         env:
@@ -108,7 +103,7 @@ jobs:
     permissions:
       contents: read
       actions: read # memo lookup
-      packages: read # pull the (possibly private) image into kind
+      packages: read # pull the AF image into kind
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Pick the AF image to spawn

@@ -115,7 +115,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=~\"cms\",pod=\"$user\", container=\"notebook\"}[5m])\n) by (pod)\n    /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=~\"cms\",pod=\"$user\", resource=\"cpu\", container=\"notebook\"}\n)\n",
+          "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=\"cms\",pod=\"$user\", container=\"notebook\"}[5m])\n) by (pod)\n    /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=\"cms\",pod=\"$user\", resource=\"cpu\", container=\"notebook\"}\n)\n",
           "interval": "",
           "legendFormat": "CPU utilization",
           "refId": "A"
@@ -125,7 +125,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=~\"cms\", pod=~\"$user\", container=\"notebook\"}\n) /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=~\"cms\", pod=~\"$user\", resource=\"memory\", container=\"notebook\"}\n)\n",
+          "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=\"cms\", pod=~\"$user\", container=\"notebook\"}\n) /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=\"cms\", pod=~\"$user\", resource=\"memory\", container=\"notebook\"}\n)\n",
           "interval": "",
           "legendFormat": "Memory utilization",
           "refId": "B"
@@ -155,7 +155,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(af_home_dir_util{namespace=~\"cms\",job=\"af-pod-monitor\",pod=~\"$user\"})",
+          "expr": "sum(af_home_dir_util{namespace=\"cms\",job=\"af-pod-monitor\",pod=~\"$user\"})",
           "interval": "",
           "legendFormat": "/home/ storage utilization",
           "refId": "E"
@@ -287,7 +287,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=~\"cms\",pod=\"$user\", container=\"notebook\"}[5m])\n) by (pod)\n",
+          "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=\"cms\",pod=\"$user\", container=\"notebook\"}[5m])\n) by (pod)\n",
           "interval": "",
           "legendFormat": "CPU utilization",
           "refId": "A"
@@ -297,7 +297,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=~\"cms\", pod=~\"$user\", container=\"notebook\"}\n)\n",
+          "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=\"cms\", pod=~\"$user\", container=\"notebook\"}\n)\n",
           "interval": "",
           "legendFormat": "Memory utilization",
           "refId": "B"
@@ -361,7 +361,7 @@
         "multi": false,
         "name": "user",
         "options": [],
-        "query": "query_result(af_home_dir_util{namespace=~\"cms\",pod=~\"purdue-af-.*\"})",
+        "query": "query_result(af_home_dir_util{namespace=\"cms\",pod=~\"purdue-af-.*\"})",
         "refresh": 1,
         "regex": "/username=\"(?<text>[^\"]+)|pod=\"(?<value>[^\"]+)/g",
         "skipUrlSync": false,

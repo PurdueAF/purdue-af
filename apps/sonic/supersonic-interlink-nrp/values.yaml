@@ -99,7 +99,6 @@ keda:
   enabled: true
   # RepositoryIndex raises this to 1; the wake path lives in envoy-config.yaml.
   minReplicaCount: 0
-  # Shares the node's GPUs with Ray Train.
   maxReplicaCount: 4
   scaleUp:
     stabilizationWindowSeconds: 120

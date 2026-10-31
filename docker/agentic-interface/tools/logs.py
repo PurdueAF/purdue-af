@@ -203,7 +203,6 @@ def register(mcp: Any) -> None:
         user = require_user()
         namespace = user["namespace"]
         username = user["username"]
-        # Scope by username + notebook container — no Hub admin pod_name needed.
         # quote_label keeps a crafted name from breaking out of the matcher.
         selector = (
             f'{{namespace="{quote_label(namespace)}",'
