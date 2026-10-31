@@ -146,8 +146,8 @@ kubectl -n cms logs deploy/ray-train-gateway
 kubectl -n cms logs deploy/ray-train-gateway --previous
 ```
 
-The GPUs free on NRP for workers of the shape `nrpWorker` in `config.yaml`
-names, from a session, or from a checkout with `aiohttp` and `pyyaml`:
+The GPUs free on NRP for workers of the size in `rayjob-nrp.yaml`, from a
+session, or from a checkout with `aiohttp` and `pyyaml`:
 
 ```bash
 curl -s http://ray-train-gateway:8265/af/nrp-gpus

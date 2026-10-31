@@ -41,7 +41,6 @@ plugin:
   config: |
     ImagePrefix: "docker://"
     SidecarPort: 4000
-    VerboseLogging: false
     ErrorsOnlyLogging: true
     EnableProbes: true
     DataRootFolder: "/depot/cms/purdue-af/interlink/"
@@ -50,9 +49,7 @@ plugin:
     SbatchPath: "/opt/purdue-af/slurm-active/bin/sbatch"
     ScancelPath: "/opt/purdue-af/slurm-active/bin/scancel"
     SqueuePath: "/opt/purdue-af/slurm-active/bin/squeue"
-    CommandPrefix: ""
     ContainerRuntime: "singularity"
-    SingularityPrefix: ""
     SingularityDefaultOptions:
       - "--nv"
       - "--no-eval"
@@ -75,10 +72,9 @@ virtualNode:
 
   network:
     enableTunnel: true
-    tunnelImage: "ghcr.io/erebe/wstunnel:v11.1.0"
     wildcardDNS: "geddes.rcac.purdue.edu"
     # No wildcard DNS: the client dials the ingress by a name that resolves and
-    # sends the shadow's hostname as Host. WSTUNNEL_TAG moves with tunnelImage.
+    # sends the shadow's hostname as Host. WSTUNNEL_TAG tracks the shadow image.
     # Bare $DOWNLOAD_DIR: Flux postBuild substitutes only the braced form.
     wstunnelCommand: |
       export DOWNLOAD_DIR="/depot/cms/purdue-af/interlink" WSTUNNEL_TAG=v11.1.0 && \

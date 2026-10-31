@@ -17,7 +17,7 @@ def _auth_counter_value(result: str) -> float:
 
 
 def hub_user_payload(name="alice"):
-    return {"name": name, "servers": {}}
+    return {"name": name}
 
 
 @respx.mock
@@ -120,17 +120,6 @@ async def test_cache_is_per_token():
 
     await auth.resolve_user("tok-1")
     await auth.resolve_user("tok-2")
-
-    assert route.call_count == 2
-
-
-@respx.mock
-async def test_clear_user_cache_forces_refetch():
-    route = respx.get(HUB_USER_URL).respond(200, json=hub_user_payload())
-
-    await auth.resolve_user("tok-1")
-    auth.clear_user_cache("tok-1")
-    await auth.resolve_user("tok-1")
 
     assert route.call_count == 2
 

@@ -3,7 +3,6 @@
 import json
 import types
 
-import auth
 import pytest
 import respx
 from agentic_helpers import failure, needs_choices, register_tools
@@ -11,8 +10,6 @@ from tools import profiles, session
 
 USER_URL = f"{session.HUB_API_URL}/users/alice"
 SERVER_URL = f"{session.HUB_API_URL}/users/alice/server"
-# auth caches by sha256(token), never the raw token.
-TOK_KEY = auth._hash_token("tok-alice")
 
 
 class _Result:
@@ -62,7 +59,7 @@ def fake_profiles(monkeypatch):
         }
     ]
 
-    async def fake_get_profiles(force=False):
+    async def fake_get_profiles():
         return parsed
 
     monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
@@ -102,7 +99,7 @@ def fake_profiles_with_options(monkeypatch, *, multi=False):
             }
         )
 
-    async def fake_get_profiles(force=False):
+    async def fake_get_profiles():
         return parsed
 
     monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
@@ -133,7 +130,7 @@ def fake_profiles_gpu(monkeypatch):
         }
     ]
 
-    async def fake_get_profiles(force=False):
+    async def fake_get_profiles():
         return parsed
 
     monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
@@ -281,17 +278,6 @@ async def test_start_rejected_options_not_masked(user_ctx):
     tools = register_tools(session).tools
     out = await failure(tools["start_af_session"](FakeCtx()))
     assert "rejected the spawn request" in out
-
-
-@respx.mock
-async def test_start_session_clears_token_cache(user_ctx):
-    respx.post(SERVER_URL).respond(201)
-    auth._user_cache[TOK_KEY] = (9e9, {"username": "alice"})
-
-    tools = register_tools(session).tools
-    await tools["start_af_session"](FakeCtx())
-
-    assert TOK_KEY not in auth._user_cache
 
 
 # ── start_af_session: elicitation flows ───────────────────────────────────────
@@ -442,15 +428,13 @@ async def test_start_gpu_question_unknown_keeps_all(user_ctx, monkeypatch):
 
 
 @respx.mock
-async def test_stop_session_clears_token_cache(user_ctx):
+async def test_stop_session_reports_stopping(user_ctx):
     respx.delete(SERVER_URL).respond(204)
-    auth._user_cache[TOK_KEY] = (9e9, {"username": "alice"})
 
     tools = register_tools(session).tools
     out = await tools["stop_af_session"]()
 
     assert "Session is stopping" in out
-    assert TOK_KEY not in auth._user_cache
 
 
 @respx.mock
@@ -468,7 +452,6 @@ async def test_stop_session_not_running(user_ctx):
 @respx.mock
 async def test_wait_returns_when_ready(user_ctx):
     respx.get(USER_URL).respond(200, json=server_payload(ready=True))
-    auth._user_cache[TOK_KEY] = (9e9, {"username": "alice"})
 
     tools = register_tools(session).tools
     out = await tools["wait_for_session"]()
@@ -476,7 +459,6 @@ async def test_wait_returns_when_ready(user_ctx):
     assert "Session is running" in out
     assert "started: 2026-01-01T00:00:00Z" in out
     assert "pod:" not in out
-    assert TOK_KEY not in auth._user_cache  # cache invalidated
 
 
 def _fake_clock(monkeypatch):
@@ -560,24 +542,6 @@ async def test_restart_overrides_take_precedence(user_ctx, monkeypatch):
 
 
 @respx.mock
-async def test_restart_clears_token_cache_after_stop(user_ctx, monkeypatch):
-    async def no_sleep(_):
-        return None
-
-    monkeypatch.setattr(session.asyncio, "sleep", no_sleep)
-
-    respx.get(USER_URL).respond(200, json=server_payload())
-    respx.delete(SERVER_URL).respond(204)
-    respx.post(SERVER_URL).respond(201)
-    auth._user_cache[TOK_KEY] = (9e9, {"username": "alice"})
-
-    tools = register_tools(session).tools
-    await tools["restart_af_session"]()
-
-    assert TOK_KEY not in auth._user_cache
-
-
-@respx.mock
 async def test_restart_when_not_running_starts_fresh(user_ctx):
     respx.get(USER_URL).respond(200, json={"servers": {}})
     respx.delete(SERVER_URL).respond(400)  # nothing to stop
@@ -650,7 +614,7 @@ async def test_start_skips_empty_choices_and_option_cancel(user_ctx, monkeypatch
         }
     ]
 
-    async def fake_get_profiles(force=False):
+    async def fake_get_profiles():
         return parsed
 
     monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
@@ -736,7 +700,7 @@ async def test_restart_error_paths(user_ctx, monkeypatch):
     assert "default options" in out
 
     # unknown profile
-    async def fake_get_profiles(force=False):
+    async def fake_get_profiles():
         return [{"slug": "stable", "display_name": "Stable", "default": True}]
 
     monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
@@ -773,7 +737,7 @@ async def test_restart_error_paths(user_ctx, monkeypatch):
 
 @respx.mock
 async def test_restart_unknown_profile_when_list_empty(user_ctx, monkeypatch):
-    async def empty_profiles(force=False):
+    async def empty_profiles():
         return []
 
     monkeypatch.setattr(profiles, "get_profiles", empty_profiles)
@@ -907,7 +871,7 @@ async def test_start_403_and_rejected_options_are_explained(user_ctx):
 
 @pytest.fixture
 def no_profile_list(monkeypatch):
-    async def none(force=False):
+    async def none():
         return []
 
     monkeypatch.setattr(profiles, "get_profiles", none)

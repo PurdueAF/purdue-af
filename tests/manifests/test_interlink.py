@@ -408,8 +408,7 @@ def test_kubernetes_tunnel_has_a_client(kubernetes_clusters):
     for cluster, app, network in _tunnel_nodes(kubernetes_clusters):
         client_image = _plugin_ini(app).get("wstunnel", "client_image", fallback="")
         assert client_image, f"{cluster}: enableTunnel without a client sidecar"
-        assert client_image == network.get("tunnelImage"), cluster
-        assert f"image: {client_image}" in network.get("customTemplate", ""), cluster
+        assert f"image: {client_image}\n" in network.get("customTemplate", ""), cluster
 
 
 def test_slurm_tunnel_client_matches_the_shadow_image(slurm_clusters):
@@ -419,8 +418,7 @@ def test_slurm_tunnel_client_matches_the_shadow_image(slurm_clusters):
         tags = re.findall(r"WSTUNNEL_TAG=(\S+)", network.get("wstunnelCommand", ""))
         assert len(tags) == 1, f"{cluster}: no single WSTUNNEL_TAG"
         image = f"ghcr.io/erebe/wstunnel:{tags[0]}"
-        assert image == network.get("tunnelImage"), cluster
-        assert f"image: {image}" in network.get("customTemplate", ""), cluster
+        assert f"image: {image}\n" in network.get("customTemplate", ""), cluster
 
 
 def test_tunnel_command_uses_every_argument(interlink_clusters):
@@ -723,8 +721,8 @@ def test_credentials_are_never_committed():
 
 def test_only_namespace_is_substituted(interlink_clusters):
     """Flux postBuild substitutes every `${VAR}` in the rendered stream, and an
-    unset one becomes an empty string. Bare `$VAR` (the wstunnel and tsocks
-    paths) is passed through untouched, so it needs no escaping."""
+    unset one becomes an empty string. Bare `$VAR` (the wstunnel command) is
+    passed through untouched, so it needs no escaping."""
     for cluster, app in interlink_clusters.items():
         text = (app["dir"] / "values.yaml").read_text()
         found = set(re.findall(r"\$\{([^}]*)\}", text))
@@ -732,8 +730,7 @@ def test_only_namespace_is_substituted(interlink_clusters):
 
 
 def test_plugin_envs_are_well_formed(interlink_clusters):
-    """`values:` instead of `value:` is a real typo from the source config: the
-    variable then reaches the container empty."""
+    """`values:` instead of `value:` reaches the container as an empty variable."""
     for cluster, app in interlink_clusters.items():
         for env in app["values"]["plugin"]["envs"]:
             assert set(env) == {"name", "value"}, f"{cluster}: {env}"

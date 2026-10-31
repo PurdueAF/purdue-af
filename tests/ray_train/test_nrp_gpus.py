@@ -102,13 +102,13 @@ def test_a_job_is_placed_where_one_region_and_model_has_the_most_room():
         node("e", 4, model="NVIDIA L40"),
     ]
     assert nrp.most_in_one_group(nodes) == 6
-    # Every node of that region and model, the roomiest first: another job
+    # Every node of that region and model: another job
     # placed from the same reading may take the room of one.
-    group = [node("b", 3), node("c", 2), node("a", 1)]
-    assert nrp.placement(nodes, wanted=4, least=1) == group
-    assert nrp.placement(nodes, wanted=2, least=2) == group
-    assert nrp.placement(nodes, wanted=7, least=7) is None
-    assert nrp.placement([], wanted=1, least=1) is None
+    group = [node("a", 1), node("b", 3), node("c", 2)]
+    assert nrp.placement(nodes, least=1) == group
+    assert nrp.placement(nodes, least=2) == group
+    assert nrp.placement(nodes, least=7) is None
+    assert nrp.placement([], least=1) is None
 
 
 @pytest.fixture

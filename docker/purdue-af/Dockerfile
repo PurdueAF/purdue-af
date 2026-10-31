@@ -21,7 +21,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # hadolint ignore=DL3002
 USER root
 
-# --disablerepo=cuda: the base's cuda.repo is NVIDIA's rolling repo, whose CUDA 13 obsoletes the pinned 12.4.
+# --disablerepo=cuda: NVIDIA's rolling cuda.repo in the base would upgrade the unversioned cuda-toolkit-config-common to CUDA 13.
 RUN set -euo pipefail \
  && dnf -y upgrade --disablerepo=cuda --exclude='linux-firmware*' \
  && dnf -y install --disablerepo=cuda dnf-plugins-core epel-release \
@@ -177,9 +177,6 @@ COPY docker/purdue-af/xml/site-local-config.xml /etc/cvmfs/SITECONF/JobConfig/
 COPY docker/purdue-af/xml/storage.xml /etc/cvmfs/SITECONF/PhEDEx/
 COPY docker/purdue-af/configs/vomses /etc
 COPY docker/purdue-af/configs/default.local /etc/cvmfs/
-RUN mkdir -p "${HOME}/.globus" "${HOME}/.rnd" && \
-    chown -R "${NB_USER}:${NB_GID}" "${HOME}/.globus" "${HOME}/.rnd" && \
-    chmod 700 "${HOME}/.globus"
 
 COPY docker/purdue-af/jupyter/jupyter_server_config.py \
     docker/purdue-af/scripts/eos-connect.sh \

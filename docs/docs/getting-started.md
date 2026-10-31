@@ -59,7 +59,7 @@ For your own analyses, we recommend creating project-specific Pixi environments 
 see the [Pixi guide](guide-pixi.md).
 
 See [Software stacks](software.md) for a complete overview. If you need a package
-that is missing from the pre-installed kernels, please
+that is missing from the global Pixi environment, please
 [contact Purdue AF support](support.md).
 
 ## 5. Set up GitHub access

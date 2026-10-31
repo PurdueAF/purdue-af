@@ -20,9 +20,7 @@ def test_ldap_lookup_parses_uid_gid(monkeypatch, fake_ldap):
 
 
 def test_ldap_lookup_targets_geddes_auth(monkeypatch, fake_ldap):
-    """geddes-aux was retired; the lookup must hit geddes-auth under the
-    AllPeople tree. Host and base DN move together — the old
-    ou=People,dc=rcac base does not exist on the new server."""
+    """The lookup reads geddes-auth's AllPeople tree: host and base DN go together."""
     ns = load(monkeypatch)
     ns["ldap_lookup"]("alice")
     assert fake_ldap["hosts"] == ["geddes-auth.rcac.purdue.edu"]
@@ -143,17 +141,6 @@ async def test_pixi_home_points_to_work_storage(monkeypatch, fake_ldap):
     )
 
     assert spawner.environment["PIXI_HOME"] == "/work/users/alice/.pixi-home"
-
-
-async def test_userdata_recorded_on_spawner(monkeypatch, fake_ldap):
-    ns = load(monkeypatch)
-    spawner = FakeSpawner()
-
-    await ns["passthrough_auth_state_hook"](
-        spawner, {"name": "alice", "domain": "purdue.edu"}
-    )
-
-    assert spawner.userdata == {"name": "alice", "domain": "purdue.edu"}
 
 
 # ── hub config wiring ─────────────────────────────────────────────────────────

@@ -1,7 +1,6 @@
 **/.DS_Store
 .helm-cache/
 **/__pycache__
-monitoring/grafonnet
 .claude/*
 !.claude/skills/
 !.claude/rules/

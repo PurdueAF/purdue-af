@@ -46,9 +46,8 @@ def ldap_lookup(username: str) -> tuple[Any, Any]:
 
 
 async def passthrough_auth_state_hook(spawner: Any, auth_state: Any) -> None:
-    spawner.userdata = {"name": auth_state["name"], "domain": auth_state["domain"]}
-    domain = spawner.userdata["domain"]
-    username = spawner.userdata["name"]
+    domain = auth_state["domain"]
+    username = auth_state["name"]
     spawner.environment["NB_USER"] = username
 
     if domain != "purdue.edu":

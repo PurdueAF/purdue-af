@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import types
 
 import pytest
 from exporter_helpers import job_runner
@@ -24,22 +25,6 @@ def test_get_env_default():
     assert runner._get_env("DOES_NOT_EXIST_EITHER", "fallback") == "fallback"
 
 
-# ── name sanitisation (used to build filesystem result paths) ─────────────────
-
-
-def test_sanitized_mount_name():
-    assert runner._sanitized_mount_name("/depot/") == "depot"
-    assert runner._sanitized_mount_name("/work/users/") == "work_users"
-    assert runner._sanitized_mount_name("cvmfs") == "cvmfs"
-    assert runner._sanitized_mount_name("/") == "root"
-
-
-def test_sanitized_node_name():
-    assert runner._sanitized_node_name(" node-a.cluster ") == "node-a.cluster"
-    assert runner._sanitized_node_name("bad/name") == "bad_name"
-    assert runner._sanitized_node_name("") == ""
-
-
 # ── result persistence ────────────────────────────────────────────────────────
 
 
@@ -54,7 +39,7 @@ def test_load_previous_result_corrupt_json(tmp_path):
 
 
 def test_write_result_atomic_roundtrip(tmp_path):
-    p = tmp_path / "nested" / "result.json"
+    p = tmp_path / "result.json"
     runner._write_result_atomic(p, {"ok": True, "value": 1.5})
 
     assert json.loads(p.read_text()) == {"ok": True, "value": 1.5}
@@ -277,9 +262,16 @@ def test_check_metadata_failure_paths(monkeypatch):
 # ── main orchestration ────────────────────────────────────────────────────────
 
 
-def test_main_writes_timeout_when_ping_fails(monkeypatch, tmp_path):
-    monkeypatch.setattr(runner, "RESULTS_DIR", tmp_path)
-    monkeypatch.setattr(runner, "MOUNT_NAME", "/depot/")
+@pytest.fixture
+def paths(monkeypatch, tmp_path):
+    """As probe_agent sets them: the attempt is written, the published verdict read."""
+    attempt, published = tmp_path / "attempt.json", tmp_path / "result.json"
+    monkeypatch.setenv("RESULT_PATH", str(attempt))
+    monkeypatch.setenv("PREV_RESULT_PATH", str(published))
+    return types.SimpleNamespace(attempt=attempt, published=published)
+
+
+def test_main_writes_timeout_when_ping_fails(monkeypatch, paths):
     monkeypatch.setattr(runner, "NODE_NAME", "node-a")
     monkeypatch.setattr(runner, "ENABLE_FIO", False)
     monkeypatch.setattr(runner, "FIO_FILE", None)
@@ -288,37 +280,32 @@ def test_main_writes_timeout_when_ping_fails(monkeypatch, tmp_path):
 
     runner.main()
 
-    result = json.loads((tmp_path / "depot__node-a.json").read_text())
+    result = json.loads(paths.attempt.read_text())
     assert result["ok"] is False
     assert result["timeout"] is True
     assert result["throughput_gbps"] is None
     assert result["node"] == "node-a"
 
 
-def test_a_failed_check_keeps_the_last_measured_rate(monkeypatch, tmp_path):
+def test_a_failed_check_keeps_the_last_measured_rate(monkeypatch, paths):
     """The exporter shows no rate for a timeout; once the mount answers again
     the rate is the one fio last measured, not a zero it never measured."""
-    monkeypatch.setattr(runner, "RESULTS_DIR", tmp_path)
-    monkeypatch.setattr(runner, "MOUNT_NAME", "/depot/")
     monkeypatch.setattr(runner, "NODE_NAME", "node-a")
     monkeypatch.setattr(runner, "ENABLE_FIO", True)
     monkeypatch.setattr(runner, "FIO_FILE", "/probe")
-    path = tmp_path / "depot__node-a.json"
-    path.write_text(json.dumps({"throughput_gbps": 6.4, "last_fio_ts": 1.0}))
+    paths.published.write_text(json.dumps({"throughput_gbps": 6.4, "last_fio_ts": 1.0}))
     monkeypatch.setattr(runner, "_check_ping", lambda: (False, True, 3000.0))
     monkeypatch.setattr(runner, "_check_metadata", lambda: (True, False, 1.0))
 
     runner.main()
 
-    result = json.loads(path.read_text())
+    result = json.loads(paths.attempt.read_text())
     assert (result["timeout"], result["throughput_gbps"]) == (True, 6.4)
 
 
-def test_a_new_pod_places_its_first_fio_run_at_random(monkeypatch, tmp_path):
+def test_a_new_pod_places_its_first_fio_run_at_random(monkeypatch, paths):
     """Without history every pod of a rollout would read the same 1 GiB file
     in the same minute."""
-    monkeypatch.setattr(runner, "RESULTS_DIR", tmp_path)
-    monkeypatch.setattr(runner, "MOUNT_NAME", "/depot/")
     monkeypatch.setattr(runner, "NODE_NAME", "n1")
     monkeypatch.setattr(runner, "ENABLE_FIO", True)
     monkeypatch.setattr(runner, "FIO_FILE", "/probe")
@@ -331,7 +318,7 @@ def test_a_new_pod_places_its_first_fio_run_at_random(monkeypatch, tmp_path):
 
     runner.main()
 
-    result = json.loads((tmp_path / "depot__n1.json").read_text())
+    result = json.loads(paths.attempt.read_text())
     assert ran == []
     assert result["ok"] is True
     # No measurement yet is not a zero rate.
@@ -339,9 +326,7 @@ def test_a_new_pod_places_its_first_fio_run_at_random(monkeypatch, tmp_path):
     assert result["timestamp"] - result["last_fio_ts"] == pytest.approx(600.0, abs=5)
 
 
-def test_main_success_without_node_name(monkeypatch, tmp_path):
-    monkeypatch.setattr(runner, "RESULTS_DIR", tmp_path)
-    monkeypatch.setattr(runner, "MOUNT_NAME", "/work/")
+def test_main_success_without_node_name(monkeypatch, paths):
     monkeypatch.setattr(runner, "NODE_NAME", "")
     monkeypatch.setattr(runner, "ENABLE_FIO", False)
     monkeypatch.setattr(runner, "FIO_FILE", None)
@@ -353,7 +338,7 @@ def test_main_success_without_node_name(monkeypatch, tmp_path):
 
     runner.main()
 
-    result = json.loads((tmp_path / "work.json").read_text())
+    result = json.loads(paths.attempt.read_text())
     assert result["ok"] is True
     assert result["timeout"] is False
     assert result["ping_ms"] == 5.0
@@ -361,9 +346,7 @@ def test_main_success_without_node_name(monkeypatch, tmp_path):
     assert result["throughput_gbps"] is None
 
 
-def test_main_runs_fio_and_records_throughput(monkeypatch, tmp_path):
-    monkeypatch.setattr(runner, "RESULTS_DIR", tmp_path)
-    monkeypatch.setattr(runner, "MOUNT_NAME", "/depot/")
+def test_main_runs_fio_and_records_throughput(monkeypatch, paths):
     monkeypatch.setattr(runner, "NODE_NAME", "n1")
     monkeypatch.setattr(runner, "ENABLE_FIO", True)
     monkeypatch.setattr(runner, "FIO_FILE", "/probe")
@@ -376,18 +359,15 @@ def test_main_runs_fio_and_records_throughput(monkeypatch, tmp_path):
 
     runner.main()
 
-    result = json.loads((tmp_path / "depot__n1.json").read_text())
+    result = json.loads(paths.attempt.read_text())
     assert result["ok"] is True
     assert result["throughput_gbps"] == 3.5
     assert result["last_fio_ts"] == 12345.0
 
 
-def test_main_tolerates_corrupt_previous_last_fio_ts(monkeypatch, tmp_path):
-    monkeypatch.setattr(runner, "RESULTS_DIR", tmp_path)
-    monkeypatch.setattr(runner, "MOUNT_NAME", "/depot/")
+def test_main_tolerates_corrupt_previous_last_fio_ts(monkeypatch, paths):
     monkeypatch.setattr(runner, "NODE_NAME", "n1")
-    path = tmp_path / "depot__n1.json"
-    path.write_text('{"last_fio_ts": "not-a-float", "throughput_gbps": 1.0}')
+    paths.published.write_text('{"last_fio_ts": "not-a-float", "throughput_gbps": 1.0}')
     monkeypatch.setattr(runner, "ENABLE_FIO", False)
     monkeypatch.setattr(runner, "FIO_FILE", None)
     monkeypatch.setattr(runner, "_check_ping", lambda: (True, False, 1.0))
@@ -398,7 +378,7 @@ def test_main_tolerates_corrupt_previous_last_fio_ts(monkeypatch, tmp_path):
 
     runner.main()
 
-    result = json.loads(path.read_text())
+    result = json.loads(paths.attempt.read_text())
     assert result["ok"] is True
     assert result["last_fio_ts"] is None
 
@@ -459,18 +439,11 @@ def test_run_bounded_missing_binary_is_not_a_timeout():
 # ── result paths the supervisor supplies ──────────────────────────────────────
 
 
-def test_default_result_path_is_per_node(monkeypatch, tmp_path):
-    monkeypatch.setattr(runner, "RESULTS_DIR", tmp_path)
-    monkeypatch.setattr(runner, "MOUNT_NAME", "/depot/")
-    monkeypatch.setattr(runner, "NODE_NAME", "node-a")
-    assert runner.default_result_path() == tmp_path / "depot__node-a.json"
-
-
-def test_default_result_path_without_a_node(monkeypatch, tmp_path):
-    monkeypatch.setattr(runner, "RESULTS_DIR", tmp_path)
-    monkeypatch.setattr(runner, "MOUNT_NAME", "/depot/")
-    monkeypatch.setattr(runner, "NODE_NAME", "")
-    assert runner.default_result_path() == tmp_path / "depot.json"
+@pytest.mark.parametrize("variable", ["RESULT_PATH", "PREV_RESULT_PATH"])
+def test_main_needs_both_paths_from_the_supervisor(monkeypatch, paths, variable):
+    monkeypatch.delenv(variable)
+    with pytest.raises(RuntimeError, match=variable):
+        runner.main()
 
 
 # ── quiet mode ────────────────────────────────────────────────────────────────

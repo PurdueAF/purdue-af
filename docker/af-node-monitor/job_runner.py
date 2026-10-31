@@ -46,26 +46,11 @@ FIO_INTERVAL_TOLERANCE_S = float(_get_env("FIO_INTERVAL_TOLERANCE_S", "60"))
 
 ENABLE_FIO = _get_env("ENABLE_FIO", "false").lower() in {"1", "true", "yes"}
 
-RESULTS_DIR = Path(_get_env("RESULTS_DIR", "/run/af-node-monitor/results"))
 NODE_NAME = os.getenv("NODE_NAME") or ""
-
-# Set by probe_agent: where this attempt writes, and which file carries the
-# last_fio_ts it must honour. Unset means derive both, as standalone runs do.
-RESULT_PATH = os.getenv("RESULT_PATH") or ""
-PREV_RESULT_PATH = os.getenv("PREV_RESULT_PATH") or ""
 
 
 def _vlog(msg: str) -> None:
     print(msg)
-
-
-def _sanitized_mount_name(name: str) -> str:
-    # Replace slashes and other problematic chars for filesystem paths.
-    return name.strip("/").replace("/", "_") or "root"
-
-
-def _sanitized_node_name(name: str) -> str:
-    return name.strip().replace("/", "_") if name else ""
 
 
 def _load_previous_result(path: Path) -> Dict[str, Any]:
@@ -80,7 +65,6 @@ def _load_previous_result(path: Path) -> Dict[str, Any]:
 
 
 def _write_result_atomic(path: Path, data: Dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     with tmp_path.open("w", encoding="utf-8") as f:
         json.dump(data, f)
@@ -229,18 +213,10 @@ def _check_throughput(
     return True, False, gbps, now
 
 
-def default_result_path() -> Path:
-    mount_key = _sanitized_mount_name(MOUNT_NAME)
-    node_key = _sanitized_node_name(NODE_NAME)
-    if node_key:
-        return RESULTS_DIR / f"{mount_key}__{node_key}.json"
-    # Manual runs without NODE_NAME: a per-mount file the exporter never reads.
-    return RESULTS_DIR / f"{mount_key}.json"
-
-
 def main() -> None:
-    result_path = Path(RESULT_PATH) if RESULT_PATH else default_result_path()
-    prev_path = Path(PREV_RESULT_PATH) if PREV_RESULT_PATH else result_path
+    # Set by probe_agent; read here because the image smoke test imports this file.
+    result_path = Path(_get_env("RESULT_PATH", required=True))
+    prev_path = Path(_get_env("PREV_RESULT_PATH", required=True))
 
     _vlog(
         f"[job_runner] Starting checks for mount '{MOUNT_NAME}' "

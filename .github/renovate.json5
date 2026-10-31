@@ -102,8 +102,7 @@
     {
       // The wstunnel images inside an interLink node's INI config and shadow
       // template, and the release Hammer's tunnel command downloads, all
-      // strings to the helm-values manager; they move with the node's
-      // tunnelImage.
+      // strings to the helm-values manager.
       customType: 'regex',
       managerFilePatterns: ['/(^|/)apps/interlink/.*\\.ya?ml$/'],
       matchStrings: [
@@ -428,11 +427,7 @@
       // retargeted (Dockerfile + epel + rpm glob together).
       // docker versioning has no range support — use a regex pin.
       matchDatasources: ['docker'],
-      matchPackageNames: [
-        'docker.io/rockylinux/rockylinux',
-        'rockylinux/rockylinux',
-        'docker.io/library/rockylinux',
-      ],
+      matchPackageNames: ['docker.io/rockylinux/rockylinux'],
       allowedVersions: '/^8([.-]|$)/',
     },
     {
@@ -488,7 +483,7 @@
     },
     {
       // Python stays at 3.12 everywhere but pixi/global (next rule): the
-      // docker manager (FROM python:3.12-slim) and the other pixi manifests.
+      // python images (FROM python:3.12-slim, plain manifests) and pixi/base.
       // pixi/base's minor is also baked into the AF Dockerfile's
       // site-packages path and the hub's sitecustomize.py mountPath, which
       // Renovate cannot update, so raise them by hand in one change.

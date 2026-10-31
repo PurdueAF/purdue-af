@@ -47,7 +47,7 @@ rules:
   # suspends and resumes them and keeps their progress in their annotations
   - apiGroups: [ray.io]
     resources: [rayjobs]
-    verbs: [get, list, watch, create, patch, delete]
+    verbs: [list, create, patch, delete]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

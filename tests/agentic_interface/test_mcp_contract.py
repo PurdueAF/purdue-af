@@ -135,7 +135,7 @@ async def test_full_stack_handshake_and_auth(monkeypatch):
             from prometheus_client import REGISTRY
             from tools import profiles
 
-            async def fake_get_profiles(force=False):
+            async def fake_get_profiles():
                 return [
                     {
                         "display_name": "Stable",

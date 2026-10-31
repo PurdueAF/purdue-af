@@ -145,10 +145,16 @@ sidecar:
   rules:
     enabled: false
 
+# The rules sidecar is off, so the chart's ClusterRole would be empty.
+rbac:
+  namespaced: true
+
 # Loki reads its configuration from structuredConfig alone, which names no memcached.
 chunksCache:
   enabled: false
 resultsCache:
+  enabled: false
+memcached:
   enabled: false
 
 test:

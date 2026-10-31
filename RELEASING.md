@@ -51,7 +51,7 @@ flowchart TD
   pub --> tags["pre-release / latest docker tags"]
   pub --> mv["advance main-validated branch"]
   mv --> exp["Flux: reconcile experimental components"]
-  passed -.->|manual run by admin| img["Release AF image"]
+  passed -.->|manual run by admin| img["Release image"]
   passed -.->|manual run by admin| plat["Release platform"]
   img -.-> plat
   plat -.-> core["Flux: reconcile core components"]
