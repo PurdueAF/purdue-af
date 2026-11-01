@@ -13,10 +13,6 @@ def test_flux_deploys_flyte():
     kustomization = yaml.safe_load(EXPERIMENTAL.read_text())
     for name in ("helmrepo", "helmrelease", "postgres", "minio", "podtemplate"):
         assert f"../../apps/flyte/{name}.yaml" in kustomization["resources"]
-    generators = {g["name"]: g for g in kustomization["configMapGenerator"]}
-    assert generators["flyte-config"]["files"] == [
-        "values.yaml=../../apps/flyte/values.yaml"
-    ]
 
 
 def test_task_pods_use_the_pod_template_in_cms():

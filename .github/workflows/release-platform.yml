@@ -7,8 +7,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version override (YYYY.M.SEQ) — leave empty to auto-compute"
+        description: "Sequence override: YYYY.M.SEQ of the current month — leave empty to auto-compute"
         default: ""
+      force:
+        description: "Tag a commit whose ci-ok has not passed (emergencies only)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write # git tag + GitHub Release
@@ -16,6 +20,10 @@ permissions:
 concurrency:
   group: release-platform
   cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   release:
@@ -26,14 +34,42 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0 # full tag list + release notes
-          token: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
+      - name: "Gate: ci-ok succeeded for this commit"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?check_name=ci-ok" \
+            -q '.check_runs[0].conclusion // "missing"')
+          echo "ci-ok on ${sha}: ${conclusion}"
+          [ "$conclusion" != success ] || exit 0
+          # A release commit gets no pipeline; its parent passed Gate 1 of Release image.
+          runs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${sha}" --jq .total_count)
+          if [ "$conclusion" = missing ] && [ "$runs" = 0 ] \
+            && [[ "$(git log -1 --format=%s)" == "release purdue-af image "* ]]; then
+            echo "::warning::${sha} is a release commit, which gets no pipeline"
+            exit 0
+          fi
+          if [ "$FORCE" = true ]; then
+            echo "::warning::ci-ok is '${conclusion}' — proceeding because force=true"
+            exit 0
+          fi
+          echo "::error::ci-ok is '${conclusion}' for ${sha} — this commit has not passed CI"
+          exit 1
       - name: Compute next platform CalVer (YYYY.M.SEQ)
         id: calver
+        env:
+          OVERRIDE: ${{ inputs.version }}
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            next="${{ inputs.version }}"
+          year=$(date -u +%Y); month=$(date -u +%-m)
+          # A later month or year would outrank every tag auto-compute mints.
+          if [ -n "$OVERRIDE" ]; then
+            if ! [[ "$OVERRIDE" =~ ^${year}\.${month}\.[0-9]+$ ]]; then
+              echo "::error::version must be ${year}.${month}.<seq>, got '${OVERRIDE}'"; exit 1
+            fi
+            next="$OVERRIDE"
           else
-            year=$(date -u +%Y); month=$(date -u +%-m)
             last=$(git tag -l "${year}.${month}.*" | sort -t. -k3 -n | tail -1)
             if [ -z "$last" ]; then
               next="${year}.${month}.0"
@@ -48,7 +84,7 @@ jobs:
           echo "next platform version: $next"
       - name: Tag and publish release
         env:
-          GH_TOKEN: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.calver.outputs.version }}
         run: |
           git config user.name "af-release-bot"

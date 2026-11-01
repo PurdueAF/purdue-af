@@ -1,22 +1,8 @@
 name: CI pixi-global
 
-# Stage 1c of ci.yml — AFTER the AF image build. Import-smoke runs INSIDE
-# that image (EL8 userland + CLI tools like `git` that bare rockylinux:8
-# lacks; mlflow → GitPython needs them).
-#
-#   1. `pixi install --locked` when toml/lock agree
-#   2. otherwise `pixi lock` + install, then on green check-env commit the
-#      regenerated lock (Renovate only bumps manifests; see renovate.json5)
-#   3. import-smoke via pixi/check-env.py inside the AF image
-#   4. the IRIS-HEP integration challenge over CMS OpenData, same env, same
-#      image — imports prove the env resolves, this proves it does physics
-#   5. image-level CVMFS check: the host's /cvmfs mounted into the AF image,
-#      sourcing the CMS environment (the kind e2e stack has no /cvmfs)
-#
-# Memoized when the lock was already in sync (image-inputs.sh key + image
-# ref). Lock commits and AF_RELEASE_TOKEN: RELEASING.md. The pixi CLI version
-# is read from ARG PIXI_VERSION in docker/purdue-af/Dockerfile.
-# CONDA_OVERRIDE_CUDA mocks CUDA on CPU-only runners.
+# Stage 1c of ci.yml, inside the AF image built by stage 1b. Syncs
+# pixi/global/pixi.lock, import-smokes the env, runs the integration challenge and
+# checks CVMFS. Lock commits: RELEASING.md.
 
 on:
   workflow_call:
@@ -29,10 +15,6 @@ on:
         description: "'true' when af-image is pullable from ghcr"
         required: true
         type: string
-    secrets:
-      AF_RELEASE_TOKEN:
-        description: "Optional PAT with contents:write — auto-retriggers CI on lock push"
-        required: false
 
 permissions:
   contents: read
@@ -43,39 +25,22 @@ jobs:
     timeout-minutes: 180
     permissions:
       contents: write # commit regenerated pixi/global/pixi.lock
-      actions: write # workflow_dispatch when no PAT
-      packages: read # pull the (possibly private) AF image
+      actions: write # approve or dispatch the run on a lock commit
+      packages: read # pull the AF image
     env:
       CONDA_OVERRIDE_CUDA: "12.4"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.head_ref || github.ref_name }}
-          token: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
-      - name: Skip without lock file
-        id: present
-        run: |
-          if [ -f pixi/global/pixi.lock ]; then
-            echo "have_lock=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "have_lock=false" >> "$GITHUB_OUTPUT"
-            echo "pixi/global/pixi.lock not present — will generate on first install"
-          fi
       - name: Pick the AF image to test inside
         id: image
-        run: |
-          if [ "${{ inputs.af-image-available }}" = "true" ]; then
-            image="${{ inputs.af-image }}"
-          else
-            # fork PR: the exact-state image could not be pushed — fall
-            # back to the promoted channel so the check still runs
-            echo "::warning::exact-state AF image unavailable — falling back to :pre-release"
-            image="ghcr.io/purdueaf/purdue-af:pre-release"
-          fi
-          echo "image=$image" | tee -a "$GITHUB_OUTPUT"
+        uses: ./.github/actions/pick-af-image
+        with:
+          af-image: ${{ inputs.af-image }}
+          af-image-available: ${{ inputs.af-image-available }}
       - name: Compute memo key
         id: key
-        if: steps.present.outputs.have_lock == 'true'
         run: |
           img="${{ steps.image.outputs.image }}"
           # The :pre-release fallback is a moving tag: never memoized.
@@ -85,12 +50,11 @@ jobs:
           esac | tee -a "$GITHUB_OUTPUT"
       - name: Look up recorded green run
         id: memo
-        if: steps.present.outputs.have_lock == 'true'
         uses: ./.github/actions/memo-restore
         with:
           key: ${{ steps.key.outputs.key }}
       - name: Login to ghcr.io
-        if: (steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: steps.memo.outputs.hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4 # Renovate pins to digest
         with:
           registry: ghcr.io
@@ -98,7 +62,7 @@ jobs:
           password: ${{ github.token }}
       # The runner's Docker 28 defaults to the classic store, which pulls the AF image about half as fast as containerd.
       - name: Switch Docker to the containerd image store
-        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         run: |
           set -euo pipefail
           { sudo cat /etc/docker/daemon.json 2>/dev/null || echo '{}'; } \
@@ -106,11 +70,9 @@ jobs:
           sudo mv /tmp/daemon.json /etc/docker/daemon.json
           sudo systemctl restart docker
           echo "docker storage driver: $(docker info --format '{{.Driver}}')"
-      # The ~13 GB pull and the global-env install need each other's results
-      # only at `docker run` time, so they overlap: the pull runs detached
-      # while pixi installs, and by the smoke-test step the image is local.
+      # The image pull and the env install overlap: each needs the other only at `docker run`.
       - name: Start the AF image pull (detached)
-        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         env:
           AF_IMAGE: ${{ steps.image.outputs.image }}
         run: |
@@ -124,10 +86,10 @@ jobs:
           echo "pulling $AF_IMAGE in the background"
       - name: Read the pixi CLI version the AF image uses
         id: pixi
-        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         run: echo "version=$(sed -n 's/^ARG PIXI_VERSION="\([^"]*\)".*/\1/p' docker/purdue-af/Dockerfile)" | tee -a "$GITHUB_OUTPUT"
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2 # Renovate pins to digest
-        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         with:
           pixi-version: v${{ steps.pixi.outputs.version }}
           manifest-path: pixi/global/pixi.toml
@@ -135,25 +97,24 @@ jobs:
           cache: false
       - name: Install global env (regenerate lock if out of sync)
         id: lock
-        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         run: |
           set -euo pipefail
           MANIFEST=pixi/global/pixi.toml
-          if [ -f pixi/global/pixi.lock ] && \
-             pixi install --manifest-path "$MANIFEST" --locked; then
+          if pixi install --manifest-path "$MANIFEST" --locked; then
             echo "updated=false" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::pixi/global lock missing or out of sync — regenerating with pixi lock"
+            echo "::notice::pixi/global lock out of sync — regenerating with pixi lock"
             pixi lock --manifest-path "$MANIFEST"
             pixi install --manifest-path "$MANIFEST" --locked
             echo "updated=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Install CVMFS on the runner
-        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         uses: cvmfs-contrib/github-action-cvmfs@72f2a8d366043978d6aebee154bc9ed321c2f2a8 # v5.6
       # Revision: tests/integration_challenge/upstream.pin (part of the memo key).
       - name: Check out the integration challenge
-        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         run: |
           set -euo pipefail
           pin=tests/integration_challenge/upstream.pin
@@ -164,10 +125,8 @@ jobs:
           git -C challenge fetch -q --depth 1 origin "$ref"
           git -C challenge checkout -q FETCH_HEAD
           echo "integration challenge at $ref" | tee -a "$GITHUB_STEP_SUMMARY"
-      # Fails loudly on a bad pull instead of letting `docker run` retry it
-      # serially, which would silently give back the overlap.
       - name: Wait for the AF image
-        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         run: |
           set -euo pipefail
           while [ ! -f /tmp/af-pull.done ] && [ ! -f /tmp/af-pull.failed ]; do sleep 5; done
@@ -175,12 +134,9 @@ jobs:
             echo "::error::AF image pull failed"; cat /tmp/af-pull.log; exit 1
           fi
           echo "AF image pulled in $(cat /tmp/af-pull.secs)s"
-      # Runs the global env's own interpreter inside the AF image — the same
-      # combination a user gets from the `Python (pixi global)` kernel. Reads
-      # a CMS OpenData file straight from eospublic (no grid cert needed).
-      # Detached, so it overlaps the two smoke tests below.
+      # The global env's interpreter inside the AF image: the `Python (pixi global)` kernel's combination.
       - name: Start the integration challenge (detached)
-        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         env:
           AF_IMAGE: ${{ steps.image.outputs.image }}
         run: |
@@ -195,24 +151,22 @@ jobs:
           ' >/tmp/challenge.log 2>&1 &
           echo "running the integration challenge in the background"
       - name: CVMFS smoke test (cmsset_default.sh)
-        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         run: |
           docker run --rm -v /cvmfs:/cvmfs:shared "${{ steps.image.outputs.image }}" bash -c '
             source /cvmfs/cms.cern.ch/cmsset_default.sh &&
             command -v scramv1 >/dev/null &&
             echo "cmsset ok: $(command -v scramv1)"'
       - name: Import-smoke the global env (inside the AF image)
-        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         run: |
-          # --user 0: the image defaults to jovyan (uid 1000), but the env
-          # installed on the runner is owned by the runner user (uid 1001)
-          # and some conda-meta files aren't world-readable
+          # --user 0: the runner's uid owns the env, and some conda-meta files are not world-readable.
           docker run --rm --user 0:0 -v "$PWD:$PWD" -w "$PWD" \
             "${{ steps.image.outputs.image }}" \
             pixi/global/.pixi/envs/default/bin/python pixi/check-env.py \
               --manifest pixi/global/pixi.toml --env default
       - name: Integration challenge result
-        if: steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true'
+        if: steps.memo.outputs.hit != 'true'
         run: |
           set -euo pipefail
           while [ ! -f /tmp/challenge.rc ]; do sleep 2; done
@@ -220,43 +174,14 @@ jobs:
           exit "$(cat /tmp/challenge.rc)"
 
       - name: Commit regenerated lockfile
-        if: success() && (steps.present.outputs.have_lock != 'true' || steps.memo.outputs.hit != 'true') && steps.lock.outputs.updated == 'true'
+        if: success() && steps.memo.outputs.hit != 'true' && steps.lock.outputs.updated == 'true'
         env:
-          HAVE_PAT: ${{ secrets.AF_RELEASE_TOKEN != '' }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
-          GH_TOKEN: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
-          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ] && \
-             [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
-            echo "::error::pixi/global/pixi.lock is out of sync with pixi.toml. " \
-              "Fork PRs cannot receive lock commits — run \`pixi lock --manifest-path pixi/global/pixi.toml\` and push."
-            exit 1
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pixi/global/pixi.lock
-          if git diff --staged --quiet; then
-            echo "Lock regenerate produced no file change — nothing to commit"
-            exit 0
-          fi
-          git commit -m "chore(pixi): regenerate global lockfile"
-          git pull --rebase origin "$BRANCH"
-          git push origin "HEAD:$BRANCH"
-          # Helper may be absent on Renovate branches — load from default branch.
-          script=.github/workflows/retrigger-after-lock-push.sh
-          if [ ! -f "$script" ]; then
-            gh api "repos/${GITHUB_REPOSITORY}/contents/.github/workflows/retrigger-after-lock-push.sh?ref=${GITHUB_DEFAULT_BRANCH}" \
-              --jq .content | base64 -d > /tmp/retrigger-after-lock-push.sh
-            script=/tmp/retrigger-after-lock-push.sh
-            chmod +x "$script"
-          fi
-          "$script" "$HAVE_PAT" "$BRANCH" | tee -a "$GITHUB_STEP_SUMMARY"
-          # Fail this SHA; follow-up CI runs on the lock commit.
-          exit 1
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: .github/workflows/commit-lockfile.sh global
       - name: Record green run
-        if: success() && steps.present.outputs.have_lock == 'true' && steps.memo.outputs.hit != 'true' && steps.lock.outputs.updated != 'true'
+        if: success() && steps.memo.outputs.hit != 'true' && steps.lock.outputs.updated != 'true'
         uses: ./.github/actions/memo-save
         with:
           key: ${{ steps.key.outputs.key }}

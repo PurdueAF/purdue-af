@@ -1,27 +1,11 @@
 #!/usr/bin/env bash
 #
-# Single source of truth for CONTENT-ADDRESSED CI artifacts.
-#
-# Every publishable artifact (image) and every memoized check (pixi, e2e)
-# declares its input paths here. The hash of those paths' git state names
-# the artifact: images are tagged `in-<hash>` on ghcr, checks record green
-# runs under cache keys containing the same hash. A build or test is
-# skipped ONLY when the artifact/marker for the exact current input state
-# already exists — verified reuse, never "the path filter didn't match".
+# Input paths of every content-addressed image and memoized check (docker/REGISTRY.md).
+# Each set includes the workflow that produces the artifact and this script.
 #
 # Usage:
-#   image-inputs.sh <name>          → prints "in-<12-hex>" for the current tree
-#   image-inputs.sh --paths <name>  → prints the input path list (one per line)
-#
-# Names: purdue-af, agentic-interface, af-pod-monitor, af-node-monitor,
-#        agentic-analysis, supersonic-model-manager, interlink-slurm-plugin,
-#        interlink-kubernetes-plugin, ray-nrp, pixi-base, pixi-global, e2e-hub
-#
-# The hash covers file content, names and modes of every TRACKED file under
-# the listed pathspecs (git ls-files -s), so it is independent of commit
-# history: a squash-merge with an identical tree reuses the PR's artifacts.
-# Each set includes the workflow that produces the artifact and this script,
-# so changing the build/test logic also invalidates the artifact.
+#   image-inputs.sh <name>          prints "in-<12-hex>" for the current tree
+#   image-inputs.sh --paths <name>  prints the input paths, one per line
 
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -29,9 +13,7 @@ cd "$(git rev-parse --show-toplevel)"
 paths_for() {
 	case "$1" in
 	purdue-af)
-		# Everything COPY'd by docker/purdue-af/Dockerfile — the dir is
-		# self-contained (Dockerfile + scripts/jupyter/osg/xml/code-server/
-		# configs/pixi-wrapper), plus the pixi base env and Slurm inputs.
+		# Everything docker/purdue-af/Dockerfile COPYs or bind-mounts.
 		cat <<-EOF
 			docker/purdue-af
 			.claude/skills/purdue-af-agentic-interface
@@ -68,9 +50,7 @@ paths_for() {
 		EOF
 		;;
 	interlink-slurm-plugin)
-		# Dockerfile COPY's the whole slurm/ tree (client RPM + every
-		# slurm-configs-<cluster>/); a new cluster config must invalidate
-		# the image hash the same way a Dockerfile change does.
+		# The Dockerfile COPYs the whole slurm/ tree.
 		cat <<-EOF
 			docker/interlink-slurm-plugin
 			slurm
@@ -93,8 +73,7 @@ paths_for() {
 		EOF
 		;;
 	agentic-analysis)
-		# Runtime only (Flyte SDK, git, pixi, the agent's tools): the workflow code
-		# reaches the task pods as a Flyte code bundle, not through this image.
+		# Runtime only: the workflow code reaches the task pods as a Flyte code bundle.
 		cat <<-EOF
 			docker/agentic-analysis
 			.github/workflows/ci-images.yml
@@ -120,11 +99,7 @@ paths_for() {
 		EOF
 		;;
 	pixi-global)
-		# The AF image the check runs inside is appended to the memo key
-		# by ci-pixi-global.yml (it is not a git path). tests/integration_
-		# challenge covers the analysis smoke test that shares this job:
-		# its driver AND upstream.pin, so a Renovate bump of the pinned
-		# challenge revision invalidates the marker and forces a real run.
+		# ci-pixi-global.yml appends the AF image to the memo key.
 		cat <<-EOF
 			pixi/global
 			pixi/check-env.py
@@ -134,8 +109,7 @@ paths_for() {
 		EOF
 		;;
 	e2e-hub)
-		# Everything the kind e2e deploys or executes. The AF image tag is
-		# appended to the memo key by ci-e2e.yml for the real-image job.
+		# ci-e2e.yml appends the spawned image to the memo key.
 		cat <<-EOF
 			apps/jupyterhub/jupyterhub
 			flux/core-production/kustomization.yaml

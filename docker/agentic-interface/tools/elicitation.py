@@ -10,6 +10,7 @@ import logging
 import time
 from typing import Any, NamedTuple, cast
 
+from mcp.server.mcpserver import Context
 from mcp.shared.exceptions import NoBackChannelError
 from pydantic import BaseModel, Field, create_model
 
@@ -29,7 +30,7 @@ class _Client(NamedTuple):
         )
 
 
-def _client_diag(ctx: Any) -> _Client:
+def _client_diag(ctx: Context) -> _Client:
     """Who is asking, as far as the connection says; None for anything unknown."""
     try:
         params = ctx.session.client_params
@@ -45,7 +46,9 @@ def _client_diag(ctx: Any) -> _Client:
         return _Client(None, None, None, None)
 
 
-async def elicit(ctx: Any, message: str, schema: type[BaseModel]) -> tuple[str, Any]:
+async def elicit(
+    ctx: Context | None, message: str, schema: type[BaseModel]
+) -> tuple[str, Any]:
     """Ask the client for structured input.
 
     Returns ``(status, data)`` where status is one of:
@@ -93,7 +96,9 @@ class NeedsChoices(Exception):
     """
 
 
-async def ask(ctx: Any, message: str, schema: type[BaseModel], help_text: str) -> Any:
+async def ask(
+    ctx: Context | None, message: str, schema: type[BaseModel], help_text: str
+) -> Any:
     """``elicit`` that returns the submitted data or raises NeedsChoices."""
     status, data = await elicit(ctx, message, schema)
     if status != "accept":

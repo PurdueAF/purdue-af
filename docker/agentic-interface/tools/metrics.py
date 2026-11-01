@@ -13,6 +13,7 @@ from typing import Any, Optional
 
 from config import CLUSTER_PROMETHEUS_URL, DASHBOARD_PATH, PROMETHEUS_URL
 from errors import Failure, UpstreamError
+from mcp.server.mcpserver import MCPServer
 from shared import prom_query, prom_vector, shared_client
 
 # Grafana's datasource uid -> the shared client's name and the URL.
@@ -117,7 +118,7 @@ async def _panel(
     return lines, answered
 
 
-def register(mcp: Any) -> None:
+def register(mcp: MCPServer) -> None:
     @mcp.tool()
     async def get_facility_metrics(section: Optional[str] = None) -> str:
         """Current numbers from the public facility dashboard.

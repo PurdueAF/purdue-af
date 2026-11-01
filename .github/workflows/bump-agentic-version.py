@@ -1,17 +1,8 @@
 #!/usr/bin/env python3
-"""Rewrite the agentic-interface image version in its Deployment — the
-file-editing half of the AUTOMATIC release in ci.yml's publish stage
-(the "Auto-release agentic-interface" step).
+"""Rewrite the agentic-interface image version in its Deployment.
 
-deployment.yaml is the single source of truth for "what production runs":
-the current version is READ from it (--print-current), and a release
-rewrites the image tag with a count-verified substitution — if the file
-drifts (the image line moves or is renamed), the script fails loudly
-instead of producing a half-bumped release.
-
-Before the first release the manifest carries the `latest` channel tag;
---print-current then reports 0.0.0, so `--bump patch` mints 0.0.1 (pass
---set X.Y.Z to pick a different starting version).
+The file-editing half of the auto-release in ci.yml (RELEASING.md). The
+substitution is count-verified, so a moved or renamed image line fails the run.
 
 The skill states the MAJOR.MINOR it ships in; --skill-kind prints the bump
 kind the skill implies (minor iff it changed since the pinned release) and
@@ -32,9 +23,7 @@ from pathlib import Path
 
 DEFAULT_FILE = Path("apps/agentic-interface/deployment.yaml")
 VERSION_RE = r"\d+\.\d+\.\d+"
-# The image ref as it appears in the Deployment (geddes Harbor proxy of ghcr;
-# the CI-promoted semver tags live on ghcr.io/purdueaf/agentic-interface).
-IMAGE_LINE_RE = rf"(?m)^(\s*image: \S+/agentic-interface:)(latest|{VERSION_RE})$"
+IMAGE_LINE_RE = rf"(?m)^(\s*image: \S+/agentic-interface:)({VERSION_RE})$"
 SKILL_DIR = ".claude/skills/purdue-af-agentic-interface"
 SKILL_STAMP_RE = r"(?m)^Skill version: `(\d+\.\d+)`$"
 
@@ -55,12 +44,7 @@ def current_version(text: str) -> str:
             "cannot find the agentic-interface image line in deployment.yaml "
             "— layout changed?"
         )
-    tag = m.group(2)
-    if tag == "latest":
-        # Pre-first-release state: bump from a zero baseline.
-        print("current tag is 'latest' — treating as 0.0.0", file=sys.stderr)
-        return "0.0.0"
-    return tag
+    return m.group(2)
 
 
 def apply(text: str, new_version: str) -> str:

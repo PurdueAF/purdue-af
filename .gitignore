@@ -1,5 +1,4 @@
 **/.DS_Store
-.helm-cache/
 **/__pycache__
 .claude/*
 !.claude/skills/

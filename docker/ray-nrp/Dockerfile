@@ -1,7 +1,5 @@
 # Ray's image for jobs on NRP Nautilus: the AF's global Pixi environment
-# (pixi/global), which Ray clusters on the AF run from /work, installed into
-# the image, since NRP pods see no AF storage. A job's script then runs with the
-# same Python, Ray and PyTorch at either site.
+# (pixi/global) installed into the image, since NRP pods see no AF storage.
 FROM ubuntu:24.04
 
 COPY --from=ghcr.io/prefix-dev/pixi:0.83.0 /usr/local/bin/pixi /usr/local/bin/pixi
@@ -27,3 +25,9 @@ RUN userdel --remove ubuntu 2>/dev/null \
     && useradd --uid 1000 --user-group --create-home --shell /bin/bash ray
 USER 1000
 WORKDIR /home/ray
+
+# As that user: Ray, PyTorch, the S3 client, and KubeRay's wget.
+RUN test "$(id -u)" = 1000 \
+    && ray --version \
+    && wget --version >/dev/null \
+    && python -c "import boto3, pyarrow, ray.train, smart_open, torch; print('ok:', ray.__version__, torch.__version__, torch.version.cuda, torch._C._cuda_getArchFlags())"

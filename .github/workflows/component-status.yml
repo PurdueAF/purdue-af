@@ -1,12 +1,8 @@
 name: Component status
 
-# Recomputes the README deployment dashboard: for every component, is the
-# cluster running what is on `main`, and if not, why not? Derived from git
-# refs alone (see component-status.py) — no cluster access.
-#
-# Output is shields.io endpoint JSON on the orphan `status` branch, which is
-# force-pushed as a single commit every run, so keeping the dashboard current
-# adds nothing to `main` and no history anywhere.
+# Force-pushes the README status badges to the orphan `status` branch as one
+# commit. What they measure: README.md#component-status; RELEASING.md for how
+# a change ships.
 
 on:
   workflow_run:
@@ -23,9 +19,14 @@ concurrency:
   group: component-status
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # PR runs cannot change any deployed ref — only main pushes and tags can
     if: >-
       github.event_name != 'workflow_run'
@@ -40,11 +41,6 @@ jobs:
         with:
           python-version: "3.15"
       - run: pip install pyyaml==6.0.3
-
-      # a silent fallback here would misreport unvalidated drift as ready to
-      # release, so require the ref instead
-      - name: Verify the validation ref is present
-        run: git rev-parse --verify origin/main-validated
 
       - name: Resolve CI state on main
         id: ci
@@ -69,7 +65,7 @@ jobs:
         run: |
           work=$(mktemp -d)
           cp -r badges "$work/badges"
-          cd "$work"
+          cd "$work" || exit 1
           git init -q -b status
           git add -A
           git -c user.name='github-actions[bot]' \

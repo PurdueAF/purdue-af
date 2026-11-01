@@ -6,10 +6,10 @@ cluster, whose questions a client without elicitation must ask in chat.
 In Claude Code it appears as ``/mcp__purdue-af-agentic-interface__create_cluster``.
 """
 
-from typing import Any
+from mcp.server.mcpserver import MCPServer
 
 
-def register(mcp: Any) -> None:
+def register(mcp: MCPServer) -> None:
     @mcp.prompt()
     def create_cluster() -> str:
         """Create a Dask Gateway cluster, asking the user for env, size and count."""

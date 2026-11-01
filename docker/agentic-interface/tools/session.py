@@ -28,7 +28,7 @@ from errors import (
     response_detail,
     unreachable,
 )
-from mcp.server.mcpserver import Context
+from mcp.server.mcpserver import Context, MCPServer
 from shared import shared_client
 
 from tools.elicitation import ask, single_choice_model
@@ -173,7 +173,7 @@ def _servers(data: dict[str, Any]) -> Optional[dict[str, Any]]:
     return servers if isinstance(servers, dict) else {}
 
 
-def register(mcp: Any) -> None:
+def register(mcp: MCPServer) -> None:
     @mcp.tool()
     async def get_session_status() -> str:
         """Return the current status of the user's Analysis Facility session (pod).

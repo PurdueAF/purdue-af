@@ -35,11 +35,9 @@ jobs:
   pixi-base:
     needs: checks
     uses: ./.github/workflows/ci-pixi-base.yml
-    secrets:
-      AF_RELEASE_TOKEN: ${{ secrets.AF_RELEASE_TOKEN }}
     permissions:
       contents: write # lockfile commits
-      actions: write # workflow_dispatch when no PAT
+      actions: write # approve or dispatch the run on a lock commit
 
   images:
     needs: pixi-base
@@ -54,11 +52,9 @@ jobs:
     with:
       af-image: ${{ needs.images.outputs.af-image }}
       af-image-available: ${{ needs.images.outputs.af-image-available }}
-    secrets:
-      AF_RELEASE_TOKEN: ${{ secrets.AF_RELEASE_TOKEN }}
     permissions:
       contents: write # lockfile commits
-      actions: write # workflow_dispatch when no PAT
+      actions: write # approve or dispatch the run on a lock commit
       packages: read
 
   e2e:
@@ -103,13 +99,19 @@ jobs:
       packages: write
       checks: write # synthetic ci-ok on manifest-only auto-release commits
     steps:
-      - name: Refuse to promote off main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Full history + tags: the auto-release compares against the last release tag.
+          fetch-depth: 0
+      # A re-run of an older commit would rewind every channel tag and main-validated, and Flux would prune to match.
+      - name: Refuse to publish a commit behind main-validated
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [ "${GITHUB_EVENT_NAME}" != "push" ] || [ "${GITHUB_REF}" != "refs/heads/main" ]; then
-            echo "::error::refusing promote: only push to main may move" \
-              " :latest / :pre-release / :sha- / main-validated" \
-              " (got event=${GITHUB_EVENT_NAME} ref=${GITHUB_REF})"
+          rel=$(gh api "repos/${GITHUB_REPOSITORY}/compare/main-validated...${GITHUB_SHA}" --jq .status)
+          if [ "$rel" != ahead ] && [ "$rel" != identical ]; then
+            echo "::error::${GITHUB_SHA} is ${rel} of main-validated: only a newer commit may publish"
             exit 1
           fi
       - name: Login to ghcr.io
@@ -124,22 +126,7 @@ jobs:
           AUX_TAGS: ${{ needs.images.outputs.aux-tags }}
         run: |
           set -euo pipefail
-          # GHCR calls fail transiently; retry every one. Progress goes to stderr: stdout carries the digest.
-          ghcr_retry() {
-            local what="$1"; shift
-            local attempt=1 max=5 delay=15
-            until "$@"; do
-              if [ "$attempt" -ge "$max" ]; then
-                echo "::error::${what} failed after ${max} attempts" >&2
-                return 1
-              fi
-              echo "::warning::${what} failed (attempt ${attempt}/${max}); retrying in ${delay}s" >&2
-              sleep "$delay"
-              attempt=$((attempt + 1))
-              delay=$((delay * 2))
-            done
-          }
-          retag() { ghcr_retry "imagetools create" docker buildx imagetools create "$@"; }
+          source .github/workflows/ghcr.sh
           first=1
           for pair in $AUX_TAGS; do
             # name=in-<hash>=<channel>
@@ -156,7 +143,7 @@ jobs:
               continue
             fi
             if [ "$first" -eq 0 ]; then sleep 5; else first=0; fi
-            retag \
+            ghcr_retry "imagetools create" docker buildx imagetools create \
               -t "$repo:sha-$GITHUB_SHA" \
               -t "$repo:$channel" \
               "$repo@$digest"
@@ -168,50 +155,20 @@ jobs:
           AF_DIGEST: ${{ needs.images.outputs.af-digest }}
         run: |
           set -euo pipefail
-          retag() {
-            local attempt=1 max=5 delay=15
-            until docker buildx imagetools create "$@"; do
-              if [ "$attempt" -ge "$max" ]; then
-                echo "::error::imagetools create failed after ${max} attempts: $*"
-                return 1
-              fi
-              echo "::warning::imagetools create failed (attempt ${attempt}/${max}); retrying in ${delay}s"
-              sleep "$delay"
-              attempt=$((attempt + 1))
-              delay=$((delay * 2))
-            done
-          }
+          source .github/workflows/ghcr.sh
           repo="${AF_IMAGE%%:*}"
-          retag \
+          ghcr_retry "imagetools create" docker buildx imagetools create \
             -t "$repo:sha-$GITHUB_SHA" \
             -t "$repo:pre-release" \
             "$repo@$AF_DIGEST"
           echo "published $repo@$AF_DIGEST -> :sha-${GITHUB_SHA::12} + :pre-release" | tee -a "$GITHUB_STEP_SUMMARY"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          # Full history + tags: the auto-release compares against the last release tag.
-          fetch-depth: 0
       - name: Auto-release agentic-interface (version bump when the image changed)
         id: autorelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Same GHCR retry as the aux publish step.
-          ghcr_retry() {
-            local what="$1"; shift
-            local attempt=1 max=5 delay=15
-            until "$@"; do
-              if [ "$attempt" -ge "$max" ]; then
-                echo "::error::${what} failed after ${max} attempts" >&2
-                return 1
-              fi
-              echo "::warning::${what} failed (attempt ${attempt}/${max}); retrying in ${delay}s" >&2
-              sleep "$delay"
-              attempt=$((attempt + 1))
-              delay=$((delay * 2))
-            done
-          }
+          source .github/workflows/ghcr.sh
           repo="ghcr.io/purdueaf/agentic-interface"
           # The image this run validated: the input-hash tag of the tested tree.
           want=$(./.github/workflows/image-inputs.sh agentic-interface)
@@ -229,12 +186,8 @@ jobs:
           git checkout -B autorelease "$GITHUB_SHA"
           cur=$(python3 .github/workflows/bump-agentic-version.py --print-current)
           # Compare with the :in- digest in the last release tag's annotation; imagetools create rewraps, so the version tag's own digest never matches.
-          if [ "$cur" = "0.0.0" ]; then
-            prev_digest="" # pin is still `latest` — nothing released yet
-          else
-            prev_digest=$(git for-each-ref --format='%(contents)' \
-              "refs/tags/agentic-interface-v$cur" | sed -n 's/^digest: //p')
-          fi
+          prev_digest=$(git for-each-ref --format='%(contents)' \
+            "refs/tags/agentic-interface-v$cur" | sed -n 's/^digest: //p')
           if [ "$prev_digest" = "$want_digest" ]; then
             echo "agentic-interface image unchanged since :$cur — no release" \
               | tee -a "$GITHUB_STEP_SUMMARY"
@@ -282,5 +235,5 @@ jobs:
         run: |
           set -euo pipefail
           target="${AUTORELEASE_SHA:-$GITHUB_SHA}"
-          git push --force origin "${target}:refs/heads/main-validated"
+          git push origin "${target}:refs/heads/main-validated"
           echo "main-validated -> ${target}" | tee -a "$GITHUB_STEP_SUMMARY"

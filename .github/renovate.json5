@@ -1,10 +1,8 @@
-// Renovate configuration — automated dependency update PRs.
+// Renovate configuration, read from main by the Mend Renovate GitHub App
+// (https://github.com/apps/renovate).
 //
-// Activation: install the Mend Renovate GitHub App on this repository
-// (https://github.com/apps/renovate). The app reads this file from main.
-//
-// Cluster Kubernetes version: 1.29.x (Geddes). When upgrading the cluster,
-// review Helm chart kubeVersion constraints before relaxing packageRules below.
+// KUBE_VERSION in .github/workflows/validate-manifests.sh is the cluster's
+// Kubernetes version; relax the rules that name it when it moves.
 //
 // Covers:
 //   - Flux HelmRelease chart versions (apps/**) via the flux manager
@@ -16,25 +14,20 @@
 //   - Python deps and their uv.lock files via pep621
 //   - pixi manifests (pixi/{base,global}/pixi.toml) — NOT lockfiles
 //   - pre-commit hook versions
-//   - regex managers: Dockerfile ARG pins (pixi CLI, coding-agent CLIs, ACP
-//     adapters), the integration-challenge revision, `name:`/`tag:` image
-//     pairs in chart values, the hadolint hook image, and the `*_VERSION`
-//     tool pins in workflows (the githubActionsVersions preset)
-//
-// Pixi lockfiles: Renovate only bumps pixi.toml. CI (ci-pixi-base.yml /
-// ci-pixi-global.yml) regenerates pixi.lock when out of sync, runs check-env,
-// and on success commits the lock back to the PR branch. That keeps Mend
-// runners free of `pixi lock` (which OOMs / fills disk on the science stack)
-// while still landing green PRs.
+//   - `# renovate:` comments on `*_VERSION` pins: Dockerfile ARGs (pixi CLI,
+//     coding-agent CLIs, ACP adapters) and workflow env vars (tool pins)
+//   - regex managers: the wstunnel pins in interLink values, the
+//     integration-challenge revision, `name:`/`tag:` image pairs in chart
+//     values, the hadolint hook image
 {
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   extends: [
     'config:recommended',
-    ':dependencyDashboard',
     // Pin `uses:` action refs to immutable commit SHAs (tag kept as comment).
     'helpers:pinGitHubActionDigests',
-    // `# renovate: datasource=… depName=…` above a `*_VERSION:` env var in a workflow.
+    // `# renovate: datasource=… depName=…` above a `*_VERSION` workflow env var or Dockerfile ARG.
     'customManagers:githubActionsVersions',
+    'customManagers:dockerfileVersions',
   ],
   // Batch update PRs into a weekly window to keep noise down.
   schedule: ['before 6am on monday'],
@@ -46,18 +39,13 @@
   groupName: 'other dependencies',
 
   prConcurrentLimit: 2,
-  branchConcurrentLimit: 2,
-
-  // Automerge uses GitHub's native auto-merge, which waits on the ci-ok check
-  // the main ruleset requires; without that ruleset Renovate merges itself.
 
   // ci-pixi-*.yml pushes the regenerated pixi.lock as this bot; without this
   // Renovate treats the branch as hand-edited and never merges it.
   gitIgnoredAuthors: ['41898282+github-actions[bot]@users.noreply.github.com'],
 
-  // Empty, not absent: `config:recommended` pulls in `:ignoreModulesAndTests`,
-  // which skips `**/tests/**` — where the integration-challenge pin and the
-  // test suite's own dependencies live.
+  // Empty, not absent: `config:recommended` skips `**/tests/**`, which holds the
+  // integration-challenge pin and the test suite's own dependencies.
   ignorePaths: [],
 
   // Flux manager is opt-in by path: parse everything Flux reconciles.
@@ -89,20 +77,10 @@
     },
   },
 
-  // The pixi CLI pin; ci-pixi-*.yml read it from the Dockerfile at run time.
   customManagers: [
     {
-      customType: 'regex',
-      managerFilePatterns: ['/(^|/)Dockerfile$/'],
-      matchStrings: ['ARG PIXI_VERSION="(?<currentValue>[^"]+)"'],
-      datasourceTemplate: 'github-releases',
-      depNameTemplate: 'prefix-dev/pixi',
-      extractVersionTemplate: '^v(?<version>.*)$',
-    },
-    {
-      // The wstunnel images inside an interLink node's INI config and shadow
-      // template, and the release Hammer's tunnel command downloads, all
-      // strings to the helm-values manager.
+      // wstunnel in an interLink node's INI config, its shadow template and
+      // Hammer's tunnel command: strings to the helm-values manager.
       customType: 'regex',
       managerFilePatterns: ['/(^|/)apps/interlink/.*\\.ya?ml$/'],
       matchStrings: [
@@ -112,52 +90,6 @@
       ],
       depNameTemplate: 'ghcr.io/erebe/wstunnel',
       datasourceTemplate: 'docker',
-    },
-    {
-      // Coding-agent CLIs baked into the images. Pinned as Dockerfile ARGs
-      // (npm install -g <pkg>@<version>), so only a regex manager sees them.
-      // The matching code-server extensions are pinned in
-      // docker/purdue-af/scripts/config-extensions.sh and come from Open VSX,
-      // which Renovate cannot query — bump those by hand alongside these.
-      customType: 'regex',
-      managerFilePatterns: ['/(^|/)Dockerfile$/'],
-      matchStrings: [
-        'ARG CLAUDE_CODE_VERSION="(?<currentValue>[^"]+)"',
-      ],
-      datasourceTemplate: 'npm',
-      depNameTemplate: '@anthropic-ai/claude-code',
-    },
-    {
-      customType: 'regex',
-      managerFilePatterns: ['/(^|/)Dockerfile$/'],
-      matchStrings: ['ARG CODEX_VERSION="(?<currentValue>[^"]+)"'],
-      datasourceTemplate: 'npm',
-      depNameTemplate: '@openai/codex',
-    },
-    {
-      customType: 'regex',
-      managerFilePatterns: ['/(^|/)Dockerfile$/'],
-      matchStrings: ['ARG OPENCODE_VERSION="(?<currentValue>[^"]+)"'],
-      datasourceTemplate: 'npm',
-      depNameTemplate: 'opencode-ai',
-    },
-    {
-      // ACP adapters — Claude and Codex again, reached from JupyterLab through
-      // jupyter-ai instead of a terminal. Separate packages on their own
-      // release cadences, so they get their own ARGs and their own managers.
-      // opencode needs no adapter: jupyter-ai drives its binary directly.
-      customType: 'regex',
-      managerFilePatterns: ['/(^|/)Dockerfile$/'],
-      matchStrings: ['ARG CLAUDE_AGENT_ACP_VERSION="(?<currentValue>[^"]+)"'],
-      datasourceTemplate: 'npm',
-      depNameTemplate: '@agentclientprotocol/claude-agent-acp',
-    },
-    {
-      customType: 'regex',
-      managerFilePatterns: ['/(^|/)Dockerfile$/'],
-      matchStrings: ['ARG CODEX_ACP_VERSION="(?<currentValue>[^"]+)"'],
-      datasourceTemplate: 'npm',
-      depNameTemplate: '@agentclientprotocol/codex-acp',
     },
     {
       // The IRIS-HEP integration challenge revision (tests/integration_challenge/upstream.pin).
@@ -200,18 +132,15 @@
 
   packageRules: [
     {
-      // Images built in this repo and served through the cluster registry;
-      // the release workflows set their tags. Third-party images behind the
-      // Docker Hub cache are renamed by registryAliases and do not match.
+      // Images built here, tagged by the release workflows; the Docker Hub cache's
+      // images are renamed by registryAliases and do not match.
       matchDatasources: ['docker'],
       matchPackageNames: ['geddes2-registry.rcac.purdue.edu/**'],
       enabled: false,
     },
     {
-      // The upstream image docker/interlink-kubernetes-plugin builds on. Its
-      // tag is one third of the PLUGIN_REF lock (Dockerfile ARG, PLUGIN_REF,
-      // the values pin — the tests fail until all agree), and a bump must
-      // also re-verify the patch still applies to the new source.
+      // The base of docker/interlink-kubernetes-plugin: its tag is locked to
+      // PLUGIN_REF and the values pin, and a bump must re-verify the patch applies.
       matchDatasources: ['docker'],
       matchPackageNames: ['docker.io/mginfn/interlink-kubernetes-plugin'],
       enabled: false,
@@ -223,19 +152,9 @@
     // Groups: one PR per artifact CI builds or validates, so a cycle rebuilds
     // each image once. A dependency pinned in two artifacts splits by file; one
     // merged by hand holds its artifact's PR for review.
-    // Later rules override earlier ones; the top-level groupName catches the rest.
     {
-      // Actions, pre-commit hooks and the test suite's own dependencies.
-      matchManagers: ['github-actions', 'pre-commit'],
-      groupName: 'ci-tooling',
-    },
-    {
-      // The regex-managed pins: workflow tool versions, the hadolint image.
-      matchFileNames: ['.github/**', '.pre-commit-config.yaml'],
-      groupName: 'ci-tooling',
-    },
-    {
-      matchFileNames: ['tests/pyproject.toml'],
+      // Actions, pre-commit hooks, workflow tool pins, the test suite's own dependencies.
+      matchFileNames: ['.github/**', '.pre-commit-config.yaml', 'tests/pyproject.toml'],
       groupName: 'ci-tooling',
     },
     {
@@ -324,30 +243,21 @@
       minimumReleaseAge: '7 days',
     },
     {
-      // dask-gateway >=2025.4.0 requires kubeVersion >=1.30; cluster is on
-      // 1.29. Hold at 2024.1.0 until the cluster is upgraded to 1.30+.
+      // dask-gateway >=2025.4.0 requires kubeVersion >=1.30: hold until KUBE_VERSION reaches it.
       matchManagers: ['flux'],
       matchPackageNames: ['dask-gateway'],
       allowedVersions: '<2025.4.0',
     },
     {
-      // traefik chart >=42 requires kubeVersion >=1.30; cluster is on 1.29.
-      // Its package name is the OCI path; docker versioning has no range
-      // support — use a regex pin.
+      // Chart >=42 requires kubeVersion >=1.30: hold until KUBE_VERSION reaches it.
+      // Its package name is the OCI path, and docker versioning has no ranges: use a regex.
       matchManagers: ['flux'],
       matchPackageNames: ['ghcr.io/traefik/helm/traefik'],
       allowedVersions: '/^41\\./',
     },
     {
-      // Hold Triton at 26.04 for Geddes GPU nodes on NVIDIA driver R580.
-      // 26.06+ is CUDA 13.3.x, whose paired Linux driver is >=610.43.02
-      // (CUDA Toolkit release notes Table 3). CUDA 13.x MVC lists >=580 as
-      // the floor, but 26.07 fails on R580. The host NVIDIA driver is not a
-      // Renovate-tracked dep in this repo.
-      // docker versioning has no range support — use a regex pin.
-      // fastml/triton-torchgeo is the same Triton with extra backends
-      // (apps/sonic/supersonic), tagged <triton version>-py3-geometric, so the
-      // same driver constraint and the same regex hold for it.
+      // Geddes GPU nodes run driver R580, which 26.07 fails on: 26.06+ is CUDA 13.3.x, paired
+      // with driver >=610.43.02. fastml/triton-torchgeo is this Triton, tagged <version>-py3-geometric.
       matchDatasources: ['docker'],
       matchPackageNames: [
         'nvcr.io/nvidia/tritonserver',
@@ -356,8 +266,7 @@
       allowedVersions: '/^26\\.04/',
     },
     {
-      // An image unpacked on CVMFS follows the unpacked.cern.ch sync recipe,
-      // not a registry.
+      // A path on CVMFS, not a registry: no tag lookup applies.
       matchDatasources: ['docker'],
       matchPackageNames: ['/cvmfs/**'],
       enabled: false,
@@ -369,9 +278,8 @@
       allowedVersions: '/^2024\\.1\\./',
     },
     {
-      // dask-gateway's proxy, on the path of every client-to-scheduler
-      // connection: merged by hand. Traefik 3 needs the CRDs and RBAC of
-      // chart >=2025.4.0.
+      // dask-gateway's proxy, on every client-to-scheduler connection: merged by
+      // hand. Traefik 3 needs the CRDs and RBAC of chart >=2025.4.0.
       matchFileNames: ['apps/dask-gateway/**'],
       matchDatasources: ['docker'],
       matchPackageNames: ['docker.io/library/traefik'],
@@ -393,7 +301,7 @@
     },
     {
       // The AF image base, merged by hand: a CUDA minor is a GPU re-test.
-      // CUDA 13 needs a newer host driver than Geddes runs (see Triton above).
+      // CUDA 13.3 pairs with driver >=610.43.02; Geddes runs R580 (see Triton above).
       matchDatasources: ['docker'],
       matchPackageNames: ['docker.io/nvidia/cuda'],
       allowedVersions: '/^12\\./',
@@ -413,110 +321,66 @@
       enabled: false,
     },
     {
-      // kubectl is supported within one minor of the API server (1.29).
+      // Renovate proposes only kubectl within one minor of KUBE_VERSION, its supported skew.
       matchDatasources: ['docker'],
       matchPackageNames: ['alpine/kubectl'],
       allowedVersions: '/^1\\.(28|29|30)\\./',
     },
     {
-      // interlink-slurm-plugin base must stay on Rocky 8: site clients are
-      // slurm-*-1.el8.x86_64.rpm, the Dockerfile installs EPEL 8, and RCAC
-      // Slurm itself runs on EL8. A jump to Rocky 10 (Renovate dashboard)
-      // would break the dnf/EPEL layer and mismatch the relocated clients.
-      // Relax only when RCAC ships EL9/EL10 Slurm RPMs and the sidecar is
-      // retargeted (Dockerfile + epel + rpm glob together).
-      // docker versioning has no range support — use a regex pin.
+      // The interlink-slurm-plugin base stays on Rocky 8 with RCAC's EL8 Slurm RPMs. Relax
+      // when RCAC ships EL9+ RPMs, moving the Dockerfile, EPEL and the RPM glob together.
       matchDatasources: ['docker'],
       matchPackageNames: ['docker.io/rockylinux/rockylinux'],
       allowedVersions: '/^8([.-]|$)/',
     },
     {
-      // Manifest-only: CI regenerates pixi.lock (see ci-pixi-*.yml). Skipping
-      // artifacts here is what keeps Mend runners from running `pixi lock`.
+      // Manifest-only: ci-pixi-*.yml regenerates pixi.lock and commits it to the PR,
+      // since `pixi lock` on the science stack OOMs Mend runners.
       matchManagers: ['pixi'],
       skipArtifactsUpdate: true,
       addLabels: ['pixi'],
     },
     {
-      // Stable releases only — no a/b/rc.
+      // Stable releases only. A later allowedVersions replaces this; use a regex.
       matchFileNames: ['pixi/base/pixi.toml', 'pixi/global/pixi.toml'],
       allowedVersions: '!/(a|b|rc)\\d*$/',
     },
     {
-      // openssh uses upstream's "portable" versioning (9.8p1, 10.4p1 — all
-      // STABLE releases; pN is the portable-line number, not a pre-release).
-      // That's not valid pep440, so without this rule the pixi manager can't
-      // parse it and silently never proposes openssh updates. Map the scheme
-      // so openssh is Renovate-managed like everything else.
+      // openssh's portable versions (9.8p1, all stable) are not pep440; without
+      // this the pixi manager cannot parse them and proposes nothing.
       matchPackageNames: ['openssh'],
       matchDatasources: ['conda'],
       versioning: 'regex:^(?<major>\\d+)\\.(?<minor>\\d+)p(?<patch>\\d+)$',
     },
     {
-      // code-server has never supported nodejs >=23 (every conda-forge build
-      // pins nodejs >=22,<23) — a nodejs major bump can never solve together
-      // with code-server. Blocks the doomed proposal.
-      // Relax if code-server upstream ever moves off the 22.x pin.
+      // Every conda-forge code-server build pins nodejs >=22,<23. Relax if code-server moves off it.
       matchPackageNames: ['nodejs'],
       matchFileNames: ['pixi/base/pixi.toml'],
       allowedVersions: '<23',
     },
     {
-      // xrootd is capped below 6.x in BOTH pixi manifests. The 6.0
-      // packaging split moved the Python bindings out of the `xrootd` package
-      // into `python-xrootd`: conda-forge ships no py312 build of `xrootd` 6.x
-      // at all, so an automated bump would silently drop the `XRootD` module
-      // that rucio-clients and fsspec-xrootd import, while xrdcp kept working.
-      // 6.0 also breaks callers: glob/iglob default to raise_error=true,
-      // `xrdcp --allow-http` is gone, the Davix XrdClHttp plugin is removed,
-      // and XrdEc is deprecated.
-      // 5.9.x is NOT stale — it is maintained in parallel with 6.x (5.9.6 and
-      // 6.1.0 shipped the same day), so patch bumps stay allowed.
-      // pixi/global also carries libxrootd 6.x, which root_base links; the cap
-      // governs xrdcp and the Python module there.
-      // To lift: move pixi/base AND pixi/global together, add `python-xrootd`
-      // explicitly, and confirm `import XRootD` plus fsspec-xrootd still work
-      // (pixi/check-env.py gates the import).
-      matchPackageNames: ['xrootd', 'python-xrootd', 'libxrootd'],
+      // 6.0 moves the Python bindings to `python-xrootd`, which rucio-clients and fsspec-xrootd need.
+      // To lift: move both pixi manifests, add `python-xrootd`, confirm `import XRootD` and fsspec-xrootd.
+      matchPackageNames: ['xrootd'],
       matchDatasources: ['conda'],
       allowedVersions: '<6',
     },
     {
-      // Python stays at 3.12 everywhere but pixi/global (next rule): the
-      // python images (FROM python:3.12-slim, plain manifests) and pixi/base.
-      // pixi/base's minor is also baked into the AF Dockerfile's
-      // site-packages path and the hub's sitecustomize.py mountPath, which
-      // Renovate cannot update, so raise them by hand in one change.
-      // 3.12.x patch releases stay allowed.
-      // Regex (not '<3.13'): docker versioning has no range support, and this
-      // rule also matches the docker datasource (FROM python:3.12-slim).
+      // Python stays at 3.12 outside pixi/global. pixi/base's minor is also baked into the AF
+      // Dockerfile's site-packages path and the hub's sitecustomize.py mountPath: raise them together.
       matchPackageNames: ['python', 'docker.io/library/python'],
       matchDatasources: ['docker', 'conda'],
       allowedVersions: '/^3\\.12([.-]|$)/',
     },
     {
-      // pixi/global takes Python 3.13; 3.14 does not solve yet: cms-combine's
-      // py3.14 builds hit the giflib conflict (next rule), and roastcoffea
-      // requires python <3.14. Overrides the rule above, so it stays after it.
-      // Regex, not '<3.14': this allowedVersions replaces the stable-only one
-      // above, and a range admits 3.14 release candidates.
+      // pixi/global takes 3.13: roastcoffea requires python <3.14. Stays after the 3.12 rule.
       matchPackageNames: ['python'],
       matchFileNames: ['pixi/global/pixi.toml'],
       allowedVersions: '/^3\\.1[23]\\.\\d+$/',
     },
     {
-      // cms-combine 11.1.0 needs root_base >=6.36.14, whose every build links
-      // giflib 6; imagemagick (via hepdata-lib) has only giflib-5 builds.
-      // Relax once conda-forge publishes an imagemagick built against giflib 6.
-      // Regex: this allowedVersions replaces the stable-only one above.
-      matchPackageNames: ['cms-combine'],
-      matchFileNames: ['pixi/global/pixi.toml'],
-      allowedVersions: '/^11\\.0\\.\\d+$/',
-    },
-    {
       // servicex needs aioboto3, whose every release pins an aiobotocore 2.x
       // that requires wrapt <2. Relax once aioboto3 moves to aiobotocore 3.
-      // Regex: this allowedVersions replaces the stable-only one above.
       matchPackageNames: ['wrapt'],
       matchFileNames: ['pixi/global/pixi.toml'],
       allowedVersions: '/^1\\./',
@@ -524,10 +388,15 @@
     {
       // The bokeh cap in pixi/global/pixi.toml, which Renovate reads as an
       // ordinary range and would raise. Relax with that cap.
-      // Regex: this allowedVersions replaces the stable-only one above.
       matchPackageNames: ['bokeh'],
       matchFileNames: ['pixi/global/pixi.toml'],
       allowedVersions: '/^3\\.9\\.\\d+$/',
+    },
+    {
+      // The Intel Mac cap in the mypy hook. Relax when no dev Python runs under Rosetta.
+      matchPackageNames: ['cryptography'],
+      matchFileNames: ['.pre-commit-config.yaml'],
+      enabled: false,
     },
   ],
 }

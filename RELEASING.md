@@ -71,10 +71,13 @@ components track `main-validated` and never need one.)
 
 **Actions → Release platform → Run workflow** computes the next
 `YYYY.M.SEQ`, tags it, and publishes a GitHub Release with generated notes —
-no file edits, no image tags. Core Flux advances within ~1 minute.
+no file edits, no image tags. Core Flux advances within ~1 minute. It refuses
+a commit whose `ci-ok` has not passed, a running pipeline included, unless
+`force` is set; a Release image commit has no pipeline and passes on its
+parent's gate.
 
 **Rollback**: delete the newest Release _together with its tag_. Flux tracks
-the newest `2026.x` **git tag**, so it re-resolves to the previous one and
+the newest platform **git tag**, so it re-resolves to the previous one and
 re-applies that commit on the next reconcile.
 
 ```
@@ -166,14 +169,14 @@ Never delete an `agentic-interface-v*` tag.
   validated state: the images stage pushes them as soon as an image builds,
   on same-repo PRs too ([docker/REGISTRY.md](docker/REGISTRY.md)). The
   `protect-main-validated` ruleset blocks deleting the branch and leaves
-  updates open, so `GITHUB_TOKEN` can force-push it.
-- The `AF_RELEASE_TOKEN` secret (fine-grained PAT, `contents: write`) is
-  optional. Every workflow that reads it falls back to `GITHUB_TOKEN`, whose
-  pushes trigger no workflow. Without it:
-  - the **Release image** commit gets no CI run and no `ci-ok` (the workflow
-    warns). Gate 1 of the next image release fails until another commit
-    lands on `main` and passes CI, or `force` is used. The platform tag of
-    step 2 points at that commit, which CI has not run on.
+  updates open, so `GITHUB_TOKEN` can push it. Publish moves it forward only:
+  a re-run of a commit behind it fails, and after a history rewrite publish
+  refuses until the branch is moved by its owner.
+- Workflows push with `GITHUB_TOKEN`, whose pushes trigger no workflow:
+  - the **Release image** commit gets no CI run and no `ci-ok`. Gate 1 of the
+    next image release fails until another commit lands on `main` and passes
+    CI, or `force` is used. The platform tag of step 2 points at that commit,
+    which CI has not run on.
   - a lock commit from `ci-pixi-base.yml` / `ci-pixi-global.yml` gets its
     follow-up run from `retrigger-after-lock-push.sh`: an approved
     `pull_request` run, or else a `workflow_dispatch` run, which never

@@ -11,6 +11,8 @@ LABEL maintainer="Dmitry Kondratyev <dkondra@purdue.edu>"
 ARG NB_USER="jovyan"
 ARG NB_UID="1000"
 ARG NB_GID="100"
+# The buildcache reuses the OS upgrade until this ID changes; README.md says when to bump it.
+ARG OS_UPGRADE_ID="2026-11-01"
 
 # Fix: https://github.com/hadolint/hadolint/wiki/DL4006
 # Fix: https://github.com/koalaman/shellcheck/wiki/SC3014
@@ -22,8 +24,12 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 USER root
 
 # --disablerepo=cuda: NVIDIA's rolling cuda.repo in the base would upgrade the unversioned cuda-toolkit-config-common to CUDA 13.
-RUN set -euo pipefail \
+RUN echo "OS_UPGRADE_ID=${OS_UPGRADE_ID}" \
  && dnf -y upgrade --disablerepo=cuda --exclude='linux-firmware*' \
+ && dnf clean all \
+ && rm -rf /var/cache/dnf
+
+RUN set -euo pipefail \
  && dnf -y install --disablerepo=cuda dnf-plugins-core epel-release \
  && dnf config-manager --set-enabled powertools \
  && dnf -y install --disablerepo=cuda \
@@ -95,6 +101,7 @@ RUN sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashr
 # ------------------------------------------------------------
 FROM system AS stack
 
+# renovate: datasource=github-releases depName=prefix-dev/pixi extractVersion=^v(?<version>.*)$
 ARG PIXI_VERSION="0.83.0" # read by ci-pixi-*.yml
 
 ENV PIXI_HOME="/opt/pixi" \
@@ -126,10 +133,15 @@ RUN chmod +x /usr/local/bin/pixi && \
 
 # Coding-agent CLIs in their own prefix, out of reach of a pixi rebuild. jupyter-ai's
 # Claude/Codex personas appear only when the *-acp adapters are on PATH.
+# renovate: datasource=npm depName=@anthropic-ai/claude-code
 ARG CLAUDE_CODE_VERSION="2.1.309"
+# renovate: datasource=npm depName=@openai/codex
 ARG CODEX_VERSION="0.164.0"
+# renovate: datasource=npm depName=opencode-ai
 ARG OPENCODE_VERSION="1.19.4"
+# renovate: datasource=npm depName=@agentclientprotocol/claude-agent-acp
 ARG CLAUDE_AGENT_ACP_VERSION="0.94.0"
+# renovate: datasource=npm depName=@agentclientprotocol/codex-acp
 ARG CODEX_ACP_VERSION="2.2.2"
 ENV NPM_GLOBAL="/opt/npm-global"
 # hadolint ignore=DL3016  # versions ARE pinned, via the ARGs above

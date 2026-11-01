@@ -6,7 +6,6 @@ records repo-rooted paths (scope in [`.coveragerc`](../.coveragerc)):
 ```bash
 uv run --project tests --frozen pytest -q -c tests/pyproject.toml tests            # everything CI runs
 uv run --project tests --frozen pytest -q -c tests/pyproject.toml tests/manifests  # one suite
-uv run --project tests mypy                                                         # types — scope and flags in mypy.ini
 ```
 
 CI runs the first line, plus coverage, in stage 0

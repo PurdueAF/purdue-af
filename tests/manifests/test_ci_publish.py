@@ -1,66 +1,59 @@
-"""Tests for the publish stage of .github/workflows/ci.yml.
+"""Tests for the GHCR retry helper and the workflows that call it."""
 
-Every GHCR call that can end the step is wrapped in the retry helper: rate
-limits and network blips are transient."""
-
-import re
+import subprocess
 
 import yaml
 from common import REPO
 
-CI = REPO / ".github/workflows/ci.yml"
+HELPER = REPO / ".github/workflows/ghcr.sh"
+WORKFLOWS = [".github/workflows/ci.yml", ".github/workflows/release-image.yml"]
 
 
-def publish_steps():
-    doc = yaml.safe_load(CI.read_text())
-    return [s for s in doc["jobs"]["publish"]["steps"] if "run" in s]
+def run_steps():
+    for workflow in WORKFLOWS:
+        doc = yaml.safe_load((REPO / workflow).read_text())
+        for job in doc["jobs"].values():
+            yield from (s for s in job.get("steps", []) if "run" in s)
 
 
-def test_every_imagetools_call_is_retried():
+def retry(body: str, delay: int = 0) -> subprocess.CompletedProcess[str]:
+    script = f'source "{HELPER}"\nflaky() {{ {body}; }}\nghcr_retry probe flaky'
+    return subprocess.run(
+        ["bash", "-c", script],
+        env={"GHCR_RETRY_DELAY": str(delay), "PATH": "/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_every_captured_imagetools_call_is_retried():
     """`digest=$(docker buildx imagetools inspect ...)` under `set -e` exits the
-    step on the first blip, before any retry can run — that is exactly how run
-    31053841647 failed."""
+    step on the first blip, before any retry can run."""
     unguarded = []
-    for step in publish_steps():
-        # join backslash continuations first: a wrapped call's second line
-        # looks unguarded on its own
-        joined = step["run"].replace("\\\n", " ")
-        for line in joined.splitlines():
+    for step in run_steps():
+        # join backslash continuations first: a wrapped call's second line looks unguarded
+        for line in step["run"].replace("\\\n", " ").splitlines():
             stripped = line.strip()
-            if "docker buildx imagetools" not in stripped:
+            if "docker buildx imagetools" not in stripped or "ghcr_retry" in stripped:
                 continue
-            # the helper definitions themselves are the retry
-            if stripped.startswith(("until ", "retag()", "ghcr_retry()")):
-                continue
-            if "ghcr_retry" in stripped or stripped.startswith("retag "):
-                continue
-            # a failing `if` condition takes the other branch instead of exiting
-            if stripped.startswith("if "):
-                continue
-            unguarded.append(f"{step.get('name')}: {stripped}")
-    assert not unguarded, f"GHCR calls with no retry: {unguarded}"
+            # `if` takes the other branch and `|| true` fails safe, so neither exits the step
+            if not (stripped.startswith("if ") or stripped.endswith("|| true")):
+                unguarded.append(stripped)
+    assert not unguarded
 
 
-def test_retry_progress_does_not_pollute_captured_output():
+def test_retry_returns_the_commands_stdout_alone():
     """The digest is read from stdout; a warning printed there would be
     substituted into the image reference."""
-    found = 0
-    for step in publish_steps():
-        # extract each ghcr_retry() function body (steps define their own copy)
-        for body in re.findall(
-            r"ghcr_retry\(\)\s*\{.*?\n\s*\}", step["run"], re.DOTALL
-        ):
-            found += 1
-            for line in body.splitlines():
-                if "::warning::" in line or "::error::" in line:
-                    assert ">&2" in line, (
-                        f"annotation not sent to stderr: {line.strip()}"
-                    )
-    assert found, "no ghcr_retry() definitions found in publish steps"
+    result = retry('n=$(( ${n:-0} + 1 )); [ "$n" -gt 1 ] || return 1; echo sha256:abc')
+    assert result.returncode == 0
+    assert result.stdout == "sha256:abc\n"
+    assert "retrying" in result.stderr
 
 
 def test_retry_is_bounded():
     """An unbounded loop would hang the job instead of failing it."""
-    run = next(s["run"] for s in publish_steps() if "ghcr_retry()" in s["run"])
-    assert re.search(r"attempt=1 max=\d+", run)
-    assert 'attempt" -ge "$max' in run
+    result = retry("echo tried; false")
+    assert result.returncode != 0
+    assert result.stdout.count("tried") == 5
+    assert "failed after 5 attempts" in result.stderr

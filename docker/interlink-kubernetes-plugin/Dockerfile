@@ -1,16 +1,14 @@
 # Purdue AF interLink Kubernetes plugin: the upstream image plus the site
 # patches (README.md).
 
-# Keep the default in sync with PLUGIN_REF; CI passes --build-arg explicitly.
+# CI builds from this default; keep it equal to PLUGIN_REF.
 ARG UPSTREAM_IMAGE=docker.io/mginfn/interlink-kubernetes-plugin:1.2.0
 
 FROM ${UPSTREAM_IMAGE}
 
 COPY docker/interlink-kubernetes-plugin/ensure-namespace.patch docker/interlink-kubernetes-plugin/wstunnel-client.patch docker/interlink-kubernetes-plugin/remote-placement.patch docker/interlink-kubernetes-plugin/remote-readiness.patch docker/interlink-kubernetes-plugin/remote-pending.patch docker/interlink-kubernetes-plugin/remote-gone.patch docker/interlink-kubernetes-plugin/remote-drain.patch /tmp/
 
-# The upstream image runs from source (WORKDIR /interlink-kubernetes-plugin);
-# the check proves the patched modules parse, the options are wired, the sidecar builds
-# and an affinity annotation's JSON becomes a typed V1Affinity.
+# The upstream image runs from source; the check exercises each patch's behaviour.
 RUN patch -p1 </tmp/ensure-namespace.patch && \
     patch -p1 </tmp/wstunnel-client.patch && \
     patch -p1 </tmp/remote-placement.patch && \

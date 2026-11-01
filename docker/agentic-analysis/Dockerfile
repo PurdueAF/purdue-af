@@ -1,7 +1,5 @@
-# Task image of workflows/agentic-analysis: the Flyte 2 runtime, git, pixi,
-# and OpenCode with ripgrep and poppler.
-# The workflow code itself is not baked in — Flyte ships it as a code bundle
-# from the launcher.
+# Task image of workflows/agentic-analysis: the Flyte 2 runtime, git, pixi, and
+# OpenCode with ripgrep and poppler. Flyte ships the workflow code as a code bundle.
 FROM python:3.12-slim
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.5 /uv /uvx /bin/
@@ -17,6 +15,7 @@ RUN apt-get update \
 
 # OpenCode is one binary, published as an npm package per platform. The
 # baseline build needs no AVX2, so it runs on every AF node.
+# renovate: datasource=npm depName=opencode-ai
 ARG OPENCODE_VERSION="1.19.4"
 RUN curl -fsSL --retry 3 --retry-delay 2 -o /tmp/opencode.tgz \
         "https://registry.npmjs.org/opencode-linux-x64-baseline/-/opencode-linux-x64-baseline-${OPENCODE_VERSION}.tgz" \
@@ -42,5 +41,11 @@ USER 1000
 ENV HOME=/home/app
 # Flyte extracts the code bundle into the cwd; /app is root's.
 WORKDIR /home/app
-# Each runs as that user.
-RUN opencode --version && pixi --version && python -c "import httpx"
+# As that user: the tools a task pod runs, and the writable cwd.
+RUN test "$(id -u)" = 1000 \
+    && git --version \
+    && pixi --version \
+    && opencode --version \
+    && rg --version \
+    && pdftoppm -v \
+    && python -c "import flyte, httpx, tempfile; tempfile.TemporaryFile(dir='.'); print(flyte.version())"

@@ -1,12 +1,13 @@
 """Storage quota tool — queries af-pod-monitor metrics from Prometheus."""
 
 import asyncio
-from typing import Any, Optional
+from typing import Optional
 
 import httpx
 from config import PROMETHEUS_URL
 from context import require_user
 from errors import UpstreamError
+from mcp.server.mcpserver import MCPServer
 from shared import prom_query, prom_scalar, quote_label, shared_client
 
 _DIRS = ("home", "work")
@@ -29,7 +30,7 @@ def _bar(fraction: float, width: int = 20) -> str:
     return "█" * filled + "░" * (width - filled)
 
 
-def register(mcp: Any) -> None:
+def register(mcp: MCPServer) -> None:
     @mcp.tool()
     async def query_storage_usage() -> str:
         """Report storage quota and usage for the authenticated user's home and work directories.

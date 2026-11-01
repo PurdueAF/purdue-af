@@ -1,10 +1,10 @@
-"""Tests for .github/workflows/component-status.py (the README deployment
+"""Tests for .github/workflows/component-status.py (the README status
 dashboard). Runs against the REAL Flux root kustomizations and the README badge
 list, whose `[slug]:` link definitions must match the components the script
 publishes badges for."""
 
 import json
-import subprocess
+import re
 from pathlib import Path
 
 import pytest
@@ -32,11 +32,11 @@ def components(cs):
 
 
 @pytest.mark.parametrize(
-    "deployed_drift,validated_drift,ci_state,expected",
+    "released_drift,validated_drift,ci_state,expected",
     [
-        # nothing moved since the deploy — CI state is irrelevant
-        (0, 0, "success", "deployed"),
-        (0, 0, "failure", "deployed"),
+        # nothing moved since the release — CI state is irrelevant
+        (0, 0, "success", "released"),
+        (0, 0, "failure", "released"),
         # drift, but all of it is past the validation boundary
         (3, 0, "pending", "awaiting release"),
         (3, 0, "failure", "awaiting release"),
@@ -45,14 +45,14 @@ def components(cs):
         (3, 2, "unknown", "validating"),
         (3, 2, "failure", "failed CI"),
         # a component can be behind the boundary only if it is behind the
-        # deploy too, so unvalidated drift never outranks total drift
+        # release too, so unvalidated drift never outranks total drift
         (1, 1, "success", "validating"),
     ],
 )
-def test_classify(cs, deployed_drift, validated_drift, ci_state, expected):
-    status, ahead = cs.classify(deployed_drift, validated_drift, ci_state)
+def test_classify(cs, released_drift, validated_drift, ci_state, expected):
+    status, ahead = cs.classify(released_drift, validated_drift, ci_state)
     assert status == expected
-    assert ahead == (0 if expected == "deployed" else deployed_drift)
+    assert ahead == (0 if expected == "released" else released_drift)
 
 
 def test_every_status_has_a_colour(cs):
@@ -63,11 +63,6 @@ def test_every_status_has_a_colour(cs):
 
 
 # --- component discovery --------------------------------------------------
-
-
-def test_channels_resolve_to_real_kustomizations(cs):
-    for path in cs.CHANNELS.values():
-        assert (REPO / path).is_file()
 
 
 def test_discovered_paths_all_exist(components):
@@ -212,31 +207,27 @@ def test_label_overrides_point_at_real_components(cs, components):
 # --- images ---------------------------------------------------------------
 
 
-def test_ci_images_match_the_build_workflow(cs):
-    """The image list is hand-written; if ci-images.yml gains or drops an
-    image, the dashboard would silently stop covering it."""
-    workflow = yaml.safe_load((REPO / ".github/workflows/ci-images.yml").read_text())
-    jobs = workflow["jobs"]
-    aux = {m["name"] for m in jobs["build-aux-images"]["strategy"]["matrix"]["include"]}
-    assert "build-af-image" in jobs  # purdue-af gets a job of its own
-    assert set(cs.CI_IMAGES) == aux | {"purdue-af"}
-
-
-@pytest.mark.parametrize("name", ["purdue-af", "agentic-interface"])
-def test_image_paths_come_from_the_build_definition(cs, name):
-    paths = cs.image_paths(name)
-    assert paths, name
-    # image-inputs.sh always folds in the build logic itself
-    assert ".github/workflows/image-inputs.sh" in paths
+def test_image_paths_come_from_the_build_definition(cs):
+    for name in cs.CI_IMAGES:
+        paths = cs.image_paths(name)
+        assert any(path.startswith(f"docker/{name}") for path in paths), name
+        # image-inputs.sh always folds in the build logic itself
+        assert ".github/workflows/image-inputs.sh" in paths
 
 
 # --- version streams ------------------------------------------------------
 
 
-def test_af_image_version_is_read_from_values_yaml(cs):
-    version = cs.af_image_version()
-    assert version is not None, "docker_image_tag no longer matches"
-    assert version in (REPO / cs.VALUES_YAML).read_text()
+def test_af_image_version_is_read_at_the_platform_tag(cs, monkeypatch):
+    calls = []
+
+    def fake_git(*args):
+        calls.append(args)
+        return (REPO / cs.VALUES_YAML).read_text()
+
+    monkeypatch.setattr(cs, "git", fake_git)
+    assert cs.af_image_version("2026.9.1") is not None
+    assert calls == [("show", "2026.9.1:apps/jupyterhub/jupyterhub/values.yaml")]
 
 
 def test_agentic_version_is_read_from_the_deployment(cs):
@@ -246,12 +237,10 @@ def test_agentic_version_is_read_from_the_deployment(cs):
         "bump_agentic_version",
     )
     text = (REPO / cs.AGENTIC_DEPLOYMENT).read_text()
-    assert (cs.agentic_interface_version() or "0.0.0") == bump.current_version(text)
+    assert cs.agentic_interface_version() == bump.current_version(text)
 
 
-@pytest.mark.parametrize(
-    "tag,expected", [("latest", None), ("1.4.2", "1.4.2"), ("1.4.2-rc1", None)]
-)
+@pytest.mark.parametrize("tag,expected", [("1.4.2", "1.4.2"), ("1.4.2-rc1", None)])
 def test_agentic_version_parsing(cs, monkeypatch, tmp_path, tag, expected):
     manifest = tmp_path / cs.AGENTIC_DEPLOYMENT
     manifest.parent.mkdir(parents=True)
@@ -263,12 +252,12 @@ def test_agentic_version_parsing(cs, monkeypatch, tmp_path, tag, expected):
 
 
 def test_versioned_badge_leads_with_the_version(cs):
-    payload = cs.badge("agentic-interface", "deployed", 0, "1.2.3")
-    assert payload["message"] == "1.2.3 · deployed"
+    payload = cs.badge("agentic-interface", "released", 0, "1.2.3")
+    assert payload["message"] == "1.2.3 · released"
     payload = cs.badge("agentic-interface", "awaiting release", 2, "1.2.3")
     assert payload["message"] == "1.2.3 · awaiting release · 2"
     # unversioned badges are unchanged
-    assert cs.badge("x", "deployed", 0)["message"] == "deployed"
+    assert cs.badge("x", "released", 0)["message"] == "released"
 
 
 def test_latest_platform_tag_orders_numerically(cs, monkeypatch):
@@ -278,16 +267,6 @@ def test_latest_platform_tag_orders_numerically(cs, monkeypatch):
     assert cs.latest_platform_tag() == "2026.10.1"
     monkeypatch.setattr(cs, "git", lambda *a: "")
     assert cs.latest_platform_tag() is None
-
-
-def test_ref_exists_maps_git_failure_to_false(cs, monkeypatch):
-    def fail(*args):
-        raise subprocess.CalledProcessError(1, "git")
-
-    monkeypatch.setattr(cs, "git", fail)
-    assert cs.ref_exists("nope") is False
-    monkeypatch.setattr(cs, "git", lambda *a: "abc123")
-    assert cs.ref_exists("main") is True
 
 
 def test_commits_touching_counts_nonblank_lines(cs, monkeypatch):
@@ -300,10 +279,6 @@ def test_commits_touching_counts_nonblank_lines(cs, monkeypatch):
     monkeypatch.setattr(cs, "git", fake_git)
     assert cs.commits_touching("base", "head", ["apps/x", "docker/y"]) == 2
     assert calls == [("log", "--oneline", "base..head", "--", "apps/x", "docker/y")]
-
-
-def test_git_runs_against_the_repo(cs):
-    assert cs.git("rev-parse", "--show-toplevel") == str(REPO)
 
 
 def test_paths_outside_the_repo_are_dropped(cs, monkeypatch, tmp_path):
@@ -332,7 +307,13 @@ def test_paths_outside_the_repo_are_dropped(cs, monkeypatch, tmp_path):
 @pytest.fixture()
 def fake_repo(cs, monkeypatch):
     """Refs, components and commit counts for main(), no git involved."""
-    refs = {"origin/main", "origin/main-validated", "v0.13.7"}
+    refs = {
+        "origin/main",
+        "origin/main-validated",
+        "2026.9.1",
+        "v0.13.7",
+        "agentic-interface-v0.2.7",
+    }
     components = {
         "core": {"apps/storage": ["apps/storage/pvc.yaml"]},
         "experimental": {
@@ -340,7 +321,7 @@ def fake_repo(cs, monkeypatch):
             "apps/interlink/hammer": ["apps/interlink/hammer/values.yaml"],
         },
     }
-    # (deployed ref, first path) -> commits; unlisted pairs are 0
+    # (released ref, first path) -> commits; unlisted pairs are 0
     drift = {
         ("2026.9.1", "apps/storage/pvc.yaml"): 2,
         ("origin/main-validated", "apps/interlink/hammer/values.yaml"): 1,
@@ -348,10 +329,12 @@ def fake_repo(cs, monkeypatch):
         ("origin/main-validated", "docker/af-pod-monitor"): 1,
     }
     monkeypatch.setattr(cs, "ref_exists", lambda ref: ref in refs)
-    monkeypatch.setattr(cs, "latest_platform_tag", lambda: "2026.9.1")
+    monkeypatch.setattr(
+        cs, "latest_platform_tag", lambda: "2026.9.1" if "2026.9.1" in refs else None
+    )
     monkeypatch.setattr(cs, "discover_components", lambda ch: components[ch])
     monkeypatch.setattr(cs, "image_paths", lambda name: [f"docker/{name}"])
-    monkeypatch.setattr(cs, "af_image_version", lambda: "0.13.7")
+    monkeypatch.setattr(cs, "af_image_version", {"2026.9.1": "0.13.7"}.get)
     monkeypatch.setattr(cs, "agentic_interface_version", lambda: "0.2.7")
     monkeypatch.setattr(
         cs, "commits_touching", lambda base, head, paths: drift.get((base, paths[0]), 0)
@@ -375,55 +358,51 @@ def test_main_writes_a_badge_per_row(cs, fake_repo, monkeypatch, tmp_path, capsy
     badges = read_badges(out)
 
     assert badges["core-storage"]["message"] == "awaiting release · 2"
-    assert badges["experimental-storage"]["message"] == "deployed"
+    assert badges["experimental-storage"]["message"] == "released"
     hammer = badges["experimental-interlink-hammer"]
     assert (hammer["label"], hammer["message"]) == ("interlink-hammer", "failed CI · 1")
-    assert badges["image-purdue-af"]["message"] == "awaiting release · 3"
-    # the agentic release tag is missing: measured against main-validated,
-    # and no version is claimed for it
-    assert badges["image-agentic-interface"]["message"] == "deployed"
+    assert badges["image-purdue-af"]["message"] == "0.13.7 · awaiting release · 3"
+    assert badges["image-agentic-interface"]["message"] == "0.2.7 · released"
     assert badges["image-af-pod-monitor"]["message"] == "failed CI · 1"
     assert set(badges) >= {f"image-{name}" for name in cs.CI_IMAGES}
+    assert badges["_pending"]["label"] == "unreleased"
     assert badges["_pending"]["message"] == "4 components"
     assert badges["_pending"]["color"] == "blue"
 
     table = capsys.readouterr().out
     assert "platform tag: 2026.9.1 · main: abc1234" in table
     assert "| image | `purdue-af` | awaiting release | 3 |" in table
-    assert "| experimental | `apps/storage` | deployed |  |" in table
+    assert "| experimental | `apps/storage` | released |  |" in table
 
 
-def test_main_leads_the_agentic_badge_with_its_release(
-    cs, fake_repo, monkeypatch, tmp_path
-):
-    fake_repo.add("agentic-interface-v0.2.7")
+def test_main_reports_nothing_unreleased(cs, fake_repo, monkeypatch, tmp_path):
+    monkeypatch.setattr(cs, "commits_touching", lambda base, head, paths: 0)
     out = tmp_path / "badges"
     run_main(cs, monkeypatch, "--out", out)
-    assert read_badges(out)["image-agentic-interface"]["message"] == "0.2.7 · deployed"
+    pending = read_badges(out)["_pending"]
+    assert (pending["message"], pending["color"]) == ("none", "brightgreen")
 
 
-def test_main_skips_an_unreleased_af_image(cs, fake_repo, monkeypatch, tmp_path):
-    fake_repo.discard("v0.13.7")
-    out = tmp_path / "badges"
-    run_main(cs, monkeypatch, "--out", out)
-    assert "image-purdue-af" not in read_badges(out)
+@pytest.mark.parametrize(
+    "ref,named",
+    [
+        ("origin/main-validated", "origin/main-validated"),
+        ("2026.9.1", "platform tag"),
+        ("v0.13.7", "v0.13.7"),
+        ("agentic-interface-v0.2.7", "agentic-interface-v0.2.7"),
+    ],
+)
+def test_main_fails_naming_a_missing_ref(cs, fake_repo, monkeypatch, ref, named):
+    fake_repo.discard(ref)
+    with pytest.raises(SystemExit, match=re.escape(named)):
+        run_main(cs, monkeypatch)
 
 
-def test_main_all_deployed_before_the_first_publish(
-    cs, fake_repo, monkeypatch, tmp_path, capsys
-):
-    """No main-validated and no platform tag yet: main is the boundary, core
-    has no rows, and nothing is pending."""
-    fake_repo.clear()
-    fake_repo.add("main")
-    monkeypatch.setattr(cs, "latest_platform_tag", lambda: None)
-    out = tmp_path / "badges"
-    run_main(cs, monkeypatch, "--out", out)
-    badges = read_badges(out)
-    assert not any(slug.startswith("core-") for slug in badges)
-    assert badges["_pending"]["message"] == "none"
-    assert badges["_pending"]["color"] == "brightgreen"
-    assert "| core |" not in capsys.readouterr().out
+@pytest.mark.parametrize("reader", ["af_image_version", "agentic_interface_version"])
+def test_main_fails_without_a_version_pin(cs, fake_repo, monkeypatch, reader):
+    monkeypatch.setattr(cs, reader, lambda *a: None)
+    with pytest.raises(SystemExit, match="no version pin"):
+        run_main(cs, monkeypatch)
 
 
 def test_main_without_out_only_prints(cs, fake_repo, monkeypatch, tmp_path, capsys):
@@ -446,12 +425,3 @@ def test_generator_owner_is_the_component_mounting_it_by_name(cs):
         },
     )
     assert owner == "apps/monitoring/af-monitoring"
-
-
-def test_generator_owner_falls_back_to_a_manifest_named_after_it(cs):
-    owner = cs._generator_owner(
-        "widget-config",
-        ["docker/widget/main.py"],
-        {"apps/widget": ["apps/widget/widget.yaml"]},  # not on disk: no mount scan
-    )
-    assert owner == "apps/widget"
