@@ -1,8 +1,9 @@
 """Tests for .github/workflows/validate-manifests.sh.
 
-Only the retry wrapper is unit-tested here: the rest of the script needs
-kustomize/flux/kubeconform/helm and runs in CI. A transient chart-host failure
-is retried; a genuinely broken chart still fails; the values reach helm."""
+The retry wrapper and the render step are unit-tested here: the rest of the
+script needs kustomize/flux/kubeconform/helm and runs in CI. A transient
+chart-host failure is retried; a genuinely broken chart still fails; the values
+reach helm; a root that does not render fails the run."""
 
 import shutil
 import subprocess
@@ -98,6 +99,42 @@ def test_still_fails_when_every_attempt_fails(call_retry):
     assert "connection reset by peer" in result.stderr, (
         "the last helm error must reach the log, or failures are undebuggable"
     )
+
+
+@pytest.mark.parametrize(
+    "step, status",
+    [(None, 0), ("kustomize", 1), ("flux", 1), ("yq", 1)],
+)
+def test_a_root_that_does_not_render_fails(tmp_path, step, status):
+    """The script calls render_env in an `if`, which turns errexit off inside it."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    for tool in ("kustomize", "flux", "yq"):
+        stub = bindir / tool
+        stub.write_text(f"#!/bin/bash\nexit {1 if tool == step else 0}\n")
+        stub.chmod(0o755)
+
+    text = SCRIPT.read_text()
+    start = text.index("SUBST_DISABLED=")
+    end = text.index("\n}\n", text.index("render_env() {")) + 3
+    (tmp_path / "fn.sh").write_text(text[start:end])
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            textwrap.dedent(f"""
+                set -euo pipefail
+                workdir='{tmp_path}'
+                source '{tmp_path}/fn.sh'
+                if ! render_env flux/demo/ >/dev/null; then exit 1; fi
+            """),
+        ],
+        capture_output=True,
+        text=True,
+        env={"PATH": f"{bindir}:/usr/bin:/bin"},
+    )
+    assert result.returncode == status, result.stderr
 
 
 def test_script_is_valid_bash():
