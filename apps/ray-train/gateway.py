@@ -3060,12 +3060,17 @@ async def until_changed(path: Path, running: bytes) -> None:
 
 
 def code_files() -> list[Path]:
-    """This file and the modules beside it that it imports: the code the gateway runs."""
+    """This file and the modules beside it that it imports: the code the gateway runs.
+
+    Python imports them from the directory behind the ConfigMap's links, which
+    kubelet deletes at every swap, so each is watched at its path beside this file.
+    """
+    here = CODE.resolve().parent
     beside = {CODE}
     for module in list(sys.modules.values()):
         file = getattr(module, "__file__", None)
-        if file and Path(file).parent == CODE.parent:
-            beside.add(Path(file))
+        if file and Path(file).resolve().parent == here:
+            beside.add(CODE.with_name(Path(file).name))
     return sorted(beside)
 
 
