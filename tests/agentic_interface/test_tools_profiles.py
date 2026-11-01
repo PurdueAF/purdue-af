@@ -2,9 +2,12 @@
 
 import asyncio
 
+import httpx
 import pytest
 import respx
 from agentic_helpers import failure, register_tools
+from common import REPO
+from gpu_queries import GPU_METRICS
 from tools import profiles
 
 VALUES_YAML = """
@@ -128,6 +131,20 @@ def test_parse_profiles_gpu_map():
     }
     # Non-GPU options carry no "gpu" key.
     assert "gpu" not in profiles._parse_profiles(VALUES_YAML)[0]["options"]["0-cpu"]
+
+
+def test_hub_values_have_one_default_profile_with_known_gpu_resources():
+    values = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
+    defaults = [p for p in profiles._parse_profiles(values.read_text()) if p["default"]]
+    assert len(defaults) == 1
+
+    resources = {
+        resource
+        for option in defaults[0]["options"].values()
+        for resource in option.get("gpu", {}).values()
+    }
+    assert resources
+    assert resources <= GPU_METRICS.keys()
 
 
 def test_gpu_resource_skips_unparseable_amounts():
@@ -264,35 +281,6 @@ async def test_list_profiles_tool_shows_gpu_availability(monkeypatch):
     assert "subject to availability" not in out
 
 
-async def test_list_profiles_tool_gpu_availability_unknown(monkeypatch):
-    async def fake_read():
-        return GPU_VALUES_YAML
-
-    async def fake_free():
-        return None  # Prometheus unreachable
-
-    monkeypatch.setattr(profiles, "_read_configmap", fake_read)
-    monkeypatch.setattr(profiles, "free_gpus", fake_free)
-
-    tools = register_tools(profiles).tools
-    out = await tools["list_af_profiles"]()
-
-    # Falls back to the static labels unchanged.
-    assert "available now" not in out
-    assert "1 A100 GPU slice (5GB)" in out
-
-
-async def test_list_profiles_tool_unavailable(monkeypatch):
-    async def broken_read():
-        return None
-
-    monkeypatch.setattr(profiles, "_read_configmap", broken_read)
-
-    tools = register_tools(profiles).tools
-    out = await failure(tools["list_af_profiles"]())
-    assert "Could not read profile list" in out
-
-
 # ── failure reasons ───────────────────────────────────────────────────────────
 #
 # An empty profile list always comes with a reason a user can act on (or at
@@ -307,8 +295,6 @@ CM_URL = (
 @pytest.fixture
 def in_cluster(monkeypatch, tmp_path):
     """Pretend to run inside Kubernetes, with a plain (mockable) HTTP client."""
-    import httpx
-
     token = tmp_path / "token"
     token.write_text("sa-token")
     monkeypatch.setattr(profiles, "_TOKEN_PATH", str(token))
@@ -336,9 +322,7 @@ async def test_read_configmap_http_failures_are_explained(in_cluster, status, ex
 
 @respx.mock
 async def test_read_configmap_unreachable_missing_values_and_success(in_cluster):
-    from httpx import ConnectError
-
-    respx.get(CM_URL).mock(side_effect=ConnectError("down"))
+    respx.get(CM_URL).mock(side_effect=httpx.ConnectError("down"))
     assert await profiles._read_configmap() is None
     assert profiles.profiles_error().startswith("Kubernetes API unreachable")
 
@@ -397,3 +381,6 @@ async def test_list_profiles_tool_names_why_gpu_counts_are_missing(monkeypatch):
         "live GPU availability is unknown right now (Prometheus is unreachable — "
         "connection refused)" in out
     )
+    # Falls back to the static labels unchanged.
+    assert "available now" not in out
+    assert "1 A100 GPU slice (5GB)" in out

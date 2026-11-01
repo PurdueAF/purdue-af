@@ -5,8 +5,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 import respx
-from agentic_helpers import failure, register_tools
-from context import current_user
+from agentic_helpers import as_user, failure, register_tools
 from httpx import ConnectError
 from tools import logs
 
@@ -222,12 +221,9 @@ async def test_limit_hint_survives_dedup(user_ctx):
 async def test_selector_escapes_quotes_in_username():
     """A crafted username cannot break out of its own LogQL selector."""
     route = respx.get(LOKI_RANGE_URL).respond(200, json=loki_response([]))
-    token = current_user.set({"username": 'ali"ce', "namespace": "cms", "token": "t"})
-    try:
+    with as_user(username='ali"ce'):
         tools = register_tools(logs).tools
         await tools["query_notebook_logs"]()
-    finally:
-        current_user.reset(token)
 
     q = query_of(route)["query"][0]
     assert 'username="ali\\"ce"' in q

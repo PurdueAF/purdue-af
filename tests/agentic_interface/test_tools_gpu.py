@@ -2,6 +2,7 @@
 
 import pytest
 import respx
+from httpx import ConnectError, Response
 from tools import gpu
 
 CHOICES = {
@@ -71,8 +72,6 @@ def _prom_result(resource, value):
 @respx.mock
 async def test_free_gpus_subtracts_used_from_allocatable():
     def responder(request):
-        import httpx as _httpx
-
         query = request.url.params["query"]
         if "allocatable" in query:
             data = [
@@ -85,7 +84,7 @@ async def test_free_gpus_subtracts_used_from_allocatable():
                 _prom_result("nvidia_com_mig_1g_5gb", 5),
                 _prom_result("nvidia_com_gpu", 3),
             ]
-        return _httpx.Response(200, json={"data": {"result": data}})
+        return Response(200, json={"data": {"result": data}})
 
     respx.get(f"{gpu.PROMETHEUS_URL}/api/v1/query").mock(side_effect=responder)
 
@@ -115,8 +114,6 @@ GPU_PROM_URL = f"{gpu.PROMETHEUS_URL}/api/v1/query"
 
 @respx.mock
 async def test_free_gpus_records_why_it_is_unknown():
-    from httpx import ConnectError, Response
-
     respx.get(GPU_PROM_URL).mock(side_effect=ConnectError("down"))
     assert await gpu.free_gpus() is None
     assert gpu.gpu_error() == "Prometheus unreachable — connection failed (down)"

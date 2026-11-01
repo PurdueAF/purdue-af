@@ -12,10 +12,8 @@ ever appear."""
 import time
 from datetime import datetime, timezone
 
-import pytest
 import respx
-from agentic_helpers import failure, register_tools
-from context import current_user
+from agentic_helpers import as_user, failure, register_tools
 from httpx import ConnectError, Response
 from tools import health
 
@@ -66,14 +64,12 @@ async def run(**kwargs):
         return await tools.tools["get_facility_health"]()
 
 
-@pytest.mark.asyncio
 async def test_healthy_when_nothing_is_firing(user_ctx):
     out = await run()
     assert "**Healthy**" in out
     assert "Nothing is failing" in out
 
 
-@pytest.mark.asyncio
 async def test_warning_alone_does_not_degrade_the_facility(user_ctx):
     """A warning must not turn the headline to Degraded, or it stops meaning
     anything — but it also must not claim Healthy when storage is slow."""
@@ -81,7 +77,6 @@ async def test_warning_alone_does_not_degrade_the_facility(user_ctx):
     assert "**Degraded**" not in out
 
 
-@pytest.mark.asyncio
 async def test_unknown_storage_is_not_reported_as_healthy(user_ctx):
     out = await run(
         firing=[
@@ -97,7 +92,6 @@ async def test_unknown_storage_is_not_reported_as_healthy(user_ctx):
     assert "Data access unknown for eos on node n1" in out
 
 
-@pytest.mark.asyncio
 async def test_mount_slow_is_impaired_not_healthy(user_ctx):
     """Elevated metadata latency is felt by users, so it is never Healthy."""
     many = [
@@ -122,7 +116,6 @@ async def test_mount_slow_is_impaired_not_healthy(user_ctx):
     assert "and 13 more, 14 nodes affected" in out
 
 
-@pytest.mark.asyncio
 async def test_own_quota_warning_does_not_impair_the_facility(user_ctx):
     """Home quota is already reported as a percent; it must not flip the
     facility headline."""
@@ -134,13 +127,11 @@ async def test_own_quota_warning_does_not_impair_the_facility(user_ctx):
     assert "**Impaired**" not in out
 
 
-@pytest.mark.asyncio
 async def test_error_degrades_the_facility(user_ctx):
     out = await run(firing=[alert("AFHubDown", "critical", "access")])
     assert "**Degraded**" in out
 
 
-@pytest.mark.asyncio
 async def test_mount_invalid_is_impaired_not_degraded(user_ctx):
     """Mount failures are often transient EOS/NFS blips — warn, don't page
     the facility as Degraded."""
@@ -161,7 +152,6 @@ async def test_mount_invalid_is_impaired_not_degraded(user_ctx):
     assert "more" not in out  # a single instance carries no scale suffix
 
 
-@pytest.mark.asyncio
 async def test_not_ready_workers_degrade_compute_capacity(user_ctx):
     """Offline AF nodes must show under compute — not look like healthy storage."""
     many = [
@@ -182,7 +172,6 @@ async def test_not_ready_workers_degrade_compute_capacity(user_ctx):
     assert "compute capacity" not in out.lower().split("normal:")[-1]
 
 
-@pytest.mark.asyncio
 async def test_never_reports_another_users_alert(user_ctx):
     """af-pod-monitor alerts carry a username; only the caller's own may show."""
     out = await run(
@@ -195,7 +184,6 @@ async def test_never_reports_another_users_alert(user_ctx):
     assert "**Healthy**" in out
 
 
-@pytest.mark.asyncio
 async def test_a_hidden_alert_is_not_counted_as_resolved(user_ctx):
     """It is still firing — hiding it from this user must not turn it into
     "came and went"."""
@@ -206,13 +194,11 @@ async def test_a_hidden_alert_is_not_counted_as_resolved(user_ctx):
     assert "came and went" not in out
 
 
-@pytest.mark.asyncio
 async def test_resolved_alerts_are_counted(user_ctx):
     out = await run(recent=[{"metric": {"alertname": "AFMountSlow"}}])
     assert "In the last 6 hours, 1 issue came and went." in out
 
 
-@pytest.mark.asyncio
 async def test_times_are_eastern_and_labelled(user_ctx):
     out = await run(
         firing=[
@@ -224,7 +210,6 @@ async def test_times_are_eastern_and_labelled(user_ctx):
     assert "(2h 00m ago)" in out  # the earliest instance dates the problem
 
 
-@pytest.mark.asyncio
 async def test_an_undatable_alert_is_still_reported(user_ctx):
     missing = alert("AFMountInvalid", "warning", "data", summary="Depot is broken")
     del missing["activeAt"]
@@ -237,14 +222,12 @@ async def test_an_undatable_alert_is_still_reported(user_ctx):
     assert "Since" not in out
 
 
-@pytest.mark.asyncio
 async def test_reports_the_callers_own_quota(user_ctx):
     out = await run(home_util=0.93)
     assert "93%" in out
     assert "Approaching the limit" in out
 
 
-@pytest.mark.asyncio
 async def test_monitoring_outage_is_not_a_health_claim(user_ctx):
     """If Prometheus cannot be reached, say so rather than implying healthy."""
     tools = register_tools(health)
@@ -257,7 +240,6 @@ async def test_monitoring_outage_is_not_a_health_claim(user_ctx):
     assert "**Healthy**" not in out
 
 
-@pytest.mark.asyncio
 async def test_monitoring_http_error_is_reported_with_its_reason(user_ctx):
     tools = register_tools(health)
     with respx.mock:
@@ -268,7 +250,6 @@ async def test_monitoring_http_error_is_reported_with_its_reason(user_ctx):
     assert "cannot tell you" in out
 
 
-@pytest.mark.asyncio
 async def test_malformed_alert_list_is_reported(user_ctx):
     tools = register_tools(health)
     with respx.mock:
@@ -277,7 +258,6 @@ async def test_malformed_alert_list_is_reported(user_ctx):
     assert "no alert list" in out
 
 
-@pytest.mark.asyncio
 async def test_healthy_without_a_running_session_is_still_healthy(user_ctx):
     """No quota reading means no session — not a monitoring outage."""
     out = await run(home_util=None)
@@ -286,7 +266,6 @@ async def test_healthy_without_a_running_session_is_still_healthy(user_ctx):
     assert "No reading of your home directory quota" in out
 
 
-@pytest.mark.asyncio
 async def test_output_avoids_internal_mechanics(user_ctx):
     """Users get facility facts, not the monitoring implementation."""
     out = await run(
@@ -298,7 +277,6 @@ async def test_output_avoids_internal_mechanics(user_ctx):
         assert jargon not in out
 
 
-@pytest.mark.asyncio
 async def test_quota_query_escapes_quotes_in_username():
     """A crafted username cannot break out of the PromQL label matcher."""
     captured: list[str] = []
@@ -307,15 +285,12 @@ async def test_quota_query_escapes_quotes_in_username():
         captured.append(request.url.params.get("query", ""))
         return Response(200, json={"data": {"result": []}})
 
-    token = current_user.set({"username": 'al"ice', "namespace": "cms", "token": "t"})
-    try:
+    with as_user(username='al"ice'):
         tools = register_tools(health)
         with respx.mock:
             respx.get(ALERTS_URL).respond(200, json={"data": {"alerts": []}})
             respx.get(PROM_URL).mock(side_effect=responder)
             await tools.tools["get_facility_health"]()
-    finally:
-        current_user.reset(token)
 
     quota_queries = [q for q in captured if "af_home_dir" in q]
     assert quota_queries
@@ -323,7 +298,6 @@ async def test_quota_query_escapes_quotes_in_username():
         assert 'username="al\\"ice"' in q
 
 
-@pytest.mark.asyncio
 async def test_dev_hardware_is_invisible_to_users(user_ctx):
     """Dev nodes are monitored for operators but run no user sessions; a user
     asking about the facility must not see them, and they must not degrade it."""
@@ -339,7 +313,6 @@ async def test_dev_hardware_is_invisible_to_users(user_ctx):
     assert "dev" not in out.lower().split("normal:")[-1]
 
 
-@pytest.mark.asyncio
 async def test_a_failed_delivery_is_invisible_to_users(user_ctx):
     """A failing release leaves the workloads running, so it is an operator's
     alert and must not turn every user's answer to Impaired."""

@@ -1,5 +1,6 @@
 """Fixtures for the agentic-interface suite (helpers in agentic_helpers.py)."""
 
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -19,8 +20,10 @@ os.environ.setdefault(
 )
 
 import auth  # noqa: E402
+import server  # noqa: E402
 from agentic_helpers import USER  # noqa: E402
 from context import current_user  # noqa: E402
+from mcp.server.auth.provider import AccessToken  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -39,3 +42,26 @@ def user_ctx():
     ctx_token = current_user.set(dict(USER))
     yield dict(USER)
     current_user.reset(ctx_token)
+
+
+@pytest.fixture
+def no_sleep(monkeypatch):
+    """asyncio.sleep returns at once. Opt-in: _fake_clock records its own sleeps."""
+
+    async def sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", sleep)
+
+
+@pytest.fixture
+def accept_token(monkeypatch):
+    """server.verify_token takes "good" as alice; returns the user that binds."""
+
+    async def verify(token):
+        if token != "good":
+            return None
+        return AccessToken(token=token, client_id="alice", scopes=[])
+
+    monkeypatch.setattr(server, "verify_token", verify)
+    return {"username": "alice", "namespace": server.NAMESPACE, "token": "good"}

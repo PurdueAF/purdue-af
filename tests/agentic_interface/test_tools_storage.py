@@ -3,9 +3,8 @@
 import re
 
 import respx
-from agentic_helpers import failure, register_tools
-from context import current_user
-from httpx import AsyncClient, ConnectError
+from agentic_helpers import as_user, failure, register_tools
+from httpx import AsyncClient, ConnectError, Response
 from tools import storage
 
 PROM_URL = f"{storage.PROMETHEUS_URL}/api/v1/query"
@@ -78,8 +77,6 @@ async def test_storage_reports_usage(user_ctx):
     gb = 1024 * 1024  # KB per GB
 
     def responder(request):
-        import httpx
-
         q = request.url.params["query"]
         value = {
             "af_home_dir_used_kb": 5 * gb,
@@ -89,7 +86,7 @@ async def test_storage_reports_usage(user_ctx):
             "af_work_dir_size_kb": 100 * gb,
             "af_work_dir_util": 0.5,
         }[q.split("{")[0]]
-        return httpx.Response(200, json=prom_result(value))
+        return Response(200, json=prom_result(value))
 
     route = respx.get(PROM_URL).mock(side_effect=responder)
 
@@ -111,12 +108,9 @@ async def test_storage_reports_usage(user_ctx):
 async def test_storage_username_is_escaped():
     """A crafted username cannot break out of the PromQL label matcher."""
     route = respx.get(PROM_URL).respond(200, json={"data": {"result": []}})
-    token = current_user.set({"username": 'al"ice', "namespace": "cms", "token": "t"})
-    try:
+    with as_user(username='al"ice'):
         tools = register_tools(storage).tools
         await tools["query_storage_usage"]()
-    finally:
-        current_user.reset(token)
 
     assert route.calls
     for call in route.calls:
@@ -135,12 +129,10 @@ async def test_storage_no_metrics_message(user_ctx):
 @respx.mock
 async def test_storage_partial_data_marks_missing_dir(user_ctx):
     def responder(request):
-        import httpx
-
         q = request.url.params["query"]
         if q.startswith("af_home"):
-            return httpx.Response(200, json=prom_result(1024 * 1024))
-        return httpx.Response(200, json={"data": {"result": []}})
+            return Response(200, json=prom_result(1024 * 1024))
+        return Response(200, json={"data": {"result": []}})
 
     respx.get(PROM_URL).mock(side_effect=responder)
 
@@ -153,14 +145,12 @@ async def test_storage_partial_data_marks_missing_dir(user_ctx):
 @respx.mock
 async def test_storage_util_falls_back_to_ratio(user_ctx):
     def responder(request):
-        import httpx
-
         q = request.url.params["query"]
         if "util" in q:
-            return httpx.Response(200, json={"data": {"result": []}})
+            return Response(200, json={"data": {"result": []}})
         if "used" in q:
-            return httpx.Response(200, json=prom_result(10 * 1024 * 1024))
-        return httpx.Response(200, json=prom_result(40 * 1024 * 1024))
+            return Response(200, json=prom_result(10 * 1024 * 1024))
+        return Response(200, json=prom_result(40 * 1024 * 1024))
 
     respx.get(PROM_URL).mock(side_effect=responder)
 
@@ -185,8 +175,6 @@ async def test_storage_prometheus_down_is_an_error_not_no_data(user_ctx):
 
 @respx.mock
 async def test_storage_partial_outage_is_noted(user_ctx):
-    from httpx import Response
-
     def responder(request):
         query = request.url.params["query"]
         if "af_work" in query:
