@@ -358,3 +358,16 @@ def test_a_stuck_session_alerts_before_the_hub_deletes_the_pod():
     ).read_text()
     timeout = int(re.search(r"KubeSpawner\.start_timeout = (\d+)", config).group(1))
     assert minutes * 60 < timeout
+
+
+def test_the_alert_lists_name_every_rule():
+    """Most AF rules aggregate the namespace label away, so a filter on it hides
+    them. The datasource keeps Rancher's cluster-wide alerts off the AF lists."""
+    panels = panels_by_title()
+    for title in ("Errors", "Warnings"):
+        options = panels[title]["options"]
+        assert options["datasource"] == "prometheus", title
+        assert "namespace" not in options["alertInstanceLabelFilter"], title
+    rancher = panels["Rancher alerts in cms"]["options"]
+    assert rancher["datasource"] == "prometheus-rancher"
+    assert rancher["alertInstanceLabelFilter"] == 'namespace="cms"'
