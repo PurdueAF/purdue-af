@@ -37,7 +37,8 @@ RUN set -euo pipefail \
       s3cmd htop \
       boost-devel diffutils ncurses-compat-libs cmake \
       glibc-static libcurl-devel \
-      gfal2-util-scripts python3-gfal2 voms-clients-cpp myproxy patch \
+      gfal2-util-scripts python3-gfal2 gfal2-plugin-xrootd gfal2-plugin-http \
+      voms-clients-cpp myproxy patch \
       # absent from the CUDA base: ps, kinit/klist (eos-connect.sh), gcc -latomic
       procps-ng psmisc krb5-workstation xz cpio libatomic \
  && dnf -y --disablerepo=cuda --enablerepo=epel install tini \
@@ -249,6 +250,10 @@ RUN nvcc --version >/dev/null && \
     klist -V >/dev/null && \
     xz --version >/dev/null && \
     xrdcp --version >/dev/null 2>&1 && \
+    gfal-ls --version >/tmp/gfal-version && \
+    grep -qE '^\s+xrootd-' /tmp/gfal-version && \
+    grep -qE '^\s+http-' /tmp/gfal-version && \
+    rm /tmp/gfal-version && \
     claude --version >/dev/null && \
     codex --version >/dev/null && \
     opencode --version >/dev/null && \
