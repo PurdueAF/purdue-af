@@ -530,8 +530,12 @@ def test_init_k8s_loads_config(monkeypatch):
     class FakeCore:
         pass
 
+    class FakeCustomObjects:
+        pass
+
     class FakeClient:
         CoreV1Api = FakeCore
+        CustomObjectsApi = FakeCustomObjects
 
     monkeypatch.setattr(nh, "config", FakeConfig)
     monkeypatch.setattr(nh, "client", FakeClient)
@@ -1081,6 +1085,7 @@ def test_only_new_exporter_code_ends_the_exporter(monkeypatch, tmp_path):
     monkeypatch.setattr(nh, "CODE", tmp_path / "node_healthcheck.py")
     monkeypatch.setattr(nh, "start_http_server", lambda port: None)
     monkeypatch.setattr(nh, "update_metrics", update_metrics)
+    monkeypatch.setattr(nh, "update_flux", lambda: None)
     monkeypatch.setattr(nh, "CHECK_INTERVAL_S", 0)
     nh.main()
     assert passes == 2
@@ -1111,6 +1116,7 @@ def _one_pass(monkeypatch, tmp_path):
     monkeypatch.setattr(nh, "CODE", code)
     monkeypatch.setattr(nh, "start_http_server", lambda port: None)
     monkeypatch.setattr(nh, "update_metrics", lambda: code.write_text("new"))
+    monkeypatch.setattr(nh, "update_flux", lambda: None)
     monkeypatch.setattr(nh, "CHECK_INTERVAL_S", 0)
     nh.main()
 
@@ -1132,3 +1138,93 @@ def test_no_registry_url_publishes_no_series(monkeypatch, tmp_path):
     monkeypatch.setattr(nh, "REGISTRY_URL", "")
     _one_pass(monkeypatch, tmp_path)
     assert _registry_up("registry.test") is None
+
+
+# ── Flux delivery state ───────────────────────────────────────────────────────
+
+
+def flux_object(name, ready="True", suspend=False):
+    return {
+        "metadata": {"name": name},
+        "spec": {"suspend": suspend},
+        "status": {"conditions": [{"type": "Ready", "status": ready}]},
+    }
+
+
+class FakeCustomObjects:
+    def __init__(self, **by_plural):
+        self.by_plural = by_plural
+
+    def list_namespaced_custom_object(
+        self, group, version, namespace, plural, _request_timeout
+    ):
+        found = self.by_plural.get(plural, [])
+        if isinstance(found, Exception):
+            raise found
+        return {"items": found}
+
+
+@pytest.fixture()
+def flux(monkeypatch):
+    nh.flux_ready.clear()
+    monkeypatch.setattr(nh, "_flux_published", {})
+    monkeypatch.setattr(nh, "_k8s_ready", True)
+
+    def _pass(**by_plural):
+        monkeypatch.setattr(nh, "_custom_objects", FakeCustomObjects(**by_plural))
+        nh.update_flux()
+
+    return _pass
+
+
+def flux_sample(kind, name):
+    return REGISTRY.get_sample_value("af_flux_ready", {"kind": kind, "name": name})
+
+
+@pytest.mark.parametrize(
+    "item, ready",
+    [
+        (flux_object("x"), 1),
+        (flux_object("x", ready="False"), 0),
+        (flux_object("x", ready="Unknown"), 0),
+        (flux_object("x", suspend=True), 0),
+        ({"metadata": {"name": "x"}}, 0),
+    ],
+)
+def test_a_flux_object_counts_only_when_ready_and_not_suspended(flux, item, ready):
+    flux(helmreleases=[item])
+    assert flux_sample("HelmRelease", "x") == ready
+
+
+def test_each_kind_is_published_under_its_own_label(flux):
+    flux(
+        kustomizations=[flux_object("root")],
+        gitrepositories=[flux_object("root")],
+        helmreleases=[flux_object("hub", ready="False")],
+    )
+    assert flux_sample("Kustomization", "root") == 1
+    assert flux_sample("GitRepository", "root") == 1
+    assert flux_sample("HelmRelease", "hub") == 0
+
+
+def test_a_removed_flux_object_leaves_no_series(flux):
+    flux(helmreleases=[flux_object("gone"), flux_object("kept")])
+    flux(helmreleases=[flux_object("kept")])
+    assert flux_sample("HelmRelease", "gone") is None
+    assert flux_sample("HelmRelease", "kept") == 1
+
+
+def test_a_refused_list_leaves_its_kind_absent_and_the_others_alone(flux):
+    """Absent is what AFFluxStateUnknown reads: a 0 would claim every object failed."""
+    flux(kustomizations=[flux_object("root")], helmreleases=[flux_object("hub")])
+    flux(kustomizations=PermissionError("403"), helmreleases=[flux_object("hub")])
+    assert flux_sample("Kustomization", "root") is None
+    assert flux_sample("HelmRelease", "hub") == 1
+
+
+def test_a_pass_without_a_cluster_client_publishes_nothing(monkeypatch):
+    nh.flux_ready.clear()
+    monkeypatch.setattr(nh, "_k8s_ready", True)
+    monkeypatch.setattr(nh, "_custom_objects", None)
+    nh.update_flux()
+    assert flux_sample("HelmRelease", "x") is None

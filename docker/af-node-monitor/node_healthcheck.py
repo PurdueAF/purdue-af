@@ -76,6 +76,14 @@ FETCH_TIMEOUT_S = float(os.getenv("FETCH_TIMEOUT_S", "5"))
 FETCH_PASS_TIMEOUT_S = float(os.getenv("FETCH_PASS_TIMEOUT_S", "30"))
 FETCH_WORKERS = int(os.getenv("FETCH_WORKERS", "16"))
 MAX_RESULT_BYTES = 64 * 1024
+
+# (kind, API group, version, plural) of what carries a commit to the cluster.
+FLUX_KINDS = (
+    ("Kustomization", "kustomize.toolkit.fluxcd.io", "v1", "kustomizations"),
+    ("GitRepository", "source.toolkit.fluxcd.io", "v1", "gitrepositories"),
+    ("HelmRelease", "helm.toolkit.fluxcd.io", "v2", "helmreleases"),
+)
+FLUX_TIMEOUT_S = float(os.getenv("FLUX_TIMEOUT_S", "10"))
 # Used when a probe pod declares no port named "http".
 DEFAULT_PROBE_PORT = 8080
 
@@ -159,6 +167,13 @@ try:
         ["registry"],
     )
 
+    flux_ready = Gauge(
+        "af_flux_ready",
+        "1 when a Flux object is Ready and not suspended, 0 when it is not. "
+        "A kind that cannot be listed has no series",
+        ["kind", "name"],
+    )
+
     # Held as objects, not names: a name resolved through globals() turns a
     # typo into the KeyError that _clear_gauges swallows, and a gauge that is
     # silently never cleared is exactly the frozen last-known-good green that
@@ -189,6 +204,7 @@ def _sanitized_mount_name(name: str) -> str:
 
 
 _core_v1: client.CoreV1Api | None  # type: ignore[type-arg]
+_custom_objects: Any = None
 _k8s_ready: bool = False
 
 # All AF-labelled nodes as (name, pool, ready). Metrics must cover NotReady
@@ -199,7 +215,7 @@ _last_node_refresh: float = 0.0
 
 
 def _init_k8s() -> None:
-    global _core_v1, _k8s_ready
+    global _core_v1, _custom_objects, _k8s_ready
     if _k8s_ready or client is None or config is None:
         return
     try:
@@ -209,6 +225,7 @@ def _init_k8s() -> None:
         except Exception:
             config.load_kube_config()
         _core_v1 = client.CoreV1Api()
+        _custom_objects = client.CustomObjectsApi()
         _k8s_ready = True
         _vlog("[node_healthcheck] Kubernetes client initialized")
     except Exception as e:  # pragma: no cover - defensive
@@ -560,6 +577,46 @@ def _registry_answers(url: str) -> bool:
         return False
 
 
+def _flux_object_ready(item: Dict[str, Any]) -> bool:
+    if item.get("spec", {}).get("suspend"):
+        return False
+    return any(
+        condition.get("type") == "Ready" and condition.get("status") == "True"
+        for condition in item.get("status", {}).get("conditions", [])
+    )
+
+
+_flux_published: Dict[str, set[str]] = {}
+
+
+def update_flux() -> None:
+    """Publish each Flux object's state, in its own failure domain: a refused
+    list must not cost the pass its mount metrics."""
+    _init_k8s()
+    if _custom_objects is None:
+        return
+    for kind, group, version, plural in FLUX_KINDS:
+        try:
+            items = _custom_objects.list_namespaced_custom_object(
+                group,
+                version,
+                POD_NAMESPACE,
+                plural,
+                _request_timeout=FLUX_TIMEOUT_S,
+            )["items"]
+        except Exception as e:
+            _elog(f"[node_healthcheck] Cannot list {plural}: {e}")
+            items = []
+        names = {item["metadata"]["name"] for item in items}
+        for item in items:
+            flux_ready.labels(kind=kind, name=item["metadata"]["name"]).set(
+                _flux_object_ready(item)
+            )
+        for name in _flux_published.get(kind, set()) - names:
+            flux_ready.remove(kind, name)
+        _flux_published[kind] = names
+
+
 # Last result per probe: a missed pull keeps its verdict, under the staleness rules.
 _result_cache: Dict[tuple[str, str], Dict[str, Any]] = {}
 
@@ -718,6 +775,7 @@ def main() -> None:
             registry_up.labels(
                 registry=urllib.parse.urlsplit(REGISTRY_URL).hostname or ""
             ).set(_registry_answers(REGISTRY_URL))
+        update_flux()
         try:
             update_metrics()
             monitor_last_iteration_ts.set(time.time())

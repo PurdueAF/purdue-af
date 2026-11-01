@@ -337,3 +337,12 @@ async def test_dev_hardware_is_invisible_to_users(user_ctx):
     assert "a337" not in out
     assert "a338" not in out
     assert "dev" not in out.lower().split("normal:")[-1]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_delivery_is_invisible_to_users(user_ctx):
+    """A failing release leaves the workloads running, so it is an operator's
+    alert and must not turn every user's answer to Impaired."""
+    out = await run(firing=[alert("AFHelmReleaseNotReady", "warning", "delivery")])
+    assert "**Healthy**" in out
+    assert "AFHelmReleaseNotReady" not in out

@@ -44,8 +44,9 @@ COMPONENT_TITLES = {
 BLOCKING = ("error", "critical")
 # The facility is also monitored on dev hardware, which runs no user sessions.
 # Those alerts exist for operators; a user asking "is the AF healthy" should
-# never see them, and they must not affect the verdict.
-HIDDEN_COMPONENTS = {"dev"}
+# never see them, and they must not affect the verdict. So too for delivery: a
+# failed release leaves the workloads running as they were.
+HIDDEN_COMPONENTS = {"dev", "delivery"}
 # Per-user quota warnings are already reported as a percent figure below; they
 # must not flip the facility headline to Impaired.
 SKIP_IMPAIR_PREFIXES = ("AFHomeDir",)

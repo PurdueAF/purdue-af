@@ -856,6 +856,45 @@ serverFiles:
                 the new scrape jobs and keeps the old rules. The pod cannot
                 start on this config, so fix it before the next restart.
                 Check: kubectl -n cms logs deploy/prometheus-server | grep "Error reloading config"
+      - name: af-delivery
+        rules:
+          - alert: AFFluxRootNotReady
+            expr: af_flux_ready{kind=~"Kustomization|GitRepository"} == 0
+            for: 5m
+            labels:
+              severity: warning
+              component: delivery
+            annotations:
+              summary: "Flux {{ $labels.kind }} {{ $labels.name }} is failing or suspended"
+              description: >
+                No merge reaches any component of this root until it recovers,
+                while its running workloads and the README badges look normal.
+                Check: kubectl -n cms get gitrepositories,kustomizations,helmreleases
+          - alert: AFHelmReleaseNotReady
+            # Longer than one Helm wait and rollback, so a retry that recovers stays quiet.
+            expr: af_flux_ready{kind="HelmRelease"} == 0
+            for: 15m
+            labels:
+              severity: warning
+              component: delivery
+            annotations:
+              summary: "HelmRelease {{ $labels.name }} is failing or suspended"
+              description: >
+                It runs its last good version and retries forever, and each
+                attempt can roll its pods, while its badge still reads deployed.
+                Check: kubectl -n cms describe helmrelease {{ $labels.name }}
+          - alert: AFFluxStateUnknown
+            expr: absent(af_flux_ready{kind="Kustomization"})
+            for: 15m
+            labels:
+              severity: warning
+              component: delivery
+            annotations:
+              summary: af-node-monitor reports no Flux state
+              description: >
+                AFFluxRootNotReady and AFHelmReleaseNotReady are blind while
+                this fires. Check for "Cannot list" in:
+                kubectl -n cms logs deploy/af-node-monitor
 alertmanager:
   enabled: true
   nodeSelector:
