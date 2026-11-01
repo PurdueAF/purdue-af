@@ -41,6 +41,12 @@ nothing is published unless every stage passed for that exact commit. The
 publish stage runs on `main` only; the two releases are `workflow_dispatch`
 runs from the Actions tab.
 
+A delivery that fails leaves the workloads running as they were, and the status
+badges read git, not the cluster. `AFFluxRootNotReady` and
+`AFHelmReleaseNotReady` report it, and
+`kubectl -n cms get gitrepositories,kustomizations,helmreleases` shows the cause
+in its READY and SUSPENDED columns.
+
 ```mermaid
 flowchart TD
   push(["push/PR into main branch"]) --> checks["CI: syntax, pixi, images, e2e"]

@@ -337,3 +337,13 @@ def test_dashboard_covers_every_component_that_has_alerts():
     panel = json.dumps(panels_by_title()["Firing alerts by component"])
     hardcoded = [c for c in components if f'"{c}"' in panel]
     assert not hardcoded, f"table hardcodes components: {hardcoded}"
+
+
+def test_delivery_alerts_are_kept_apart_by_kind():
+    """Names repeat across kinds, so the rules select on kind, not on a name."""
+    by_name = {r["alert"]: r for r in rules() if r["labels"]["component"] == "delivery"}
+    assert (
+        'kind=~"Kustomization|GitRepository"' in by_name["AFFluxRootNotReady"]["expr"]
+    )
+    assert 'kind="HelmRelease"' in by_name["AFHelmReleaseNotReady"]["expr"]
+    assert "absent(" in by_name["AFFluxStateUnknown"]["expr"]
