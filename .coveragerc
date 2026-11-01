@@ -17,10 +17,6 @@ omit =
     **/.venv/*
     **/.pixi/*
     docs/*
-    # Exercised by the container HEALTHCHECK at runtime, not by the test suite.
-    docker/purdue-af/jupyter/docker_healthcheck.py
-# Entry points run by the container or the launcher, and the sentinels after
-# an exhaustive loop, are not reachable from the suite.
+# Entry points run by the container or the launcher are not reachable from the suite.
 exclude_also =
     if __name__ == .__main__.:
-    raise AssertionError\("unreachable"\)

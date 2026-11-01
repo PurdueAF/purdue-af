@@ -365,9 +365,7 @@ def test_context_is_written_for_every_harness(run_script, agent_home, relative):
     result, _ = run_script()
     assert result.returncode == 0
     written = (agent_home / relative).read_text()
-    assert "Purdue Analysis Facility" in written
-    # a guardrail from the context, not just the heading
-    assert "refuse to run on a project under `/home/`" in written
+    assert CONTEXT.read_text().strip() in written
 
 
 @pytest.mark.parametrize("relative", HARNESS_CONTEXT_FILES)
@@ -380,7 +378,7 @@ def test_a_users_own_instructions_survive(run_script, agent_home, relative):
     run_script()
     after = target.read_text()
     assert "Always use pytest -x." in after
-    assert "Purdue Analysis Facility" in after
+    assert CONTEXT.read_text().strip() in after
 
 
 # --- never break a session start -----------------------------------------
@@ -619,7 +617,7 @@ def test_section_source_is_shipped_and_is_an_image_input():
     text = DOCKERFILE.read_text()
     assert "agents/platform-context.md" in text
     assert "managed-block.py" in text
-    assert (REPO / "docker/purdue-af/agents/platform-context.md").is_file()
+    assert CONTEXT.read_text().strip()
 
 
 def test_bundled_python_scripts_do_not_use_the_system_interpreter():

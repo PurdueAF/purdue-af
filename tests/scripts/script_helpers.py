@@ -17,7 +17,7 @@ def load_jupyter_config(monkeypatch, env=None):
     Every session variable the config reads is cleared unless a test sets it,
     so a developer's own shell cannot decide what the config under test
     produces."""
-    for var in ("NB_UMASK", "JUPYTERHUB_API_TOKEN", "NAMESPACE"):
+    for var in ("JUPYTERHUB_API_TOKEN", "NAMESPACE"):
         monkeypatch.delenv(var, raising=False)
     for key, value in (env or {}).items():
         monkeypatch.setenv(key, value)

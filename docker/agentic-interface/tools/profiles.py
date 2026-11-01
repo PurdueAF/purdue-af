@@ -200,19 +200,19 @@ def profiles_error() -> Optional[str]:
     return _last_error
 
 
-async def get_profiles(force: bool = False) -> list[dict]:
+async def get_profiles() -> list[dict]:
     """Return the profile list, with a 5-minute cache.
 
     An empty list always has a reason waiting in ``profiles_error()``.
     """
     global _last_good, _last_error
-    if not force and "profiles" in _fresh:
+    if "profiles" in _fresh:
         return _fresh["profiles"]
 
     async with _refresh_lock:
         # Re-check after acquiring — another task may have refreshed while
         # we waited on the lock.
-        if not force and "profiles" in _fresh:
+        if "profiles" in _fresh:
             return _fresh["profiles"]
 
         raw = await _read_configmap()

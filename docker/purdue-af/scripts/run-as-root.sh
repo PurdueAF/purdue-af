@@ -28,7 +28,6 @@ if [ ! -f "$_HOME_SETUP_SENTINEL" ]; then
 	# full quota) costs them these directories, never the whole session.
 	af_as_user mkdir -p "$NEW_HOME/.jupyter/lab/workspaces" || true
 	af_as_user mkdir -p "$NEW_HOME/.local/share/jupyter/runtime" || true
-	af_as_user mkdir -p "$NEW_HOME/.config/dask" || true
 	# Repairs root-owned homes; cannot work through a depot symlink, so never fatal.
 	chown -h "$NB_USER:users" \
 		"$NEW_HOME/.jupyter" \
@@ -38,8 +37,7 @@ if [ ! -f "$_HOME_SETUP_SENTINEL" ]; then
 		"$NEW_HOME/.local/share" \
 		"$NEW_HOME/.local/share/jupyter" \
 		"$NEW_HOME/.local/share/jupyter/runtime" \
-		"$NEW_HOME/.config" \
-		"$NEW_HOME/.config/dask" || true
+		"$NEW_HOME/.config" || true
 	af_as_user touch "$_HOME_SETUP_SENTINEL" || true
 fi
 chmod 755 "$NEW_HOME"

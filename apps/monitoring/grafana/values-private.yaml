@@ -38,22 +38,6 @@ securityContext:
 initChownData:
   enabled: false
 
-extraVolumes:
-  - name: grafana-png-tmp
-    emptyDir: {}
-  - name: grafana-pdf-tmp
-    emptyDir: {}
-  - name: grafana-csv-tmp
-    emptyDir: {}
-
-extraVolumeMounts:
-  - name: grafana-png-tmp
-    mountPath: /var/lib/grafana/png
-  - name: grafana-pdf-tmp
-    mountPath: /var/lib/grafana/pdf
-  - name: grafana-csv-tmp
-    mountPath: /var/lib/grafana/csv
-
 resources:
   requests:
     cpu: 1000m
@@ -94,8 +78,6 @@ dashboardProviders:
 
 dashboardsConfigMaps:
   private: grafana-private-dashboards
-
-# No plugins on this instance.
 
 # Shared datasources are in datasources.yaml; these are on this instance only (values.yaml says why).
 datasources:

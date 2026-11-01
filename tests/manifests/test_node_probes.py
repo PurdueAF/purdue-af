@@ -249,8 +249,8 @@ def test_priority_class_never_preempts():
 
 
 def test_node_name_comes_from_the_downward_api():
-    """One template covers every node, so the result filename and the node
-    label can only come from spec.nodeName at runtime."""
+    """One template covers every node, so the node a result names can only come
+    from spec.nodeName at runtime."""
     for name, ds in daemonsets().items():
         node_env = next(e for e in container(ds)["env"] if e["name"] == "NODE_NAME")
         assert node_env["valueFrom"]["fieldRef"]["fieldPath"] == "spec.nodeName", name
@@ -349,8 +349,3 @@ def test_exporter_sentinels_match_the_probe_timeouts():
         assert exporter.get(key), f"exporter does not set {key}"
         for name, ds in daemonsets().items():
             assert env_of(ds)[key] == exporter[key], (name, key)
-
-
-def test_exporter_does_not_keep_a_timeout_it_cannot_enforce():
-    """The exporter runs no fio, so it carries no fio timeout."""
-    assert "FIO_TIMEOUT_S" not in EXPORTER.read_text()

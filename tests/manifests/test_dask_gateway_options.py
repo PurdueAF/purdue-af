@@ -76,7 +76,7 @@ def basic(name):
 def config(monkeypatch, code):
     """Exec the embedded config against stub dask_gateway_server modules."""
     options = types.ModuleType("dask_gateway_server.options")
-    for name in ("Options", "Integer", "Float", "Mapping", "String", "Select"):
+    for name in ("Options", "Float", "Mapping", "String"):
         setattr(options, name, lambda *args, **kwargs: None)
     kubernetes = types.ModuleType("dask_gateway_server.backends.kubernetes")
     kubernetes.KubeBackend = type("KubeBackend", (), {"start_cluster": None})

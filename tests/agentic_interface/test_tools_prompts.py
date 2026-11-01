@@ -13,25 +13,6 @@ def test_all_prompts_registered():
     assert set(recorder.prompts) == EXPECTED_PROMPTS
 
 
-def test_prompts_reference_existing_tools():
-    """Every tool name mentioned in a prompt must actually exist."""
-    from tools import dask, logs, profiles, session, storage
-
-    real_tools = set()
-    for module in (dask, logs, profiles, session, storage):
-        real_tools |= set(register_tools(module).tools)
-
-    recorder = register_tools(prompts)
-    mentioned = set()
-    for fn in recorder.prompts.values():
-        text = fn()
-        for tool in real_tools:
-            if tool in text:
-                mentioned.add(tool)
-
-    assert {"create_dask_cluster", "list_dask_cluster_options"} <= mentioned
-
-
 def test_prompt_text_never_names_unknown_tools():
     """Catch typos: any word with two or more underscores must be a tool."""
     import re

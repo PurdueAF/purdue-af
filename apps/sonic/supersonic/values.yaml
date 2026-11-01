@@ -61,8 +61,6 @@ inferenceServer:
   service:
     labels:
       scrape_metrics: "true"
-    annotations:
-      metallb.universe.tf/address-pool: geddes-private-pool
   modelRepository:
     enabled: true
     storageType: cvmfs-pvc
@@ -104,9 +102,8 @@ keda:
   enabled: true
   # RepositoryIndex raises this to 1 through the Envoy admission sidecar.
   minReplicaCount: 0
-  # Below the free GPU count, so neither arm is ever starved.
   maxReplicaCount: 5
-  # Poll often enough that the wake is not sitting behind a 30s KEDA tick.
+  # Poll often enough that the wake is not sitting behind a KEDA tick.
   pollingInterval: 1
   cooldownPeriod: 300
   scaleUp:
@@ -117,9 +114,6 @@ keda:
     stabilizationWindowSeconds: 300
     periodSeconds: 45
     stepsize: 1
-
-ingress:
-  enabled: false
 
 prometheus:
   # FQDN: the KEDA operator runs in the keda namespace.

@@ -61,7 +61,7 @@ triton:
   timeoutSeconds: 10
 
 prometheus:
-  # -- Base URL of the Prometheus that scrapes Triton, e.g. http://sonic-prometheus-server:9090
+  # -- Base URL of the Prometheus that scrapes Triton
   url: ""
   # -- Extra PromQL matchers for every nv_* query; derived from supersonicRelease when empty.
   selector: ""

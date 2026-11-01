@@ -12,9 +12,8 @@ from common import REPO, ConfigSink
 EXTRA_FILES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles"
 
 
-def load_snippet(filename, monkeypatch, namespace="cms", extra_globals=None):
+def load_snippet(filename, monkeypatch, extra_globals=None):
     """Exec an extraFiles snippet the way JupyterHub does; return its globals."""
-    monkeypatch.setenv("POD_NAMESPACE", namespace)
     # gpu-availability.py imports the shared gpu_queries module from the
     # snippet directory; in the source tree that is extraFiles itself.
     monkeypatch.setenv("JUPYTERHUB_CONFIG_D", str(EXTRA_FILES))
@@ -31,5 +30,4 @@ class FakeSpawner:
 
     def __init__(self, user_id=1):
         self.environment = {}
-        self.userdata = None
         self.user = types.SimpleNamespace(id=user_id)

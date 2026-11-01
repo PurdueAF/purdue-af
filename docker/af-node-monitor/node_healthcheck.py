@@ -62,13 +62,7 @@ def _elog(msg: str) -> None:
     print(msg)
 
 
-# Cadence the probe DaemonSets write at (probe_agent.PROBE_INTERVAL_S). The
-# exporter does not drive it; it only needs to agree on what "recent" means.
-PROBE_INTERVAL_S = float(os.getenv("PROBE_INTERVAL_S", "600"))
-
-RESULT_STALE_WINDOW_S = float(
-    os.getenv("RESULT_STALE_WINDOW_S", str(3 * PROBE_INTERVAL_S))
-)
+RESULT_STALE_WINDOW_S = float(os.getenv("RESULT_STALE_WINDOW_S", "1800"))
 
 # A result stamped in the future is a clock-skewed node, not a fresh check.
 # Without this a skewed node can never go stale, so a dead mount there would
@@ -129,7 +123,8 @@ try:
 
     mount_timeout_total = Counter(
         "af_node_mount_timeout_total",
-        "Total number of timeouts contacting mount workers or running checks",
+        "Exporter passes that found no usable result, a failed volume setup or "
+        "a timed-out check, by check_type",
         ["mount_name", "mount_path", "node", "node_pool", "check_type"],
     )
     mount_last_success_ts = Gauge(
@@ -193,10 +188,6 @@ def _sanitized_mount_name(name: str) -> str:
     return name.strip("/").replace("/", "_") or "root"
 
 
-def _sanitized_node_name(name: str) -> str:
-    return name.strip().replace("/", "_") if name else ""
-
-
 _core_v1: client.CoreV1Api | None  # type: ignore[type-arg]
 _k8s_ready: bool = False
 
@@ -241,7 +232,7 @@ def _node_is_ready(node: Any) -> bool:
 
 
 def _refresh_node_caches() -> None:
-    """Refresh Ready-only and all-AF-node caches from the API."""
+    """Refresh the AF node list and node pools from the API."""
     _init_k8s()
     if not _k8s_ready or _core_v1 is None:
         return
@@ -488,7 +479,7 @@ def _list_probe_pods(now: float) -> Dict[tuple[str, str], Probe] | None:
     for pod in pods.items:
         labels = getattr(pod.metadata, "labels", None) or {}
         mount_key = labels.get("mount", "")
-        node_key = _sanitized_node_name(getattr(pod.spec, "node_name", "") or "")
+        node_key = getattr(pod.spec, "node_name", "") or ""
         if not mount_key or not node_key:
             continue
         key = (mount_key, node_key)
@@ -579,7 +570,7 @@ def update_metrics() -> None:
     af_nodes = _list_af_nodes()
     probes = _probe_pods(now)
 
-    ready_nodes = {_sanitized_node_name(name) for name, _pool, ok in af_nodes if ok}
+    ready_nodes = {name for name, _pool, ok in af_nodes if ok}
     targets = {
         key: probe
         for key, probe in (probes or {}).items()
@@ -611,8 +602,7 @@ def update_metrics() -> None:
                 _clear_mount_gauges(labels)
                 continue
 
-            node_key = _sanitized_node_name(node_name)
-            key = (mount_key, node_key)
+            key = (mount_key, node_name)
             probe = probes.get(key) if probes is not None else None
             probe_up = (
                 bool(probe and probe.ready and key in fetched)
@@ -620,24 +610,12 @@ def update_metrics() -> None:
                 else None
             )
 
-            if probe is not None and probe.setup_failed and node_key in working_nodes:
+            if probe is not None and probe.setup_failed and node_name in working_nodes:
                 _publish_probe_up(labels, probe_up)
                 _publish_setup_failed(labels)
                 continue
 
             data = _result_cache.get(key)
-            # Use node from result JSON (the probe pod's node); fallback to
-            # discovery so the metric always reflects the node that produced it.
-            node_for_label = (
-                (data.get("node") or "").strip() if data else ""
-            ) or node_name
-
-            labels = {
-                "mount_name": m_name,
-                "mount_path": mount_path,
-                "node": node_for_label,
-                "node_pool": _node_pools.get(node_for_label, pool),
-            }
             _publish_probe_up(labels, probe_up)
 
             if not data:

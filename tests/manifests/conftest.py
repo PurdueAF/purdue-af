@@ -1,8 +1,7 @@
 """Fixtures for manifest tests — plain YAML parsing, no cluster.
 
-These suites assert the wiring that only fails at deploy time: a patch that
-matches nothing, a ConfigMap name nobody generates, a placeholder Flux
-silently blanks out.
+These suites assert the wiring that only fails at deploy time: a ConfigMap
+name nobody generates, a placeholder Flux silently blanks out.
 """
 
 import pytest

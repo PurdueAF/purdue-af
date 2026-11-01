@@ -36,41 +36,7 @@ securityContext:
 initChownData:
   enabled: false
 
-# Plugins live on the PVC so they are not reinstalled into SQLite on every restart.
-extraVolumes:
-  - name: grafana-png-tmp
-    emptyDir: {}
-  - name: grafana-pdf-tmp
-    emptyDir: {}
-  - name: grafana-csv-tmp
-    emptyDir: {}
-  # TRANSITIONAL: backs the private-dashboards cleanup provider.
-  - name: private-dashboards-cleanup
-    emptyDir: {}
-  - name: work
-    existingClaim: af-shared-storage
-  - name: announcements-nginx-conf
-    configMap:
-      name: announcements-nginx-conf
-      items:
-        - key: default.conf
-          path: default.conf
-
-extraVolumeMounts:
-  - name: grafana-png-tmp
-    mountPath: /var/lib/grafana/png
-  - name: grafana-pdf-tmp
-    mountPath: /var/lib/grafana/pdf
-  - name: grafana-csv-tmp
-    mountPath: /var/lib/grafana/csv
-  - name: private-dashboards-cleanup
-    mountPath: /var/lib/grafana/dashboards/private
-  - name: work
-    mountPath: /work/
-    mountPropagation: HostToContainer
-    readOnly: true
-
-# TRANSITIONAL: removes plugins dropped from the list, which stay installed on the PVC.
+# TRANSITIONAL: removes plugins this instance no longer installs, which stay on the PVC.
 extraInitContainers:
   - name: remove-unused-plugins
     image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/busybox:1.38
@@ -79,8 +45,8 @@ extraInitContainers:
       - sh
       - -c
       - >-
-        rm -rf /var/lib/grafana/plugins/grafana-llm-app
-        /var/lib/grafana/plugins/grafana-pyroscope-app
+        rm -rf /var/lib/grafana/plugins/marcusolsson-dynamictext-panel
+        /var/lib/grafana/plugins/yesoreyeram-infinity-datasource
     securityContext:
       runAsNonRoot: true
       runAsUser: 472
@@ -97,27 +63,6 @@ extraInitContainers:
     volumeMounts:
       - name: storage
         mountPath: /var/lib/grafana
-
-extraContainers: |
-  - name: announcements-server
-    image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/nginxinc/nginx-unprivileged:alpine
-    ports:
-      - containerPort: 8080
-    volumeMounts:
-      - name: work
-        mountPath: /work/
-        mountPropagation: HostToContainer
-        readOnly: true
-      - name: announcements-nginx-conf
-        mountPath: /etc/nginx/conf.d
-        readOnly: true
-    resources:
-      requests:
-        cpu: 100m
-        memory: 1Gi
-      limits:
-        cpu: 1000m
-        memory: 2Gi
 
 resources:
   requests:
@@ -159,16 +104,6 @@ dashboardProviders:
         allowUiUpdates: true
         options:
           path: /var/lib/grafana/dashboards/public
-      # TRANSITIONAL: an empty dir makes Grafana delete the private dashboards it provisioned here.
-      - name: "private"
-        orgId: 1
-        folder: "Private Dashboards"
-        type: file
-        disableDeletion: false
-        updateIntervalSeconds: 10
-        allowUiUpdates: true
-        options:
-          path: /var/lib/grafana/dashboards/private
 
 dashboardsConfigMaps:
   public: grafana-public-dashboards
@@ -187,19 +122,8 @@ datasources:
         orgId: 1
       - name: prometheus-hammer
         orgId: 1
-    datasources:
       - name: Infinity
-        type: yesoreyeram-infinity-datasource
-        uid: infinity
-        access: proxy
-        editable: false
-        jsonData:
-          allowedHosts:
-            - "http://localhost:8080"
-
-plugins:
-  - marcusolsson-dynamictext-panel
-  - yesoreyeram-infinity-datasource
+        orgId: 1
 
 nodeSelector:
   cms-af-prod: "true"

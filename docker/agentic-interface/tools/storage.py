@@ -41,7 +41,6 @@ def register(mcp: Any) -> None:
         user = require_user()
         username = user["username"]
         # Metrics are labeled by username via Kubernetes SD (username_unescaped).
-        # No Hub admin state / pod_name required.
         user_selector = f'username="{quote_label(username)}"'
 
         client = shared_client("prometheus")

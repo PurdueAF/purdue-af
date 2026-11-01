@@ -97,7 +97,6 @@ def test_home_directories_are_created(run_hook):
     assert result.returncode == 0, result.stderr
     assert (home / ".local/share/jupyter/runtime").is_dir()
     assert (home / ".jupyter/lab/workspaces").is_dir()
-    assert (home / ".config/dask").is_dir()
     assert (home / ".jupyter/migrated").is_file()
 
 
@@ -109,7 +108,7 @@ def test_as_root_the_home_writes_are_delegated_to_the_user(run_hook):
 
     calls = run.delegated()
     assert calls, "nothing was delegated: run-as-root.sh still writes as root"
-    for needle in (".local/share/jupyter", ".jupyter", ".config/dask"):
+    for needle in (".local/share/jupyter", ".jupyter"):
         assert any(needle in c for c in calls), f"{needle} not delegated: {calls}"
     assert all(c.startswith("-u jovyan --") for c in calls), calls
 

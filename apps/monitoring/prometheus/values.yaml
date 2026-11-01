@@ -5,7 +5,6 @@ serviceAccounts:
   server:
     create: false
     name: prometheus-sa
-    automountServiceAccountToken: true
 
 configmapReload:
   prometheus:
@@ -68,13 +67,6 @@ server:
     - name: hub-metrics-token
       mountPath: /etc/hub-metrics
       readOnly: true
-
-  ingress:
-    enabled: false
-    hosts: [prometheus-af.geddes.rcac.purdue.edu]
-    tls:
-      - hosts: [prometheus-af.geddes.rcac.purdue.edu]
-    ingressClassName: public
 
   # Recreate: the RWO PVC and TSDB lock rule out a second pod.
   strategy:
@@ -213,8 +205,6 @@ serverFiles:
         relabel_configs:
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: "pod"
-          - source_labels: [__meta_kubernetes_endpoint_address_target_ip]
-            target_label: "ip"
           - source_labels: [__meta_kubernetes_pod_label_username_unescaped]
             target_label: "username"
           - source_labels: [__meta_kubernetes_pod_label_docker_image_tag]
@@ -290,30 +280,6 @@ serverFiles:
           - source_labels: [__name__]
             action: keep
             regex: "loki_write_(sent|dropped)_(entries|bytes)_total|loki_write_batch_retries_total|loki_process_dropped_lines_total"
-      - job_name: "envoy-monitor"
-        metrics_path: "/stats/prometheus"
-        kubernetes_sd_configs:
-          - role: endpoints
-            namespaces:
-              names:
-                - ${namespace}
-        relabel_configs:
-          - source_labels: [__meta_kubernetes_service_label_app]
-            target_label: "app"
-          - source_labels: [__meta_kubernetes_pod_name]
-            target_label: "pod"
-          - source_labels: [__meta_kubernetes_pod_label_username_unescaped]
-            target_label: "username"
-          - source_labels: [__meta_kubernetes_pod_label_docker_image_tag]
-            target_label: "docker_image_tag"
-          - source_labels: [__meta_kubernetes_namespace]
-            target_label: "namespace"
-            replacement: "$1"
-          - source_labels: [__meta_kubernetes_pod_node_name]
-            target_label: "node"
-          - source_labels: [__meta_kubernetes_service_label_envoy]
-            action: keep
-            regex: "true"
       - job_name: "dask-gateway-monitor"
         kubernetes_sd_configs:
           - role: endpoints
@@ -371,75 +337,12 @@ serverFiles:
               [__meta_kubernetes_service_label_app_kubernetes_io_component]
             action: keep
             regex: envoy
-  # Figures of merit for the SuperSONIC releases' scaling.
-  recording_rules.yml:
-    groups:
-      - name: sonic-scaling-fom
-        interval: 15s
-        rules:
-          - record: sonic:replicas_desired
-            expr: |-
-              max by (release) (
-                label_replace(
-                  kube_deployment_spec_replicas{namespace="cms", deployment=~"supersonic.*-inference-server"},
-                  "release", "$1", "deployment", "(.*)-inference-server"
-                )
-              )
-          - record: sonic:replicas_ready
-            expr: |-
-              max by (release) (
-                label_replace(
-                  kube_deployment_status_replicas_ready{namespace="cms", deployment=~"supersonic.*-inference-server"},
-                  "release", "$1", "deployment", "(.*)-inference-server"
-                )
-              )
-          # Above zero means the run is measuring GPU supply, not the metric.
-          - record: sonic:capacity_shortfall
-            expr: sonic:replicas_desired - sonic:replicas_ready
-          - record: sonic:scale_actions:changes10m
-            expr: |-
-              max by (release) (
-                label_replace(
-                  changes(kube_deployment_spec_replicas{namespace="cms", deployment=~"supersonic.*-inference-server"}[10m]),
-                  "release", "$1", "deployment", "(.*)-inference-server"
-                )
-              )
-          - record: sonic:throughput_inferences:rate30s
-            expr: sum by (release) (rate(nv_inference_count[30s]))
-          - record: sonic:throughput_requests:rate30s
-            expr: |-
-              sum by (release) (
-                rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="inference_server_grpc_service"}[30s])
-              )
-          - record: sonic:latency_envoy_mean_ms
-            expr: |-
-              sum by (release) (rate(envoy_cluster_upstream_rq_time_sum{envoy_cluster_name="inference_server_grpc_service"}[30s]))
-              / clamp_min(
-                  sum by (release) (rate(envoy_cluster_upstream_rq_time_count{envoy_cluster_name="inference_server_grpc_service"}[30s])),
-                  1
-                )
-          - record: sonic:latency_envoy_p95_ms
-            expr: |-
-              histogram_quantile(0.95,
-                sum by (release, le) (
-                  rate(envoy_cluster_upstream_rq_time_bucket{envoy_cluster_name="inference_server_grpc_service"}[30s])
-                )
-              )
-          - record: sonic:queue_fraction
-            expr: |-
-              sum by (release) (rate(nv_inference_queue_duration_us[30s]))
-              / clamp_min(sum by (release) (rate(nv_inference_request_duration_us[30s])), 1)
-          - record: sonic:gpu_util_mean
-            expr: avg by (release) (nv_gpu_utilization)
-          - record: sonic:gpu_util_max
-            expr: max by (release) (nv_gpu_utilization)
-
   alerting_rules.yml:
     groups:
       - name: af-pod-monitor
         rules:
           - alert: AFHomeDirUtilHigh
-            expr: af_home_dir_util{namespace=~"cms",job="af-pod-monitor",username!=""} > 0.90
+            expr: af_home_dir_util{namespace="cms",job="af-pod-monitor",username!=""} > 0.90
             for: 1m
             labels:
               severity: warning
@@ -451,7 +354,7 @@ serverFiles:
                 If utilization reaches 100%, user's session will stop working!
                 Now is the time to contact the user and make sure they are aware of this.
           - alert: AFHomeDirUtilVeryHigh
-            expr: af_home_dir_util{namespace=~"cms",job="af-pod-monitor",username!=""} > 0.95
+            expr: af_home_dir_util{namespace="cms",job="af-pod-monitor",username!=""} > 0.95
             for: 1m
             labels:
               severity: error
@@ -463,7 +366,7 @@ serverFiles:
                 If utilization reaches 100%, user's session will stop working!
                 User {{ $labels.username }} must delete files, or move to /work/ or /depot/ immediately.
           - alert: AFHomeDirUtilCritical
-            expr: af_home_dir_util{namespace=~"cms",job="af-pod-monitor",username!=""} > 0.99
+            expr: af_home_dir_util{namespace="cms",job="af-pod-monitor",username!=""} > 0.99
             for: 1m
             labels:
               severity: critical
@@ -531,7 +434,7 @@ serverFiles:
       # Can users get in? ---------------------------------------------------
       - name: af-access
         rules:
-          # Scoped to this hub: the jupyterhub job is a static list shared with other hubs.
+          # Scoped to this cluster's hub: the job's one target is production's host on every cluster.
           - alert: AFHubDown
             expr: up{job="jupyterhub", instance="${jupyterhub_host}"} == 0
             for: 5m
@@ -962,19 +865,6 @@ alertmanager:
       operator: "Equal"
       value: "cms-af"
       effect: "NoSchedule"
-  config:
-    global: {}
-  ingress:
-    enabled: false
-    className: public
-    hosts:
-      - host: prometheus-af-alerts.geddes.rcac.purdue.edu
-        paths:
-          - path: /
-            pathType: Prefix
-    tls:
-      - hosts:
-          - prometheus-af-alerts.geddes.rcac.purdue.edu
 kube-state-metrics:
   enabled: false
 prometheus-node-exporter:

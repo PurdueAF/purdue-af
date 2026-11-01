@@ -1039,7 +1039,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "af_home_dir_util{namespace=~\"cms\",job=\"af-pod-monitor\",username!=\"\"}",
+          "expr": "af_home_dir_util{namespace=\"cms\",job=\"af-pod-monitor\",username!=\"\"}",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1051,7 +1051,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "af_work_dir_util{namespace=~\"cms\",job=\"af-pod-monitor\",username!=\"\"}",
+          "expr": "af_work_dir_util{namespace=\"cms\",job=\"af-pod-monitor\",username!=\"\"}",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1075,7 +1075,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_replace(\n  time() - kube_pod_created{namespace=~\"cms\",pod=~\"purdue-af-.*\",pod!~\"purdue-af-(agent|broker).*\"},\n  \"userId\", \"$1\", \"pod\", \"purdue-af-(.*)\"\n)\n",
+          "expr": "label_replace(\n  time() - kube_pod_created{namespace=\"cms\",pod=~\"purdue-af-.*\",pod!~\"purdue-af-(agent|broker).*\"},\n  \"userId\", \"$1\", \"pod\", \"purdue-af-(.*)\"\n)\n",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1087,7 +1087,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "kube_pod_container_resource_requests{namespace=~\"cms\",pod=~\"purdue-af-.*\",resource=\"cpu\",container=\"notebook\"}",
+          "expr": "kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"purdue-af-.*\",resource=\"cpu\",container=\"notebook\"}",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1099,7 +1099,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum by (pod) (\n  kube_pod_container_resource_requests{\n    namespace=~\"cms\",\n    pod=~\"purdue-af-.*\",\n    resource=~\"nvidia_com_(mig_.+|gpu)\",\n    container=\"notebook\"\n  }\n)",
+          "expr": "sum by (pod) (\n  kube_pod_container_resource_requests{\n    namespace=\"cms\",\n    pod=~\"purdue-af-.*\",\n    resource=~\"nvidia_com_(mig_.+|gpu)\",\n    container=\"notebook\"\n  }\n)",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1111,7 +1111,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "kube_pod_container_resource_requests{namespace=~\"cms\",pod=~\"purdue-af-.*\",resource=\"memory\",container=\"notebook\"}",
+          "expr": "kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"purdue-af-.*\",resource=\"memory\",container=\"notebook\"}",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1123,7 +1123,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=~\"cms\",pod=~\"purdue-af-.*\", container=\"notebook\"}[5m])\n) by (pod)\n    /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=~\"cms\",pod=~\"purdue-af-.*\", resource=\"cpu\", container=\"notebook\"}\n)\n",
+          "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=\"cms\",pod=~\"purdue-af-.*\", container=\"notebook\"}[5m])\n) by (pod)\n    /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"purdue-af-.*\", resource=\"cpu\", container=\"notebook\"}\n)\n",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1135,7 +1135,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=~\"cms\", pod=~\"purdue-af-.*\", container=\"notebook\"}\n) /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=~\"cms\", pod=~\"purdue-af-.*\", resource=\"memory\", container=\"notebook\"}\n)\n",
+          "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=\"cms\", pod=~\"purdue-af-.*\", container=\"notebook\"}\n) /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=\"cms\", pod=~\"purdue-af-.*\", resource=\"memory\", container=\"notebook\"}\n)\n",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1147,7 +1147,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{\n  namespace=~\"cms\",\n  pod=~\"purdue-af-.*\"\n})\n",
+          "expr": "sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{\n  namespace=\"cms\",\n  pod=~\"purdue-af-.*\"\n})\n",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1159,7 +1159,7 @@
             "type": "prometheus",
             "uid": "prometheus-rancher"
           },
-          "expr": "sum by (pod) (\n  ( DCGM_FI_DEV_FB_USED{namespace=~\"cms\",pod=~\"purdue-af-.*\"}\n    / ( \n      DCGM_FI_DEV_FB_USED{namespace=~\"cms\",pod=~\"purdue-af-.*\"} +\n      DCGM_FI_DEV_FB_FREE{namespace=~\"cms\",pod=~\"purdue-af-.*\"}\n    )\n  )\n)\n",
+          "expr": "sum by (pod) (\n  ( DCGM_FI_DEV_FB_USED{namespace=\"cms\",pod=~\"purdue-af-.*\"}\n    / ( \n      DCGM_FI_DEV_FB_USED{namespace=\"cms\",pod=~\"purdue-af-.*\"} +\n      DCGM_FI_DEV_FB_FREE{namespace=\"cms\",pod=~\"purdue-af-.*\"}\n    )\n  )\n)\n",
           "format": "table",
           "instant": true,
           "interval": "",
@@ -1171,7 +1171,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (pod) (dask_scheduler_workers{job=\"af-pod-monitor\",namespace=~\"cms\",pod=~\"purdue-af-.*\",})\n",
+          "expr": "sum by (pod) (dask_scheduler_workers{job=\"af-pod-monitor\",namespace=\"cms\",pod=~\"purdue-af-.*\",})\n",
           "format": "table",
           "instant": true,
           "interval": "",

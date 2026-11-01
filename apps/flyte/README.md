@@ -9,11 +9,11 @@ under [`workflows/`](../../workflows).
 | `values.yaml`              | Database, object store, and task-pod defaults                                                                                                           |
 | `postgres.yaml`            | Metadata database (runs, actions, cache)                                                                                                                |
 | `minio.yaml`               | Object store ([PGSTY Silo](https://github.com/pgsty/silo), a MinIO fork) for task inputs, outputs and code bundles, and the Job that creates its bucket |
-| `podtemplate.yaml`         | Base pod spec for every task pod: AF node placement and the `/work` mount                                                                               |
+| `podtemplate.yaml`         | Default pod spec for a task that names no pod template: AF node placement and the `/work` mount                                                         |
 | `secret-console-auth.yaml` | Basic-auth credentials in front of the console and API ingress, sops-encrypted                                                                          |
 
-Task pods run in `cms` and reach the Dask Gateway, XCache and `/work` like a
-notebook does. In-cluster, the API is `flyte-http.cms.svc.cluster.local:8090`.
+Task pods run in `cms`; a task on the default pod template mounts `/work`.
+In-cluster, the API is `flyte-http.cms.svc.cluster.local:8090`.
 
 The ingress serves the console at `https://flyte-cms.geddes.rcac.purdue.edu/v2`
 behind basic auth (user `af`; the password is the one encrypted in

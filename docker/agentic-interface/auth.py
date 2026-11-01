@@ -83,10 +83,6 @@ async def resolve_user(token: str) -> Optional[dict]:
     HubUnavailable when the Hub could not be reached, or answered with
     anything other than a verdict on the token — that says nothing about
     the token and must not be reported as "invalid".
-
-    Does not read Hub server ``state`` (admin-only). Tools that need to know
-    whether a session is running query Hub ``servers[""].ready`` themselves,
-    or filter Loki/Prometheus by ``username``.
     """
     key = _hash_token(token)
     cached = _user_cache.get(key)
@@ -155,10 +151,3 @@ class HubTokenVerifier:
         if user is None:
             return None
         return AccessToken(token=token, client_id=user["username"], scopes=[])
-
-
-def clear_user_cache(token: str) -> None:
-    """Remove a token's cached entries so the next request revalidates."""
-    key = _hash_token(token)
-    _user_cache.pop(key, None)
-    _negative_cache.pop(key, None)

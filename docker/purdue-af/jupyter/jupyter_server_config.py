@@ -33,11 +33,6 @@ c.InlineBackend.figure_formats = {"png", "jpeg", "svg", "pdf"}
 # https://github.com/jupyter/notebook/issues/3130
 c.FileContentsManager.delete_to_trash = False
 
-# Change default umask for all subprocesses of the notebook server if set in
-# the environment
-if "NB_UMASK" in os.environ:
-    os.umask(int(os.environ["NB_UMASK"], 8))
-
 c.KernelSpecManager.ensure_native_kernel = False
 
 

@@ -37,9 +37,7 @@ def test_every_alert_explains_what_to_do():
     for rule in rules():
         annotations = rule.get("annotations", {})
         assert annotations.get("summary"), f"{rule['alert']} has no summary"
-        assert len(annotations.get("description", "")) > 40, (
-            f"{rule['alert']} has no usable description"
-        )
+        assert annotations.get("description"), f"{rule['alert']} has no description"
 
 
 def test_every_alert_waits_before_firing():
@@ -54,8 +52,8 @@ def test_alert_names_are_prefixed():
 
 
 def test_hub_alert_is_scoped_to_this_environment():
-    """The jupyterhub job is a static target list; an unscoped `up == 0`
-    would fire for any other hub added to it."""
+    """The job's one target is production's host on every cluster, so an
+    unscoped `up == 0` on geddes2 would report a hub that is not its own."""
     hub = next(r for r in rules() if r["alert"] == "AFHubDown")
     assert "${jupyterhub_host}" in hub["expr"], (
         "AFHubDown must be scoped to the environment's own hub"

@@ -3,6 +3,7 @@
 import asyncio
 import datetime
 import types
+from pathlib import Path
 
 import pytest
 from common import REPO, load_script
@@ -310,15 +311,10 @@ async def test_main_continues_after_cull_failure(monkeypatch):
 
 def test_default_namespace_reads_service_account(tmp_path, monkeypatch):
     mod = culler()
-    monkeypatch.delenv("POD_NAMESPACE", raising=False)
     ns_file = tmp_path / "namespace"
     ns_file.write_text("cms\n")
     monkeypatch.setattr(mod, "NAMESPACE_FILE", ns_file)
     assert mod.default_namespace() == "cms"
-
-    # POD_NAMESPACE wins when something does set it
-    monkeypatch.setenv("POD_NAMESPACE", "cms-dev")
-    assert mod.default_namespace() == "cms-dev"
 
 
 async def test_cull_failure_is_logged(monkeypatch, caplog):
@@ -363,7 +359,7 @@ def test_cli_defaults_to_a_day_every_ten_minutes(monkeypatch):
     monkeypatch.setattr(asyncio, "run", fake_run)
     monkeypatch.setattr(logging, "basicConfig", lambda **kw: None)
     monkeypatch.setattr(sys, "argv", ["cull-gpu-sessions.py"])
-    monkeypatch.setenv("POD_NAMESPACE", "cms")
+    monkeypatch.setattr(Path, "read_text", lambda self: "cms\n")
 
     runpy.run_path(str(SCRIPT), run_name="__main__")
 

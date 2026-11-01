@@ -301,7 +301,6 @@ def metrics_env(monkeypatch):
         "_fetch_all",
         lambda targets: {k: v for k, v in probes.served.items() if k in targets},
     )
-    nh._node_pools["node-a"] = "prod"
     return probes
 
 
@@ -497,22 +496,6 @@ def test_a_cached_success_goes_unknown_once_stale(metrics_env, monkeypatch):
     metrics_env.served.clear()
     nh.update_metrics()
     assert sample("af_node_mount_result_fresh") == 0
-
-
-def test_node_label_prefers_result_json(metrics_env):
-    metrics_env(
-        "/depot/",
-        "node-a",
-        ok=True,
-        timestamp=time.time(),
-        ping_ms=1.0,
-        node="node-actual",
-    )
-
-    nh.update_metrics()
-
-    assert sample("af_node_mount_valid", node="node-actual") == 1
-    assert sample("af_node_mount_valid", node="node-a") is None
 
 
 # ── remaining branches ────────────────────────────────────────────────────────

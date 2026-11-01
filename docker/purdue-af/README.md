@@ -45,6 +45,6 @@ registries: [REGISTRY.md](../REGISTRY.md).
 ## Release checklist
 
 Before running **Release image**, verify on a test session: GPU visibility
-(`nvidia-smi`, torch/TF), that a 0-GPU session sees no GPUs, `eos-connect.sh`
+(`nvidia-smi`, torch), that a 0-GPU session sees no GPUs, `eos-connect.sh`
 (kinit against CERN.CH), grid workflows (`voms-proxy-init`, gfal2, xrootd), and
 Slurm (`sbatch`/`squeue`).

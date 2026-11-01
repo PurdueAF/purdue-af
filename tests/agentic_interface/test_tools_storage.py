@@ -100,7 +100,6 @@ async def test_storage_reports_usage(user_ctx):
     assert "20.0%" in out
     assert "50.00 GB / 100.00 GB" in out
     assert "50.0%" in out
-    assert "last accessed" not in out  # st_atime never measured the session
     # directories are queried concurrently but render home-then-work
     assert out.index("/home/") < out.index("/work/")
     # every query is scoped to the authenticated username

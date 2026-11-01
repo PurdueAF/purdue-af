@@ -3,7 +3,6 @@ kind: Service
 metadata:
   name: prometheus-af-pod-monitor
   labels:
-    app: prometheus-af-pod-monitor
     scrape_metrics: "true"
 spec:
   type: ClusterIP

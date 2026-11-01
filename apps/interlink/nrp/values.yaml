@@ -73,13 +73,12 @@ plugin:
 
     [wstunnel]
     # Runs the virtual kubelet's tunnel command beside each offloaded pod with
-    # exposed ports; keep in step with virtualNode.network.tunnelImage.
+    # exposed ports; keep in step with the shadow template's image.
     client_image=ghcr.io/erebe/wstunnel:v11.1.0
 
 virtualNode:
   image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:0.7.0-pre1
-  # The local scheduler's gate only; NRP places the real pod. One pod per GPU,
-  # each the NRP Ray worker, nrpWorker in apps/ray-train/config.yaml.
+  # The local scheduler's gate only; NRP places the real pod.
   resources:
     CPUs: 80
     memGiB: 320
@@ -99,7 +98,6 @@ virtualNode:
   # (the plugin's wstunnel-client sidecar), so Geddes reaches its ports.
   network:
     enableTunnel: true
-    tunnelImage: "ghcr.io/erebe/wstunnel:v11.1.0"
     wildcardDNS: "geddes.rcac.purdue.edu"
     # The client dials apps/interlink/traefik's pinned address and sends the
     # shadow's hostname as Host. Runs in the foreground as the sidecar.

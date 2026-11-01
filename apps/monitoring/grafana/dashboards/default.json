@@ -9516,7 +9516,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(1, sum(rate(jupyterhub_server_spawn_duration_seconds_bucket{\njob=\"jupyterhub\",\ninstance=~\"cms(dev)?.geddes.rcac.purdue.edu\"\n}[5m])) by (le))\n",
+          "expr": "histogram_quantile(1, sum(rate(jupyterhub_server_spawn_duration_seconds_bucket{\njob=\"jupyterhub\"\n}[5m])) by (le))\n",
           "interval": "",
           "legendFormat": "",
           "refId": "A"

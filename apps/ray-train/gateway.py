@@ -743,12 +743,6 @@ def epoch_ms(stamp: str | None) -> int | None:
     return int(datetime.fromisoformat(stamp).timestamp() * 1000) if stamp else None
 
 
-def active(job: dict[str, Any]) -> bool:
-    """Whether a job on NRP holds, or waits for, its GPUs."""
-    annotations = job["metadata"].get("annotations") or {}
-    return not job_ended(job) and STOPPED_ANNOTATION not in annotations
-
-
 def job_ended(job: dict[str, Any]) -> bool:
     return (job.get("status") or {}).get("jobStatus") in (
         "SUCCEEDED",
@@ -1673,16 +1667,15 @@ class Gateway:
         let KubeRay start its cluster; False if there is no room for the fewest it starts with."""
         assert self.nrp is not None
         name = job["metadata"]["name"]
-        annotations = job["metadata"].get("annotations") or {}
         wanted = nrp_jobs.workers_of(job)
-        least = int(annotations.get(LEAST_WORKERS_ANNOTATION) or wanted)
+        least = int(job["metadata"]["annotations"][LEAST_WORKERS_ANNOTATION])
         async with self.nrp_admitting:
             try:
                 found = await nrp_nodes(self.http, NRP_PROMETHEUS_URL, NRP_WORKER)
             except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
                 log.warning("asking NRP's Prometheus: %r", e)
                 return False
-            chosen = placement(found, wanted, least)
+            chosen = placement(found, least)
             if chosen is None:
                 return False
             workers = min(wanted, sum(n.workers for n in chosen))

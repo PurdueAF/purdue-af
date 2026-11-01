@@ -134,8 +134,7 @@ def test_refuses_empty_list(shims):
 
 
 def test_retries_flaky_fetch_until_it_answers(shims):
-    """A transient empty reply must not fail the pod (which is what
-    littered the namespace with Error pods)."""
+    """A transient empty reply must not fail the pod."""
     counter = shims["bin"].parent / "attempts"
     (shims["bin"] / "ldapsearch").write_text(
         f"""#!/bin/bash
