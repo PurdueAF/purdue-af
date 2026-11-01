@@ -1,6 +1,6 @@
 # Purdue AF interLink Slurm sidecar: one image for every RCAC cluster (README.md).
 
-# Keep the default in sync with PLUGIN_REF; CI passes --build-arg explicitly.
+# CI builds from this default; keep it equal to PLUGIN_REF.
 ARG SLURM_PLUGIN_REF=0.6.2-pre3
 ARG GOLANG_IMAGE=golang:1.27
 # EL8 for the site Slurm RPMs.
@@ -82,6 +82,12 @@ RUN chmod 555 /etc/startup.sh && \
 WORKDIR /root
 
 COPY --from=build-stage /app/bin/slurm-sidecar /sidecar/slurm-sidecar
+
+# The multi-cluster layout; munged needs the site key, so it stays down.
+RUN test -x /sidecar/slurm-sidecar \
+ && test -x /etc/startup.sh \
+ && test -f /opt/purdue-af/slurm-configs/hammer/slurm.conf \
+ && test -f /opt/purdue-af/slurm-clients/client-versions
 
 ENV SLURMCONFIGPATH=/root/SlurmConfig.yaml
 # Must be overridden per Deployment (e.g. hammer).

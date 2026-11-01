@@ -44,6 +44,10 @@ registries: [REGISTRY.md](../REGISTRY.md).
 
 ## Release checklist
 
+Bump `OS_UPGRADE_ID` in the `Dockerfile` in a PR ahead of each image release, so
+OS updates soak on `:pre-release` first: the build cache reuses `dnf upgrade`
+until that ID changes.
+
 Before running **Release image**, verify on a test session: GPU visibility
 (`nvidia-smi`, torch), that a 0-GPU session sees no GPUs, `eos-connect.sh`
 (kinit against CERN.CH), grid workflows (`voms-proxy-init`, gfal2, xrootd), and

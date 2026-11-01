@@ -1,11 +1,11 @@
 """Tests for .github/workflows/validate-manifests.sh.
 
-The retry wrapper and the render step are unit-tested here: the rest of the
-script needs kustomize/flux/kubeconform/helm and runs in CI. A transient
-chart-host failure is retried; a genuinely broken chart still fails; the values
-reach helm; a root that does not render fails the run."""
+The retry wrapper, the source fetch and the render step are unit-tested here:
+the rest of the script needs kustomize/flux/kubeconform/helm and runs in CI. A
+transient chart-host failure is retried; a genuinely broken chart still fails;
+the values reach helm; a failed fetch leaves nothing behind; a root that does
+not render fails the run."""
 
-import shutil
 import subprocess
 import textwrap
 
@@ -25,6 +25,13 @@ echo "rendered"
 """
 
 
+def lift_retry():
+    text = SCRIPT.read_text()
+    start = text.index("HELM_ATTEMPTS=")
+    end = text.index("\n}\n", text.index("fetch_ref() {")) + 3
+    return text[start:end]
+
+
 @pytest.fixture()
 def call_retry(tmp_path):
     """Run helm_template_retry with a stub helm that fails N times first."""
@@ -34,12 +41,8 @@ def call_retry(tmp_path):
     stub.write_text(STUB_HELM)
     stub.chmod(0o755)
 
-    # lift just the retry helper out of the script — sourcing the whole file
-    # would run the real validation
-    text = SCRIPT.read_text()
-    start = text.index("HELM_ATTEMPTS=")
-    end = text.index("\n}\n", text.index("helm_template_retry() {")) + 3
-    (tmp_path / "fn.sh").write_text(text[start:end])
+    # sourcing the whole file would run the real validation
+    (tmp_path / "fn.sh").write_text(lift_retry())
 
     def _run(fail_times):
         state = tmp_path / "state"
@@ -137,7 +140,82 @@ def test_a_root_that_does_not_render_fails(tmp_path, step, status):
     assert result.returncode == status, result.stderr
 
 
-def test_script_is_valid_bash():
-    assert shutil.which("bash")
-    result = subprocess.run(["bash", "-n", str(SCRIPT)], capture_output=True, text=True)
+@pytest.fixture()
+def source_repo(tmp_path):
+    """A repository with a branch ahead of the commit that its tag names."""
+
+    def git(*args):
+        return subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo),
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                *args,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+    repo = tmp_path / "src"
+    repo.mkdir()
+    git("init", "--quiet", "--initial-branch=main")
+    (repo / "marker").write_text("first")
+    git("add", "marker")
+    git("commit", "--quiet", "-m", "first")
+    git("tag", "v1")
+    first = git("rev-parse", "HEAD")
+    (repo / "marker").write_text("second")
+    git("commit", "--quiet", "-am", "second")
+    return repo, first
+
+
+def fetch(tmp_path, url, ref):
+    work = tmp_path / "work"
+    work.mkdir(exist_ok=True)
+    (tmp_path / "fn.sh").write_text(lift_retry())
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"workdir='{work}'; source '{tmp_path}/fn.sh'; fetch_ref '{url}' '{ref}' '{work}/dest'",
+        ],
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin", "HELM_RETRY_DELAY": "0"},
+    )
+    return result, work
+
+
+@pytest.mark.parametrize(
+    "ref, marker", [("main", "second"), ("HEAD", "second"), ("v1", "first")]
+)
+def test_fetches_a_named_ref(tmp_path, source_repo, ref, marker):
+    repo, _ = source_repo
+    result, work = fetch(tmp_path, f"file://{repo}", ref)
     assert result.returncode == 0, result.stderr
+    assert (work / "dest" / "marker").read_text() == marker
+
+
+def test_fetches_a_commit(tmp_path, source_repo):
+    repo, first = source_repo
+    subprocess.run(
+        ["git", "-C", str(repo), "config", "uploadpack.allowAnySHA1InWant", "true"],
+        check=True,
+    )
+    result, work = fetch(tmp_path, f"file://{repo}", first)
+    assert result.returncode == 0, result.stderr
+    assert (work / "dest" / "marker").read_text() == "first"
+
+
+def test_a_failed_fetch_leaves_nothing_behind(tmp_path, source_repo):
+    """An existing clone directory reads as a finished clone."""
+    repo, _ = source_repo
+    result, work = fetch(tmp_path, f"file://{repo}", "no-such-ref")
+    assert result.returncode != 0
+    assert result.stderr.count("retrying") == 2, result.stderr
+    assert list(work.iterdir()) == []

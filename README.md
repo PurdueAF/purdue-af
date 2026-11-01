@@ -4,8 +4,8 @@
 [![codecov](https://codecov.io/gh/PurdueAF/purdue-af/graph/badge.svg)](https://codecov.io/gh/PurdueAF/purdue-af)
 [![Docs deploy](https://github.com/PurdueAF/purdue-af/actions/workflows/docs-deploy.yml/badge.svg)](https://analysis-facility.physics.purdue.edu)
 [![Registry GC](https://github.com/PurdueAF/purdue-af/actions/workflows/registry-gc.yml/badge.svg)](https://github.com/PurdueAF/purdue-af/actions/workflows/registry-gc.yml)
+[![Component status](https://github.com/PurdueAF/purdue-af/actions/workflows/component-status.yml/badge.svg?event=schedule)](https://github.com/PurdueAF/purdue-af/actions/workflows/component-status.yml)
 [![platform][platform-version]](https://github.com/PurdueAF/purdue-af/releases)
-[![AF image][af-image-version]](RELEASING.md)
 
 GitOps source of truth for the **Purdue Analysis Facility** — a Kubernetes-based interactive analysis platform for high energy physics research at CMS experiment.
 
@@ -31,9 +31,9 @@ Admin documentation: [https://purdue-cms-tier2.gitlab.io/documentation](https://
 
 ## Component status
 
-Whether each component on the cluster is running what is on `main`
+Whether the ref behind each component holds what is on `main`
 ([which ref each root deploys](flux/README.md);
-[![awaiting deployment][status-pending]](https://github.com/PurdueAF/purdue-af/releases)).
+[![unreleased][status-pending]](https://github.com/PurdueAF/purdue-af/releases)).
 
 **Core** — ![platform][platform-version]
 
@@ -87,13 +87,15 @@ Whether each component on the cluster is running what is on `main`
 
 Reading the badges:
 
-- `deployed` — no drift, the cluster has it
+- `released` — the Flux source holds this commit, which is a fact about git,
+  not the cluster: a delivery that fails appears under the `delivery` component
+  of the [Alerts dashboard](apps/monitoring/grafana/dashboards/alerts.json)
 - `awaiting release` — validated, and only a release stands between it and
-  the cluster
+  the Flux source
 - `validating` — CI has not finished on those commits yet
 - `failed CI` — do not release; the drift is broken
-- the trailing number is how many commits it has moved since it was deployed
-- a leading `X.Y.Z` is the deployed version, for images on a version stream
+- the trailing number is how many commits it has moved since it was released
+- a leading `X.Y.Z` is the released version, for images on a version stream
 
 Recomputed hourly and after every CI run on `main` by
 [`component-status.yml`](.github/workflows/component-status.yml); the badge
@@ -146,4 +148,3 @@ How a change reaches the cluster, version rules and rollback:
 [image-ray-nrp]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-ray-nrp.json
 [status-pending]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/_pending.json
 [platform-version]: https://img.shields.io/github/v/tag/PurdueAF/purdue-af?filter=2*&sort=semver&label=platform&color=blue
-[af-image-version]: https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2FPurdueAF%2Fpurdue-af%2Fmain%2Fapps%2Fjupyterhub%2Fjupyterhub%2Fvalues.yaml&query=%24.singleuser.image.tag&label=AF%20image&color=blue

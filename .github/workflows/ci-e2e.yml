@@ -1,27 +1,8 @@
 name: CI e2e
 
-# Stage 2 of ci.yml — the full JupyterHub stack in a throwaway kind
-# cluster: the chart version from helmrelease.yaml, the real values.yaml,
-# hub configmaps derived from the production kustomization, mock CILogon +
-# mock LDAP. See tests/e2e_hub/README.md.
-#
-#   e2e-production   certifies the PRODUCTION deployment: the hub stack
-#                    exactly as the repo deploys it to the cms namespace,
-#                    spawning the REAL image pinned in values.yaml
-#                    (singleuser.image.tag) — the "e2e = production" gate.
-#   e2e-pre-release  certifies the PRE-RELEASE channel: same stack, but
-#                    spawns the REAL AF image built in stage 1 for the
-#                    CURRENT input state — never a previously promoted
-#                    tag — through the hub's pre-release profile. The
-#                    :pre-release promotion in ci.yml rides on this job.
-#
-# Both jobs are memoized on the hash of their full input state
-# (image-inputs.sh e2e-hub plus the image they spawn): identical state with
-# a recorded green run skips as verified reuse. The shared machinery
-# (memo restore/save, image fallback, kind stack, diagnostics) lives in
-# .github/actions/ composites. The image-level CVMFS check runs in
-# ci-pixi-global.yml, which already holds the AF image locally.
-# A Renovate chart bump changes helmrelease.yaml, so e2e runs on its PR.
+# Stage 2 of ci.yml: the JupyterHub stack in a kind cluster (tests/e2e_hub/README.md).
+# e2e-production spawns the image values.yaml pins; e2e-pre-release spawns the AF
+# image of stage 1, and :pre-release promotion rides on it (RELEASING.md).
 
 on:
   workflow_call:
@@ -40,11 +21,6 @@ permissions:
 
 jobs:
   e2e-production:
-    # Runs the full hub-config suite AND spawns the REAL image pinned for
-    # production in values.yaml (the "e2e = production" gate). Heavy — it
-    # pulls the ~13 GB AF image into kind — but memoized on the hub-config +
-    # production-pin hash, so it only re-runs when either actually changes
-    # (most commits touch neither and memo-hit).
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -58,8 +34,7 @@ jobs:
         run: |
           name=$(yq '.singleuser.image.name' apps/jupyterhub/jupyterhub/values.yaml)
           tag=$(yq '.singleuser.image.tag' apps/jupyterhub/jupyterhub/values.yaml)
-          # geddes ghcr-proxy-cache is unreachable from CI; the proxy mirrors
-          # ghcr, so the ghcr ref resolves to the identical digest
+          # ghcr-proxy-cache is unreachable from CI and mirrors ghcr, so the digest is identical.
           repo=${name/geddes2-registry.rcac.purdue.edu\/ghcr-proxy-cache\//ghcr.io/}
           {
             echo "image=${repo}:${tag}"
@@ -126,7 +101,6 @@ jobs:
         uses: ./.github/actions/memo-restore
         with:
           key: ${{ steps.key.outputs.key }}
-      # setup-kind.sh crictl-pulls the image straight into the kind node.
       - name: Bring up the hub stack (AF image preloaded)
         if: steps.memo.outputs.hit != 'true'
         uses: ./.github/actions/kind-hub-stack
@@ -139,7 +113,6 @@ jobs:
         env:
           E2E_HUB: "1"
           E2E_PRERELEASE: "1"
-          # the test asserts the spawned pod runs exactly this image
           PRERELEASE_IMAGE: ${{ steps.image.outputs.image }}
         run: >-
           uv run --project tests --frozen pytest -q -c tests/pyproject.toml

@@ -10,6 +10,6 @@ spec:
   timeout: 1m
   url: https://github.com/PurdueAF/purdue-af.git
   ref:
-    semver: 2026.x
+    semver: ">=2026.0.0"
   secretRef:
     name: flux-github-token

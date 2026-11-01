@@ -3,7 +3,7 @@
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Optional
 
 import httpx
 from config import LOKI_URL
@@ -16,6 +16,7 @@ from errors import (
     response_detail,
     unreachable,
 )
+from mcp.server.mcpserver import MCPServer
 from shared import quote_label, shared_client
 
 # ── time helpers ──────────────────────────────────────────────────────────────
@@ -172,7 +173,7 @@ async def _loki_query(
 # ── tools ─────────────────────────────────────────────────────────────────────
 
 
-def register(mcp: Any) -> None:
+def register(mcp: MCPServer) -> None:
     @mcp.tool()
     async def query_notebook_logs(
         start: str = "1h",

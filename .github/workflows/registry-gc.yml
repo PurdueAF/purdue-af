@@ -1,11 +1,8 @@
 name: Registry GC
 
-# Weekly ghcr hygiene for every image ci-images.yml builds. Deletes a package
-# version only when it is older than MAX_AGE_DAYS and every tag it carries is
-# an in-<hash> or sha-<commit> build tag, other than the current repo state's
-# in- tag. Never deleted: untagged versions (attestation children, old cache)
-# and any version with another tag (semver releases, :latest, :pre-release,
-# :buildcache, the interlink-slurm-plugin PLUGIN_REF tag).
+# Deletes a ghcr version of an image ci-images.yml builds once it is older than
+# MAX_AGE_DAYS and carries only in- and sha- build tags, other than the current
+# repo state's in- tag. Tags: docker/REGISTRY.md.
 # Needs admin Actions access for this repo on every package.
 
 on:

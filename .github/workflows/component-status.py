@@ -1,28 +1,8 @@
 #!/usr/bin/env python3
-"""Per-component deployment status for the README dashboard.
+"""Per-component release status for the README dashboard.
 
-Answers one question for every deployed component: **is what's on the
-cluster the same as what's on `main`, and if not, why not?**
-
-Everything is derived from git refs alone — no cluster access — because the
-two Flux channels track refs in this repo:
-
-    core    newest platform tag `YYYY.M.SEQ`  (flux/core-production)
-    experimental  branch `main-validated`           (flux/experimental)
-
-`main-validated` doubles as the validation boundary: the ci.yml publish
-stage only advances it when every stage of that commit was green. So for a
-component's own paths:
-
-    no commits in <deployed>..main            → deployed
-    commits, but none past main-validated     → validated, awaiting release
-    commits past main-validated               → not validated yet (CI state
-                                                decides: running vs failed)
-
-Components and their input paths are read from the Flux root kustomizations, so
-a component added there appears here automatically. Each CI image gets its
-own row, with input paths from image-inputs.sh — the same list that
-content-addresses the image in CI.
+Compares git refs alone, so it says what the ref behind each component holds,
+never what the cluster runs. Badge legend: README.md; refs: RELEASING.md.
 
 Writes shields.io endpoint JSON per component (see --out) plus a markdown
 table on stdout for the workflow job summary.
@@ -46,28 +26,27 @@ CHANNELS = {
     "experimental": Path("flux/experimental/kustomization.yaml"),
 }
 IMAGE_INPUTS = Path(".github/workflows/image-inputs.sh")
-# Images ci-images.yml builds; which tag each ships on: RELEASING.md.
-CI_IMAGES = [
-    "purdue-af",
-    "agentic-interface",
-    "af-pod-monitor",
-    "af-node-monitor",
-    "agentic-analysis",
-    "supersonic-model-manager",
-    "interlink-slurm-plugin",
-    "interlink-kubernetes-plugin",
-    "ray-nrp",
-]
+CI_IMAGES_WORKFLOW = Path(".github/workflows/ci-images.yml")
 VALUES_YAML = Path("apps/jupyterhub/jupyterhub/values.yaml")
 AGENTIC_DEPLOYMENT = Path("apps/agentic-interface/deployment.yaml")
 
 COLORS = {
-    "deployed": "brightgreen",
+    "released": "brightgreen",
     "awaiting release": "yellow",
     "validating": "blue",
     "failed CI": "red",
     "unknown": "lightgrey",
 }
+
+
+def ci_images() -> list[str]:
+    """Images ci-images.yml builds: its own job for purdue-af, then the matrix."""
+    workflow = yaml.safe_load((REPO / CI_IMAGES_WORKFLOW).read_text())
+    matrix = workflow["jobs"]["build-aux-images"]["strategy"]["matrix"]["include"]
+    return ["purdue-af", *(image["name"] for image in matrix)]
+
+
+CI_IMAGES = ci_images()
 
 
 def git(*args: str) -> str:
@@ -85,6 +64,12 @@ def ref_exists(ref: str) -> bool:
         return True
     except subprocess.CalledProcessError:
         return False
+
+
+def require_ref(ref: str) -> str:
+    if not ref_exists(ref):
+        sys.exit(f"component-status: missing git ref {ref}")
+    return ref
 
 
 def latest_platform_tag() -> str | None:
@@ -147,8 +132,7 @@ def _generator_owner(
     Usually its own files say so, a component the channel deploys before one
     it only borrows a file from. When they all live outside apps/ (scripts
     and env manifests under docker/, pixi/ or workflows/), fall back to the
-    component whose manifests mount it by name, then to one holding a
-    manifest named after it.
+    component whose manifests mount it by name.
     """
     owners = {_component_of(f) for f in files if f.startswith("apps/")}
     if owners:
@@ -159,10 +143,6 @@ def _generator_owner(
             if manifest.suffix in (".yaml", ".yml") and manifest.is_file():
                 if f"name: {name}\n" in manifest.read_text():
                     return component
-    stem = name.removesuffix("-config").removesuffix("-cm")
-    for component, paths in components.items():
-        if any(stem in Path(p).stem for p in paths):
-            return component
     return name
 
 
@@ -189,17 +169,17 @@ def discover_components(channel: str) -> dict[str, list[str]]:
 
 
 def classify(
-    drift_from_deployed: int, drift_from_validated: int, ci_state: str
+    drift_from_released: int, drift_from_validated: int, ci_state: str
 ) -> tuple[str, int]:
-    """→ (status, commits ahead of what is deployed). Pure: unit-tested."""
-    if drift_from_deployed == 0:
-        return "deployed", 0
+    """→ (status, commits ahead of what is released). Pure: unit-tested."""
+    if drift_from_released == 0:
+        return "released", 0
     if drift_from_validated == 0:
         # everything that drifted has already passed the full pipeline
-        return "awaiting release", drift_from_deployed
+        return "awaiting release", drift_from_released
     if ci_state == "failure":
-        return "failed CI", drift_from_deployed
-    return "validating", drift_from_deployed
+        return "failed CI", drift_from_released
+    return "validating", drift_from_released
 
 
 def slugify(channel: str, component: str) -> str:
@@ -212,9 +192,7 @@ def write_badge(out: Path, slug: str, payload: dict[str, Any]) -> None:
     (out / f"{slug}.json").write_text(json.dumps(payload, ensure_ascii=False))
 
 
-# Components whose directory name alone does not name the thing: the
-# interLink apps are one per cluster, so the node they register — not the
-# cluster — is what a reader is looking for.
+# The interLink apps are one per cluster, so they carry the node they register.
 LABEL_OVERRIDES = {
     "apps/interlink/hammer": "interlink-hammer",
     "apps/interlink/nrp": "interlink-nrp",
@@ -232,7 +210,7 @@ def badge(
 ) -> dict[str, Any]:
     """One badge per component per channel — self-describing, since the README
     lists them as a bare wall with no surrounding text. Versioned images lead
-    with their deployed version."""
+    with their released version."""
     message = status if not ahead else f"{status} · {ahead}"
     if version:
         message = f"{version} · {message}"
@@ -258,15 +236,15 @@ def image_paths(name: str) -> list[str]:
     return [line.strip() for line in out.splitlines() if line.strip()]
 
 
-def af_image_version() -> str | None:
-    text = (REPO / VALUES_YAML).read_text()
+def af_image_version(platform_tag: str) -> str | None:
+    """The hub tracks the platform tag, so the pin on `main` is not yet released."""
+    text = git("show", f"{platform_tag}:{VALUES_YAML}")
     m = re.search(r'docker_image_tag: "(\d+\.\d+\.\d+)"', text)
     return m.group(1) if m else None
 
 
 def agentic_interface_version() -> str | None:
-    """The version the agentic-interface Deployment pins (auto-released by the
-    ci.yml publish stage). None while the pin is still `latest` (pre-release)."""
+    """The version the agentic-interface Deployment pins."""
     text = (REPO / AGENTIC_DEPLOYMENT).read_text()
     m = re.search(r"/agentic-interface:(\d+\.\d+\.\d+)\s*$", text, re.MULTILINE)
     return m.group(1) if m else None
@@ -284,49 +262,43 @@ def main() -> int:
     args = parser.parse_args()
 
     head = "origin/main" if ref_exists("origin/main") else "main"
-    validated = (
-        "origin/main-validated"
-        if ref_exists("origin/main-validated")
-        else "main-validated"
-    )
+    validated = require_ref("origin/main-validated")
     platform_tag = latest_platform_tag()
-    if not ref_exists(validated):
-        validated = head  # nothing published yet; treat main as the boundary
+    if platform_tag is None:
+        sys.exit("component-status: missing git ref: no platform tag YYYY.M.SEQ")
 
     rows: list[tuple[str, str, str, int]] = []
 
-    for channel, deployed in (
+    for channel, released in (
         ("core", platform_tag),
         ("experimental", validated),
     ):
-        if deployed is None:
-            continue
         for component, paths in sorted(discover_components(channel).items()):
-            drift = commits_touching(deployed, head, paths)
+            drift = commits_touching(released, head, paths)
             unvalidated = commits_touching(validated, head, paths)
             status, ahead = classify(drift, unvalidated, args.ci_state)
             rows.append((channel, component, status, ahead))
 
     # images are their own stream, not part of either Flux channel
-    version = af_image_version()
-    af_tag = f"v{version}" if version else None
+    af_version = af_image_version(platform_tag)
     agentic_version = agentic_interface_version()
-    agentic_tag = f"agentic-interface-v{agentic_version}" if agentic_version else None
-    versions: dict[tuple[str, str], str] = {}
+    if not af_version or not agentic_version:
+        sys.exit(
+            f"component-status: no version pin: {VALUES_YAML} at {platform_tag} "
+            f"gives {af_version}, {AGENTIC_DEPLOYMENT} gives {agentic_version}"
+        )
+    release_tags = {
+        "purdue-af": require_ref(f"v{af_version}"),
+        "agentic-interface": require_ref(f"agentic-interface-v{agentic_version}"),
+    }
+    versions = {
+        ("image", "purdue-af"): af_version,
+        ("image", "agentic-interface"): agentic_version,
+    }
     for name in CI_IMAGES:
-        if name == "purdue-af":
-            if not (af_tag and ref_exists(af_tag)):
-                continue
-            deployed_ref = af_tag
-        elif name == "agentic-interface" and agentic_tag and ref_exists(agentic_tag):
-            # auto-released stream: drift is measured against the release the
-            # Deployment pins, and the badge leads with that version
-            deployed_ref = agentic_tag
-            versions[("image", name)] = agentic_version or ""
-        else:
-            deployed_ref = validated
+        released_ref = release_tags.get(name, validated)
         paths = image_paths(name)
-        drift = commits_touching(deployed_ref, head, paths)
+        drift = commits_touching(released_ref, head, paths)
         unvalidated = commits_touching(validated, head, paths)
         status, ahead = classify(drift, unvalidated, args.ci_state)
         rows.append(("image", name, status, ahead))
@@ -344,15 +316,15 @@ def main() -> int:
                     versions.get((channel, component)),
                 ),
             )
-        pending = sum(1 for row in rows if row[2] != "deployed")
+        unreleased = sum(1 for row in rows if row[2] != "released")
         write_badge(
             args.out,
             "_pending",
             {
                 "schemaVersion": 1,
-                "label": "awaiting deployment",
-                "message": "none" if not pending else f"{pending} components",
-                "color": "brightgreen" if not pending else "blue",
+                "label": "unreleased",
+                "message": "none" if not unreleased else f"{unreleased} components",
+                "color": "brightgreen" if not unreleased else "blue",
                 "cacheSeconds": 300,
             },
         )

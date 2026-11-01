@@ -15,5 +15,10 @@ COPY docker/af-node-monitor/node_healthcheck.py ./node_healthcheck.py
 COPY docker/af-node-monitor/job_runner.py ./job_runner.py
 COPY docker/af-node-monitor/probe_agent.py ./probe_agent.py
 
+# -B: a __pycache__ here would ship in the image.
+RUN fio --version \
+    && AF_NODE_MONITOR_VERBOSE=1 MOUNT_NAME=smoke CHECK_FILE=smoke \
+       python -B -c "import job_runner, node_healthcheck; print('ok')"
+
 CMD ["python", "node_healthcheck.py"]
 

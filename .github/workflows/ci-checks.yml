@@ -1,8 +1,6 @@
 name: CI checks
 
-# Stage 0 of ci.yml — the quick gates (~5 min): every later stage (image
-# builds, e2e, publication) waits for these, so time is never spent on
-# expensive work while cheap problems exist.
+# Stage 0 of ci.yml: the quick gates every later stage waits for.
 
 on:
   workflow_call:
@@ -21,9 +19,7 @@ env:
 
 jobs:
   check-lint:
-    # Runs every hook in .pre-commit-config.yaml (ruff, prettier, shfmt,
-    # hadolint, hygiene). The config file is the single source of truth —
-    # run the same thing locally with: uvx pre-commit run --all-files
+    # Locally: uvx pre-commit run --all-files
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -58,8 +54,7 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: tests/uv.lock
-      # One project, one lock, every suite — run from the repo root so
-      # coverage records repo-rooted paths; scope lives in .coveragerc.
+      # From the repo root, so coverage records repo-rooted paths.
       - name: Run tests with coverage
         run: >-
           uv run --project tests --frozen
@@ -72,10 +67,7 @@ jobs:
           tag="agentic-interface-v$(python3 .github/workflows/bump-agentic-version.py --print-current)"
           git fetch -q --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}"
           python3 .github/workflows/bump-agentic-version.py --skill-kind
-      # Coverage reporting is informational: a Codecov outage (CLI download,
-      # GPG keyserver, upload) must not fail the test job. Genuinely silent
-      # processing rejections exit 0 regardless, so fail_ci_if_error would
-      # not catch them anyway — staleness shows up on the badge/dashboard.
+      # Informational: a Codecov outage must not fail the test job.
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
         with:
@@ -101,10 +93,6 @@ jobs:
           fi
 
   check-manifests:
-    # Builds every Flux-consumed kustomize root, applies each environment's
-    # postBuild substitutions, and validates the rendered manifests with
-    # kubeconform. Logic lives in validate-manifests.sh (this directory) —
-    # run it locally.
     # 24.04 ships kustomize, yq and Helm 3, which the cluster's Flux renders with; 26.04 ships Helm 4.
     runs-on: ubuntu-24.04
     timeout-minutes: 15

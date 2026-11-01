@@ -14,6 +14,7 @@ import yaml
 from cachetools import TTLCache
 from config import NAMESPACE
 from errors import UpstreamError, describe_exception, json_body, response_detail
+from mcp.server.mcpserver import MCPServer
 from shared import shared_client
 
 from tools.gpu import free_gpus, gpu_error
@@ -243,7 +244,7 @@ def find_profile(profiles: list[dict], name: str) -> Optional[dict]:
 # ── tool registration ─────────────────────────────────────────────────────────
 
 
-def register(mcp: Any) -> None:
+def register(mcp: MCPServer) -> None:
     @mcp.tool()
     async def list_af_profiles() -> str:
         """List available Analysis Facility session profiles and their configurable options.

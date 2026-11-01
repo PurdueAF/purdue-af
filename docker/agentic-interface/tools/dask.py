@@ -32,7 +32,7 @@ from errors import (
     response_detail,
     unreachable,
 )
-from mcp.server.mcpserver import Context
+from mcp.server.mcpserver import Context, MCPServer
 from pydantic import BaseModel, Field
 from shared import prom_query, prom_scalar, prom_vector, quote_label, shared_client
 
@@ -450,7 +450,7 @@ _WORKERS_PENDING_NEXT = [
 ]
 
 
-def register(mcp: Any) -> None:
+def register(mcp: MCPServer) -> None:
     @mcp.tool()
     async def list_dask_clusters() -> str:
         """List the calling user's running Dask clusters."""

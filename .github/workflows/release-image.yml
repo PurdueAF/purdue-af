@@ -1,8 +1,8 @@
 name: Release image
 
 # Releases the purdue-af image: promotes the exact-state digest to a semver tag
-# and rewrites the version pins (bump-af-version.py). Gates, rollback and
-# AF_RELEASE_TOKEN: RELEASING.md.
+# and rewrites the version pins (bump-af-version.py). Gates and rollback:
+# RELEASING.md.
 
 on:
   workflow_dispatch:
@@ -28,6 +28,10 @@ concurrency:
   group: release-image # never run two releases concurrently, never cancel one
   cancel-in-progress: false
 
+defaults:
+  run:
+    shell: bash
+
 env:
   IMAGE_REPO: ghcr.io/purdueaf/purdue-af
 
@@ -37,18 +41,11 @@ jobs:
     timeout-minutes: 15
     if: github.ref == 'refs/heads/main'
     env:
-      GH_TOKEN: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
-      HAVE_RELEASE_PAT: ${{ secrets.AF_RELEASE_TOKEN != '' }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0 # full history for release notes
-          token: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
-      - name: Warn if running with the default token
-        if: env.HAVE_RELEASE_PAT != 'true'
-        run: |
-          echo "::warning::AF_RELEASE_TOKEN secret not set — the release " \
-            "commit will NOT trigger CI workflows (GITHUB_TOKEN limitation)."
       - name: Login to ghcr.io
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4 # Renovate pins to digest
         with:
@@ -94,9 +91,11 @@ jobs:
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
       - name: Bump the AF version
         id: ver
+        env:
+          VERSION_OVERRIDE: ${{ inputs.version }}
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            new=$(python3 .github/workflows/bump-af-version.py --set "${{ inputs.version }}" | tail -1)
+          if [ -n "$VERSION_OVERRIDE" ]; then
+            new=$(python3 .github/workflows/bump-af-version.py --set "$VERSION_OVERRIDE" | tail -1)
           else
             new=$(python3 .github/workflows/bump-af-version.py --bump "${{ inputs.bump }}" | tail -1)
           fi
@@ -104,7 +103,8 @@ jobs:
           git diff --stat
       - name: Tag the digest on ghcr (promote-by-digest, no rebuild)
         run: |
-          docker buildx imagetools create \
+          source .github/workflows/ghcr.sh
+          ghcr_retry "imagetools create" docker buildx imagetools create \
             -t "$IMAGE_REPO:${{ steps.ver.outputs.version }}" \
             "$IMAGE_REPO@${{ steps.src.outputs.digest }}"
           echo "promoted $IMAGE_REPO@${{ steps.src.outputs.digest }} -> :${{ steps.ver.outputs.version }}" \

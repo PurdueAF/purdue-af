@@ -1,24 +1,13 @@
 #!/usr/bin/env bash
-# After a lockfile push: start CI on the new tip without a human clicking
-# "Approve workflows to run".
+# After a lockfile push: start CI on the new tip. A GITHUB_TOKEN push leaves any
+# pull_request run in action_required, so approve it through the API; with none, dispatch.
 #
-#   AF_RELEASE_TOKEN (PAT) push → pull_request/push fires normally.
-#   GITHUB_TOKEN push            → GitHub creates pull_request runs in
-#                                  action_required; we approve them via API.
-#                                  If none appear, fall back to workflow_dispatch.
-#
-# Usage: retrigger-after-lock-push.sh <have_pat true|false> <branch>
+# Usage: retrigger-after-lock-push.sh <branch>
 set -euo pipefail
 
-HAVE_PAT="${1:?have_pat}"
-BRANCH="${2:?branch}"
+BRANCH="${1:?branch}"
 NEW_SHA="$(git rev-parse HEAD)"
 REPO="${GITHUB_REPOSITORY:?}"
-
-if [ "$HAVE_PAT" = "true" ]; then
-	echo "PAT push re-triggers CI automatically."
-	exit 0
-fi
 
 approved=0
 for _ in $(seq 1 12); do

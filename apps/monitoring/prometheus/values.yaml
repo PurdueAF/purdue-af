@@ -883,7 +883,7 @@ serverFiles:
               summary: "HelmRelease {{ $labels.name }} is failing or suspended"
               description: >
                 It runs its last good version and retries forever, and each
-                attempt can roll its pods, while its badge still reads deployed.
+                attempt can roll its pods, while its badge still reads released.
                 Check: kubectl -n cms describe helmrelease {{ $labels.name }}
           - alert: AFFluxStateUnknown
             expr: absent(af_flux_ready{kind="Kustomization"})

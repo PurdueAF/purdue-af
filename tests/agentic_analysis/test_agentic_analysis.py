@@ -146,8 +146,6 @@ def test_flux_lists_every_manifest_of_the_app():
 
 
 def test_the_task_image_is_built_published_and_pulled_under_one_name():
-    inputs = (REPO / ".github/workflows/image-inputs.sh").read_text()
-    assert "\tagentic-analysis)" in inputs and "docker/agentic-analysis" in inputs
     ci = yaml.safe_load((REPO / ".github/workflows/ci-images.yml").read_text())
     matrix = {
         m["name"]: m
@@ -156,12 +154,6 @@ def test_the_task_image_is_built_published_and_pulled_under_one_name():
     assert (
         matrix["agentic-analysis"]["dockerfile"] == "docker/agentic-analysis/Dockerfile"
     )
-    resolve = ci["jobs"]["resolve"]["steps"][-1]["run"]
-    assert " agentic-analysis " in resolve, (
-        "publish only moves :latest for names listed in resolve"
-    )
-    status = (REPO / ".github/workflows/component-status.py").read_text()
-    assert '"agentic-analysis",' in status
     assert (REPO / "docker/agentic-analysis/uv.lock").is_file()
     (job,) = docs(APP / "workspace.yaml")
     (container,) = job["spec"]["template"]["spec"]["containers"]

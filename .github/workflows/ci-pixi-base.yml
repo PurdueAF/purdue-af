@@ -1,25 +1,11 @@
 name: CI pixi-base
 
-# Stage 1a of ci.yml — BEFORE the AF image build so Dockerfile
-# `pixi install --locked` sees a matching pixi/base lock.
-#
-#   1. `pixi install --locked` when toml/lock agree
-#   2. otherwise `pixi lock` + install, then on green check-env commit the
-#      regenerated lock back to the branch (Renovate only bumps manifests;
-#      see skipArtifactsUpdate in renovate.json5)
-#   3. import-smoke every direct dependency with pixi/check-env.py in an EL8
-#      userland (rockylinux:8) — catches libstdc++ issues Ubuntu would miss.
-#
-# Memoized when the lock was already in sync (image-inputs.sh key). Lock
-# commits and AF_RELEASE_TOKEN: RELEASING.md. The pixi CLI version is read
-# from ARG PIXI_VERSION in docker/purdue-af/Dockerfile.
+# Stage 1a of ci.yml, before the image build, so the Dockerfile's --locked install
+# sees a matching lock. Syncs pixi/base/pixi.lock and import-smokes the env in an
+# EL8 userland. Lock commits: RELEASING.md.
 
 on:
   workflow_call:
-    secrets:
-      AF_RELEASE_TOKEN:
-        description: "Optional PAT with contents:write — auto-retriggers CI on lock push"
-        required: false
 
 permissions:
   contents: read
@@ -30,13 +16,12 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: write # commit regenerated pixi/base/pixi.lock
-      actions: write # workflow_dispatch when no PAT
+      actions: write # approve or dispatch the run on a lock commit
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # PR head branch so a lock commit can be pushed back; main on push.
           ref: ${{ github.head_ref || github.ref_name }}
-          token: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
       - name: Read the pixi CLI version the AF image uses
         id: pixi
         run: echo "version=$(sed -n 's/^ARG PIXI_VERSION="\([^"]*\)".*/\1/p' docker/purdue-af/Dockerfile)" | tee -a "$GITHUB_OUTPUT"
@@ -81,40 +66,10 @@ jobs:
       - name: Commit regenerated lockfile
         if: success() && steps.memo.outputs.hit != 'true' && steps.lock.outputs.updated == 'true'
         env:
-          HAVE_PAT: ${{ secrets.AF_RELEASE_TOKEN != '' }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
-          GH_TOKEN: ${{ secrets.AF_RELEASE_TOKEN || github.token }}
-          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ] && \
-             [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
-            echo "::error::pixi/base/pixi.lock is out of sync with pixi.toml. " \
-              "Fork PRs cannot receive lock commits — run \`pixi lock --manifest-path pixi/base/pixi.toml\` and push."
-            exit 1
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pixi/base/pixi.lock
-          if git diff --staged --quiet; then
-            echo "Lock regenerate produced no file change — nothing to commit"
-            exit 0
-          fi
-          git commit -m "chore(pixi): regenerate base lockfile"
-          git pull --rebase origin "$BRANCH"
-          git push origin "HEAD:$BRANCH"
-          # Helper may be absent on Renovate branches — load from default branch.
-          script=.github/workflows/retrigger-after-lock-push.sh
-          if [ ! -f "$script" ]; then
-            gh api "repos/${GITHUB_REPOSITORY}/contents/.github/workflows/retrigger-after-lock-push.sh?ref=${GITHUB_DEFAULT_BRANCH}" \
-              --jq .content | base64 -d > /tmp/retrigger-after-lock-push.sh
-            script=/tmp/retrigger-after-lock-push.sh
-            chmod +x "$script"
-          fi
-          "$script" "$HAVE_PAT" "$BRANCH" | tee -a "$GITHUB_STEP_SUMMARY"
-          # Fail this SHA so images does not build against a pre-lock tree.
-          # The follow-up run (concurrency) cancels this one.
-          exit 1
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: .github/workflows/commit-lockfile.sh base
       - name: Record green run
         # Only memoize in-sync trees; a lock push triggers a new commit/CI.
         if: success() && steps.memo.outputs.hit != 'true' && steps.lock.outputs.updated != 'true'

@@ -27,6 +27,7 @@ from errors import (
     response_detail,
     unreachable,
 )
+from mcp.server.mcpserver import MCPServer
 from shared import shared_client
 
 _SERVICE = "the Ray gateway"
@@ -216,7 +217,7 @@ def _cluster_body(resp: httpx.Response) -> dict[str, Any]:
     return body
 
 
-def register(mcp: Any) -> None:
+def register(mcp: MCPServer) -> None:
     @mcp.tool()
     async def get_ray_capacity(
         min_gpu_memory_gb: Optional[float] = None,

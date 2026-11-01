@@ -1,17 +1,8 @@
 name: CI images
 
-# Stage 1 of ci.yml — content-addressed image builds.
-#
-# Every first-party image is tagged `in-<hash>` where the hash names the
-# exact git state of its declared input paths (.github/workflows/
-# image-inputs.sh — the single source of truth, shared with
-# release-image.yml). If the tag already exists on ghcr, the build is
-# skipped as VERIFIED reuse: the identical input state was already built
-# and smoke-tested. There is no diff-based path filtering anywhere — a
-# skip can never mean "we assumed this was fine".
-#
-# in- tags are pushed from same-repo PRs too, so reuse works across a merge.
-# Promotion: RELEASING.md; images built outside CI: docker/REGISTRY.md.
+# Stage 1 of ci.yml: content-addressed image builds. An image whose `in-<hash>`
+# tag is already on ghcr is reused, not rebuilt (image-inputs.sh, docker/REGISTRY.md).
+# Promotion: RELEASING.md.
 
 on:
   workflow_call:
@@ -51,7 +42,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Login to ghcr.io
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4 # Renovate pins to digest
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -70,7 +61,8 @@ jobs:
             af_digest=""
           fi
           aux_tags=""
-          for name in agentic-interface af-pod-monitor af-node-monitor agentic-analysis supersonic-model-manager interlink-slurm-plugin interlink-kubernetes-plugin ray-nrp; do
+          aux=$(yq '.jobs["build-aux-images"].strategy.matrix.include[].name' .github/workflows/ci-images.yml)
+          for name in $aux; do
             tag=$(./.github/workflows/image-inputs.sh "$name")
             channel=latest
             if [ "$name" = interlink-slurm-plugin ] || [ "$name" = interlink-kubernetes-plugin ]; then
@@ -105,8 +97,6 @@ jobs:
       - name: Verified reuse — this exact input state is already on ghcr
         if: env.AF_EXISTS == 'true'
         run: echo "reusing $AF_IMAGE (already built + smoke-tested for this input state)" | tee -a "$GITHUB_STEP_SUMMARY"
-      # First build step on purpose: it must never wipe tools other steps
-      # install. The build and its export peak at ~20 GiB.
       - name: Free runner disk space
         if: env.AF_EXISTS != 'true'
         uses: ./.github/actions/ensure-disk
@@ -127,15 +117,14 @@ jobs:
             echo "GEDDES_BASE=$geddes"
             echo "PUBLIC_BASE=docker.io/${geddes#*/dockerhub-proxy-cache/}"
           } | tee -a "$GITHUB_ENV"
-      # Login first: cache-from needs read; cache-to/push need write.
+      # Before the build: cache-from needs read, cache-to and push need write.
       - name: Login to ghcr.io
         if: env.AF_EXISTS != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4 # Renovate pins to digest
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # Never loaded into the docker daemon: the smoke test is the Dockerfile's `smoke` stage.
       - name: Build + in-build smoke test
         if: env.AF_EXISTS != 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
@@ -143,24 +132,16 @@ jobs:
           context: .
           file: docker/purdue-af/Dockerfile
           target: smoke
-          # The Dockerfile's FROM points at the geddes dockerhub-proxy-cache proxy
-          # (unreachable from GH runners); remap that exact ref to docker.io
-          # without modifying the Dockerfile.
+          # The geddes proxy in the Dockerfile's FROM is unreachable from GitHub runners.
           build-contexts: |
             ${{ env.GEDDES_BASE }}=docker-image://${{ env.PUBLIC_BASE }}
           push: false
-          # Registry-backed cache — the 10 GB GHA cache cannot hold this
-          # layer set. cache-to happens once, in the push step below.
-          cache-from: type=registry,ref=ghcr.io/purdueaf/purdue-af:buildcache
+          # Registry-backed: the layer set exceeds the 10 GB GHA cache.
+          cache-from: type=registry,ref=${{ env.AF_REPO }}:buildcache
       - name: Disk after build
         if: env.AF_EXISTS != 'true'
         run: df -h / | tee -a "$GITHUB_STEP_SUMMARY"
-      # Everything is cached from the step above, so this only EXPORTS:
-      # image and buildcache are pushed by buildx with identical zstd blobs,
-      # which the registry deduplicates — one ~upload instead of two, and
-      # zstd cuts every later pull (pixi-global, e2e, cluster sessions of
-      # :pre-release). The default target is the bare `runtime` alias, so
-      # no smoke layers ship.
+      # Only exports: every layer is cached from the step above. The default target ships no smoke layers.
       - name: Push in- tag + build cache (single zstd upload)
         id: push
         if: env.AF_EXISTS != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
@@ -175,13 +156,10 @@ jobs:
           build-contexts: |
             ${{ env.GEDDES_BASE }}=docker-image://${{ env.PUBLIC_BASE }}
           outputs: type=image,push=true,compression=zstd,compression-level=3,force-compression=true,oci-mediatypes=true
-          cache-from: type=registry,ref=ghcr.io/purdueaf/purdue-af:buildcache
-          # force-compression on BOTH exports: identical zstd blobs → the
-          # registry dedups image push against cache push
-          cache-to: type=registry,ref=ghcr.io/purdueaf/purdue-af:buildcache,mode=max,compression=zstd,compression-level=3,force-compression=true,ignore-error=true
-      # Everything downstream consumes the image by DIGEST-PINNED ref
-      # (repo:in-tag@sha256:...) — what pixi/e2e test is byte-identical to
-      # what publish later retags, even if the in- tag were moved.
+          cache-from: type=registry,ref=${{ env.AF_REPO }}:buildcache
+          # force-compression on both exports: identical zstd blobs, so the registry dedups them.
+          cache-to: type=registry,ref=${{ env.AF_REPO }}:buildcache,mode=max,compression=zstd,compression-level=3,force-compression=true,ignore-error=true
+      # Digest-pinned: what pixi and e2e test is what publish retags, even if the in- tag moved.
       - name: Record availability
         id: avail
         env:
@@ -200,8 +178,7 @@ jobs:
               echo "digest=$digest"
             } | tee -a "$GITHUB_OUTPUT"
           else
-            # fork PR: image was built and smoke-tested but cannot be
-            # pushed — downstream jobs fall back to :pre-release
+            # Fork PR: built but not pushable; downstream jobs fall back to :pre-release.
             {
               echo "available=false"
               echo "image="
@@ -223,94 +200,37 @@ jobs:
           - name: agentic-interface
             dockerfile: docker/agentic-interface/Dockerfile
             context: .
-            smoke: python -c "import server; print('ok:', server.SERVICE_PREFIX)"
           - name: af-pod-monitor
             dockerfile: docker/af-pod-monitor/Dockerfile
             context: docker/af-pod-monitor
-            smoke: >-
-              sh -c "cd /etc && python -c \"import importlib.util as u;
-              s = u.spec_from_file_location('m', 'pod-metrics-exporter.py');
-              m = u.module_from_spec(s); s.loader.exec_module(m);
-              print('ok')\""
           - name: af-node-monitor
             dockerfile: docker/af-node-monitor/Dockerfile
             context: .
-            smoke: >-
-              sh -c "fio --version && cd /opt/af-node-monitor &&
-              AF_NODE_MONITOR_VERBOSE=1 MOUNT_NAME=smoke CHECK_FILE=smoke
-              python -c 'import job_runner, node_healthcheck; print(\"ok\")'"
-          # As the image's non-root user: the tools an agentic-analysis task pod
-          # runs, and a cwd that user can write, where Flyte extracts the code bundle.
-          # Single-quoted: the runner's bash interpolates this string before
-          # docker runs, so a double-quoted $(id -u) would test the RUNNER's uid.
           - name: agentic-analysis
             dockerfile: docker/agentic-analysis/Dockerfile
             context: .
-            smoke: >-
-              sh -c 'set -e; test "$(id -u)" = 1000;
-              python -c "import flyte, os, tempfile; tempfile.mkstemp(dir=os.getcwd()); print(flyte.version())";
-              git --version; pixi --version; opencode --version; rg --version;
-              pdftoppm -v; echo ok'
-          # Imports the app, asserts the dashboard and its logo assets ship in
-          # the image, and that the ASGI routes are wired.
           - name: supersonic-model-manager
             dockerfile: docker/supersonic-model-manager/Dockerfile
             context: .
-            smoke: >-
-              python -c "from pathlib import Path;
-              from model_manager.main import app, STATIC_DIR;
-              routes = {getattr(r, 'path', None) for r in app.routes};
-              assert {'/', '/healthz', '/api/state'} <= routes, routes;
-              assert (STATIC_DIR / 'index.html').is_file();
-              assert (STATIC_DIR / 'img' / 'supersonic-mark.svg').is_file();
-              print('ok:', len(routes), 'routes')"
-          # Thin Slurm client for every RCAC cluster; SLURM_CLUSTER selects
-          # the baked config tree at runtime. Smoke does not start munged
-          # (needs the site key PVC) — just asserts the multi-cluster layout.
           - name: interlink-slurm-plugin
             dockerfile: docker/interlink-slurm-plugin/Dockerfile
             context: .
             free_disk: true
-            smoke_entrypoint: /bin/sh
-            smoke: >-
-              -c "set -e;
-              test -x /sidecar/slurm-sidecar;
-              test -x /etc/startup.sh;
-              test -f /opt/purdue-af/slurm-configs/hammer/slurm.conf;
-              test -f /opt/purdue-af/slurm-clients/client-versions;
-              test -x /opt/purdue-af/slurm-clients/25.11.4/usr/bin/sbatch;
-              ls /opt/purdue-af/slurm-configs;
-              echo ok"
-          # The global environment's Ray, PyTorch and S3 client run as the image's
-          # user, with the wget KubeRay's probes need.
-          # Built straight into the docker daemon, uncached: exporting its
-          # environment layer to the daemon or to the 10 GB GHA cache takes
-          # longer than building it.
+          # uncached: exporting its environment layer to the daemon or the GHA cache outlasts building it.
           - name: ray-nrp
             dockerfile: docker/ray-nrp/Dockerfile
             context: .
             free_disk: true
             uncached: true
-            smoke: >-
-              sh -c 'set -e; test "$(id -u)" = 1000; ray --version; wget --version | head -1;
-              python -c "import boto3, pyarrow, ray.train, smart_open, torch;
-              print(\"ok:\", ray.__version__, torch.__version__, torch.version.cuda, torch._C._cuda_getArchFlags())"'
-          # The upstream plugin image plus ensure-namespace.patch; the smoke
-          # import proves the patch applied and the modules still parse.
           - name: interlink-kubernetes-plugin
             dockerfile: docker/interlink-kubernetes-plugin/Dockerfile
             context: .
-            smoke: >-
-              python -c "from app.common.config import Option;
-              from app.services import kubernetes_plugin_service;
-              assert Option.OFFLOADING_ENSURE_NAMESPACE;
-              print('ok')"
     name: aux ${{ matrix.name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Login to ghcr.io
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4 # Renovate pins to digest
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -325,38 +245,24 @@ jobs:
           else
             exists=false
           fi
-          build_args=""
-          build_contexts=""
-          case "${{ matrix.name }}" in
-          interlink-slurm-plugin)
-            plugin_ref=$(tr -d '[:space:]' < docker/interlink-slurm-plugin/PLUGIN_REF)
-            build_args="SLURM_PLUGIN_REF=${plugin_ref}"
-            ;;
-          interlink-kubernetes-plugin)
-            plugin_ref=$(tr -d '[:space:]' < docker/interlink-kubernetes-plugin/PLUGIN_REF)
-            build_args="UPSTREAM_IMAGE=docker.io/mginfn/interlink-kubernetes-plugin:${plugin_ref}"
-            ;;
-          esac
           {
             echo "image=$image"
             echo "exists=$exists"
-            echo "build_args=$build_args"
-            echo "build_contexts=$build_contexts"
           } | tee -a "$GITHUB_OUTPUT"
       - name: Verified reuse — this exact input state is already on ghcr
         if: steps.meta.outputs.exists == 'true'
         run: echo "reusing ${{ steps.meta.outputs.image }}" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Free runner disk space
         if: steps.meta.outputs.exists != 'true' && matrix.free_disk
-        uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0 # Renovate pins to digest
+        uses: ./.github/actions/ensure-disk
         with:
+          min-free-gb: 50
           tool-cache: true
-          docker-images: false
-          large-packages: false
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
         if: steps.meta.outputs.exists != 'true'
         with:
           driver: ${{ matrix.uncached && 'docker' || 'docker-container' }}
+      # Each Dockerfile's trailing RUN holds the image's smoke test, so a failure stops the push.
       - name: Build image
         if: steps.meta.outputs.exists != 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
@@ -367,34 +273,12 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-          build-args: ${{ steps.meta.outputs.build_args }}
-          build-contexts: ${{ steps.meta.outputs.build_contexts }}
           push: false
           load: true
           cache-from: ${{ !matrix.uncached && format('type=gha,scope={0}', matrix.name) || '' }}
           cache-to: ${{ !matrix.uncached && format('type=gha,scope={0},mode=max', matrix.name) || '' }}
-      - name: Smoke test
-        if: steps.meta.outputs.exists != 'true'
-        env:
-          SMOKE_ENTRYPOINT: ${{ matrix.smoke_entrypoint }}
-        run: |
-          if [ -n "$SMOKE_ENTRYPOINT" ]; then
-            docker run --rm --entrypoint "$SMOKE_ENTRYPOINT" \
-              ${{ steps.meta.outputs.image }} ${{ matrix.smoke }}
-          else
-            docker run --rm ${{ steps.meta.outputs.image }} ${{ matrix.smoke }}
-          fi
-      # Only smoke-tested images ever reach the registry.
       - name: Push in- tag to ghcr.io
         if: steps.meta.outputs.exists != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         run: |
-          # GHCR occasionally returns "blob upload unknown" on large pushes;
-          # a couple of retries usually clear a transient registry glitch.
-          for attempt in 1 2 3; do
-            if docker push ${{ steps.meta.outputs.image }}; then
-              exit 0
-            fi
-            echo "push attempt ${attempt} failed; retrying in 20s..." >&2
-            sleep 20
-          done
-          exit 1
+          source .github/workflows/ghcr.sh
+          ghcr_retry "docker push" docker push ${{ steps.meta.outputs.image }}

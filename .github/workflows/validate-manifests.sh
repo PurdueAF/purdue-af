@@ -1,37 +1,8 @@
 #!/usr/bin/env bash
 #
-# Validate everything Flux consumes, the same way Flux consumes it:
-#
-#   1. `kustomize build` each kustomize root under flux/ (and standalone roots)
-#   2. apply that environment's postBuild.substitute variables, parsed straight
-#      from its flux-kustomization.yaml (no duplicated values — single source
-#      of truth), via `flux envsubst`
-#   3. validate the rendered manifests with kubeconform against upstream
-#      Kubernetes schemas + the CRDs-catalog (Flux CRDs, monitoring CRDs, ...)
-#   4. `helm template` every HelmRelease found in the rendered stream, with
-#      the chart version, HelmRepository URL and valuesFrom-ConfigMap values
-#      resolved from that same stream (a SOPS-encrypted valuesFrom Secret
-#      renders as a placeholder at its targetPath) — this is what catches
-#      breaking chart schema changes when a chart version is bumped (e.g. by
-#      Renovate).
-#      Charts that live in this repository (sourced from its GitRepository
-#      under a relative path in apps/) are rendered from the working
-#      tree with the same values, so a broken template or a values/template
-#      mismatch fails here rather than in the cluster. A chart in someone
-#      else's repository is rendered from a shallow clone of the ref its
-#      GitRepository names — several track a branch, where the chart changes
-#      with no version to bump. A GitRepository read through a secretRef is
-#      skipped when that clone is refused: the run holds no such credential.
-#   5. `promtool check rules` on Prometheus alerting/recording rules embedded
-#      in Helm values — a typo'd PromQL expression otherwise deploys silently
-#      and the alert simply never fires.
-#
-# Bootstrap objects (flux-kustomization.yaml / git-repository.yaml) are
-# validated directly, since they are applied out-of-band.
-#
-# Tripwires: the run fails if suspiciously few HelmReleases/resources were
-# validated — a parsing regression must turn the build red, never silently
-# validate nothing.
+# Validate everything Flux consumes, the way Flux consumes it: render each root,
+# kubeconform the result, `helm template` every HelmRelease with its resolved
+# values, and `promtool check` the rules in Helm values.
 #
 # Requirements: kustomize, flux, yq (v4), kubeconform, helm, promtool
 # Run locally:  ./.github/workflows/validate-manifests.sh
@@ -39,9 +10,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-# The cluster's Kubernetes version (helm .Capabilities / kubeVersion
-# constraints validate against this) — Geddes runs 1.29.x; keep in sync
-# with the cluster note in .github/renovate.json5 when it is upgraded.
+# The cluster's Kubernetes version, which chart kubeVersion constraints validate against.
 KUBE_VERSION="${KUBE_VERSION:-1.29.0}"
 
 # shellcheck disable=SC2054  # commas below are kubeconform list syntax
@@ -59,12 +28,8 @@ trap 'rm -rf "$workdir"' EXIT
 failed=0
 releases_seen=0
 
-# Render one Flux environment like kustomize-controller does:
-# LoadRestrictionsNone + postBuild substitution, honouring the
-# `kustomize.toolkit.fluxcd.io/substitute: disabled` per-resource annotation
-# (used by ConfigMaps that carry shell scripts). Stricter than the controller,
-# which blanks an undeclared variable. The caller's `if` turns errexit off here,
-# so each step exits by hand.
+# Render a root like kustomize-controller, except that an undeclared variable fails here.
+# The caller's `if` turns errexit off, so each step exits by hand.
 SUBST_DISABLED='.metadata.annotations["kustomize.toolkit.fluxcd.io/substitute"] == "disabled"'
 render_env() {
 	local env_dir=$1
@@ -80,31 +45,70 @@ render_env() {
 	)
 }
 
-# Shallow-clone a GitRepository source once per (url, ref) and echo the path.
-# Returns 2 when the clone itself fails, 1 for anything wrong inside it.
-# A chart in git has no packaged dependencies, so fetch them on first use:
-# `dependency update`, not `build`, because build wants every repository in
-# Chart.yaml already registered via `helm repo add` and a fresh runner has
-# none — update resolves them from the URLs themselves.
+# A network call fails for reasons unrelated to the manifests; a broken chart fails every attempt.
+HELM_ATTEMPTS="${HELM_ATTEMPTS:-3}"
+HELM_RETRY_DELAY="${HELM_RETRY_DELAY:-5}"
+retry() {
+	local label=$1
+	shift
+	local attempt=1 out
+	while :; do
+		if out=$("$@" 2>&1); then
+			return 0
+		fi
+		if ((attempt >= HELM_ATTEMPTS)); then
+			printf '%s\n' "$out" >&2
+			return 1
+		fi
+		echo "  ${label}: attempt ${attempt} failed, retrying in ${HELM_RETRY_DELAY}s" >&2
+		attempt=$((attempt + 1))
+		sleep "$HELM_RETRY_DELAY"
+	done
+}
+
+helm_template_retry() {
+	local name=$1 version=$2
+	shift 2
+	retry "${name}: helm template" helm template "$name" "$@" \
+		${version:+--version "$version"} \
+		--kube-version "$KUBE_VERSION" \
+		--namespace cms
+}
+
+# A branch, a tag, a commit or HEAD; the destination exists only once the checkout succeeded.
+fetch_ref() {
+	local url=$1 ref=$2 dest=$3 tmp
+	tmp=$(mktemp -d "$workdir/fetch.XXXXXX")
+	if git -C "$tmp" init --quiet &&
+		retry "${url}@${ref}: git fetch" env GIT_TERMINAL_PROMPT=0 git -C "$tmp" fetch --quiet --depth 1 "$url" "$ref" &&
+		git -C "$tmp" checkout --quiet FETCH_HEAD; then
+		mv "$tmp" "$dest"
+	else
+		rm -rf "$tmp"
+		return 1
+	fi
+}
+
+# Fetch a GitRepository source once per (url, ref) and echo the chart's path.
+# `dependency update`, not `build`: build wants every repository already added to helm.
 git_chart_dir() {
 	local url=$1 ref=$2 chart_path=$3
-	local key clone_dir out
+	local key clone_dir
 	key=$(printf '%s@%s' "$url" "$ref" | shasum | cut -d' ' -f1)
 	clone_dir="$workdir/gitsrc-$key"
 	if [[ ! -d "$clone_dir" ]]; then
-		GIT_TERMINAL_PROMPT=0 git clone --quiet --depth 1 --branch "$ref" "$url" "$clone_dir" >&2 || return 2
+		fetch_ref "$url" "$ref" "$clone_dir" || return 1
 	fi
 	[[ -d "$clone_dir/$chart_path" ]] || {
 		echo "chart path '${chart_path}' not in ${url}@${ref}" >&2
 		return 1
 	}
-	# An apiVersion v1 chart lists them in requirements.yaml.
+	# An apiVersion v1 chart lists its dependencies in requirements.yaml.
 	if [[ -f "$clone_dir/$chart_path/Chart.yaml" ]] &&
 		[[ ! -d "$clone_dir/$chart_path/charts" ]] &&
 		{ [[ $(yq -N '.dependencies | length' "$clone_dir/$chart_path/Chart.yaml") -gt 0 ]] ||
 			[[ -f "$clone_dir/$chart_path/requirements.yaml" ]]; }; then
-		if ! out=$(helm dependency update "$clone_dir/$chart_path" 2>&1); then
-			printf '%s\n' "$out" >&2
+		if ! retry "${chart_path}: helm dependency update" helm dependency update "$clone_dir/$chart_path"; then
 			echo "could not fetch chart dependencies for ${chart_path} in ${url}@${ref}" >&2
 			return 1
 		fi
@@ -112,56 +116,23 @@ git_chart_dir() {
 	printf '%s' "$clone_dir/$chart_path"
 }
 
-# `helm template` pulls the chart over the network on every call, so a reset
-# connection to the chart host fails the whole run for reasons that have
-# nothing to do with the manifests (seen: grafana.github.io and GitHub release
-# assets both dropping connections mid-run). Retry a few times before
-# believing it; a genuinely broken chart or values file fails all attempts.
-HELM_ATTEMPTS="${HELM_ATTEMPTS:-3}"
-HELM_RETRY_DELAY="${HELM_RETRY_DELAY:-5}"
-helm_template_retry() {
-	local name=$1 version=$2
-	shift 2
-	local attempt=1 out
-	while :; do
-		if out=$(helm template "$name" "$@" \
-			${version:+--version "$version"} \
-			--kube-version "$KUBE_VERSION" \
-			--namespace cms 2>&1); then
-			return 0
-		fi
-		if ((attempt >= HELM_ATTEMPTS)); then
-			printf '%s\n' "$out" >&2
-			return 1
-		fi
-		echo "  ${name}: helm template attempt ${attempt} failed, retrying in ${HELM_RETRY_DELAY}s" >&2
-		attempt=$((attempt + 1))
-		sleep "$HELM_RETRY_DELAY"
-	done
-}
-
-# helm-template every HelmRelease in a rendered stream. Identical
-# (repo, chart, version, values) combinations are rendered only once.
-# (newline-joined list, not an assoc array: macOS ships bash 3.2)
+# Identical (repo, chart, version, values) combinations render once.
+# A newline-joined list, not an assoc array: macOS ships bash 3.2.
 seen_releases=""
 validate_helmreleases() {
 	local rendered=$1
-	local repos_file=$2 # "name|type|url" lines from ALL envs: HelmRepositories
-	# may be created by a sibling Flux Kustomization on the same cluster
-	local git_repos_file=$3 # "name|url|ref" lines, same reasoning
-	local git_auth_file=$4  # names of the GitRepositories that carry a secretRef
-	local name chart version src_name src_kind repo_line repo_url repo_type
-	local values_files values_file values_args vhash kind src key path i local_chart out git_ref git_dir rc
+	local repos_file=$2     # "name|type|url" lines from every root
+	local git_repos_file=$3 # "name|url|ref" lines from every root
+	local name release chart version src_name src_kind repo_line repo_url repo_type
+	local values_files values_file values_args vhash kind src key path i local_chart git_ref git_dir
 	while IFS= read -r name; do
 		releases_seen=$((releases_seen + 1))
-		chart=$(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec.chart.spec.chart" "$rendered")
-		version=$(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec.chart.spec.version" "$rendered")
-		src_name=$(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec.chart.spec.sourceRef.name" "$rendered")
-		src_kind=$(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec.chart.spec.sourceRef.kind" "$rendered")
+		release="select(.kind==\"HelmRelease\" and .metadata.name==\"$name\")"
+		chart=$(yq "$release | .spec.chart.spec.chart" "$rendered")
+		version=$(yq "$release | .spec.chart.spec.version" "$rendered")
+		src_name=$(yq "$release | .spec.chart.spec.sourceRef.name" "$rendered")
+		src_kind=$(yq "$release | .spec.chart.spec.sourceRef.kind" "$rendered")
 
-		# A chart in this repository is rendered from the working tree; a chart
-		# in someone else's, from a shallow clone of the ref its GitRepository
-		# names. Either way the values are the ones resolved below.
 		local_chart=""
 		git_ref=""
 		git_dir=""
@@ -183,7 +154,7 @@ validate_helmreleases() {
 			;;
 		GitRepository)
 			if [[ "$chart" == ./* || "$chart" == /* ]]; then
-				# A relative path is this repository's own chart, on disk here.
+				# A relative path is this repository's own chart, rendered from the working tree.
 				if [[ ! -f "$chart/Chart.yaml" ]]; then
 					echo "✗ ${name}: chart path '${chart}' has no Chart.yaml in this repository" >&2
 					failed=1
@@ -210,8 +181,6 @@ validate_helmreleases() {
 			;;
 		esac
 
-		# Resolve valuesFrom ConfigMaps (generated by kustomize from values.yaml
-		# files) into temp files, in order.
 		values_files=()
 		i=0
 		while IFS='|' read -r kind src key path; do
@@ -234,20 +203,14 @@ validate_helmreleases() {
 			fi
 			values_files+=("$values_file")
 			i=$((i + 1))
-		done < <(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec.valuesFrom[]? | (.kind // \"ConfigMap\") + \"|\" + .name + \"|\" + (.valuesKey // \"values.yaml\") + \"|\" + (.targetPath // \"\")" "$rendered")
+		done < <(yq "$release | .spec.valuesFrom[]? | (.kind // \"ConfigMap\") + \"|\" + .name + \"|\" + (.valuesKey // \"values.yaml\") + \"|\" + (.targetPath // \"\")" "$rendered")
 
-		# Inline .spec.values, if any.
-		if [[ $(yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec | has(\"values\")" "$rendered") == "true" ]]; then
-			yq "select(.kind==\"HelmRelease\" and .metadata.name==\"$name\") | .spec.values" \
-				"$rendered" >"$workdir/${name}-values-inline.yaml"
+		if [[ $(yq "$release | .spec | has(\"values\")" "$rendered") == "true" ]]; then
+			yq "$release | .spec.values" "$rendered" >"$workdir/${name}-values-inline.yaml"
 			values_files+=("$workdir/${name}-values-inline.yaml")
 		fi
 
-		# `helm template` has no cluster, so `lookup` returns empty. The
-		# SuperSONIC chart hard-fails when envoy.external_config.load_from_configmap
-		# is set and the ConfigMap cannot be looked up, so such a release only
-		# renders against a live cluster. The ConfigMap it reads is itself part
-		# of this stream and was kubeconform-validated above.
+		# The chart hard-fails when `lookup` finds no ConfigMap, and `helm template` has no cluster.
 		if [[ ${#values_files[@]} -gt 0 ]] &&
 			yq -N '(.envoy.external_config.load_from_configmap // false)' \
 				"${values_files[@]}" | grep -qx true; then
@@ -266,11 +229,8 @@ validate_helmreleases() {
 
 		if [[ -n "$local_chart" ]]; then
 			echo "  helm template ${name} (${local_chart}, from this repository)"
-			if ! out=$(helm template "$name" "$local_chart" \
-				--kube-version "$KUBE_VERSION" \
-				--namespace cms \
-				${values_args[@]+"${values_args[@]}"} 2>&1); then
-				printf '%s\n' "$out" >&2
+			if ! helm_template_retry "$name" "" "$local_chart" \
+				${values_args[@]+"${values_args[@]}"}; then
 				echo "✗ ${name}: helm template failed" >&2
 				failed=1
 			fi
@@ -286,12 +246,7 @@ validate_helmreleases() {
 		echo "  helm template ${name} (${chart}@${version:-${git_ref}} from ${repo_url})"
 		local helm_src
 		if [[ "$repo_type" == "git" ]]; then
-			rc=0
-			git_dir=$(git_chart_dir "$repo_url" "$git_ref" "$chart") || rc=$?
-			if [[ $rc -eq 2 ]] && grep -qx "$src_name" "$git_auth_file"; then
-				echo "  skip ${name}: GitRepository '${src_name}' is read with a Secret this run does not have"
-				continue
-			elif [[ $rc -ne 0 ]]; then
+			if ! git_dir=$(git_chart_dir "$repo_url" "$git_ref" "$chart"); then
 				echo "✗ ${name}: could not fetch chart from ${repo_url}@${git_ref}" >&2
 				failed=1
 				continue
@@ -311,7 +266,6 @@ validate_helmreleases() {
 }
 
 # --- Flux-managed environments -------------------------------------------
-# Pass 1: render everything (also builds the cross-env HelmRepository lookup).
 for env_dir in flux/*/; do
 	[[ -f "${env_dir}kustomization.yaml" ]] || continue
 	name=$(basename "$env_dir")
@@ -321,33 +275,25 @@ for env_dir in flux/*/; do
 		failed=1
 	fi
 done
-# (named so the rendered-*.yaml glob can never match it: the output redirect
-# creates the file before the glob expands)
+# Named outside the rendered-*.yaml glob: the redirect creates it before the glob expands.
 for f in "$workdir"/rendered-*.yaml; do
 	cat "$f"
 	echo "---"
 done >"$workdir/union.yaml"
 
-# One small lookup table of every HelmRepository across all envs
-# ("name|type|url" lines) — releases may reference a repo created by a
-# sibling Flux Kustomization on the same cluster.
+# A release may reference a source created by a sibling Flux Kustomization.
 yq -N 'select(.kind=="HelmRepository") | .metadata.name + "|" + (.spec.type // "default") + "|" + .spec.url' \
 	"$workdir/union.yaml" | sort -u >"$workdir/helm-repos.txt"
 
-# Same table for GitRepositories ("name|url|ref"), so a chart sourced from one
-# can be cloned at the exact ref Flux would check out.
-yq -N 'select(.kind=="GitRepository") | .metadata.name + "|" + .spec.url + "|" + (.spec.ref.tag // .spec.ref.branch // .spec.ref.commit // "HEAD")' \
+yq -N 'select(.kind=="GitRepository") | .metadata.name + "|" + .spec.url + "|" + (.spec.ref.commit // .spec.ref.tag // .spec.ref.branch // "HEAD")' \
 	"$workdir/union.yaml" | sort -u >"$workdir/git-repos.txt"
-yq -N 'select(.kind=="GitRepository" and .spec.secretRef != null) | .metadata.name' \
-	"$workdir/union.yaml" | sort -u >"$workdir/git-repos-auth.txt"
 
-# Pass 2: validate.
 for rendered in "$workdir"/rendered-*.yaml; do
 	name=$(basename "$rendered" .yaml)
 	echo "──── ${name#rendered-} ────"
 	# Flux decrypts a SOPS Secret before applying it; its `sops` block never reaches the API server.
 	yq 'del(.sops)' "$rendered" | "${KUBECONFORM[@]}" || failed=1
-	validate_helmreleases "$rendered" "$workdir/helm-repos.txt" "$workdir/git-repos.txt" "$workdir/git-repos-auth.txt"
+	validate_helmreleases "$rendered" "$workdir/helm-repos.txt" "$workdir/git-repos.txt"
 done
 
 # --- Flux bootstrap objects ----------------------------------------------
@@ -372,8 +318,7 @@ for values_file in $(git grep -lE "alerting_rules|recording_rules" -- 'apps/**/v
 done
 
 # --- Tripwires against silent pass-through --------------------------------
-# Counts well below today's real numbers (~19 releases, ~230 resources) mean
-# the extraction logic broke, not that the platform shrank.
+# A count this low means the extraction broke, not that the platform shrank.
 total_resources=$(yq -N 'select(.kind != null) | .kind' "$workdir/union.yaml" | grep -c .)
 if [[ $releases_seen -lt 10 || $total_resources -lt 100 ]]; then
 	echo "✗ tripwire: only ${releases_seen} HelmReleases / ${total_resources} resources found — validator is broken" >&2

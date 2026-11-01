@@ -6,11 +6,12 @@ paths:
 
 # Flux manifests
 
-- A chart that lives in this repository needs `reconcileStrategy: Revision` on
-  its HelmRelease. `Chart.yaml` stays at `0.1.0`, and Flux's default
-  `ChartVersion` re-packages only when that string changes: template edits
-  never reach the cluster while values edits still upgrade, running new values
-  against the old chart. `tests/manifests/test_inrepo_charts.py` asserts it.
+- A chart sourced from a GitRepository needs `reconcileStrategy: Revision` on
+  its HelmRelease. Flux's default `ChartVersion` re-packages only when the
+  `Chart.yaml` version changes, which stays at `0.1.0` in this repository's own
+  charts: template edits never reach the cluster while values edits still
+  upgrade, running new values against the old chart.
+  `tests/manifests/test_inrepo_charts.py` asserts it.
 - Do not add a `timeout:` to a HelmRelease. A release that hangs is waiting
   for something real; find what.
 - Every manifest and ConfigMap generator is listed in a `flux/*/kustomization.yaml`

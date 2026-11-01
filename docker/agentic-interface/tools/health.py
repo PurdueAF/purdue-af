@@ -27,6 +27,7 @@ import httpx
 from config import PROMETHEUS_URL
 from context import require_user
 from errors import UpstreamError, describe_exception, json_body, response_detail
+from mcp.server.mcpserver import MCPServer
 from shared import prom_query, prom_scalar, quote_label, shared_client
 
 EASTERN = ZoneInfo("America/New_York")
@@ -114,7 +115,7 @@ def _nodes(alerts: list[dict[str, Any]]) -> set[str]:
     return names - {""}
 
 
-def register(mcp: Any) -> None:
+def register(mcp: MCPServer) -> None:
     @mcp.tool()
     async def get_facility_health() -> str:
         """Report whether the Purdue Analysis Facility is healthy right now.
