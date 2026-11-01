@@ -347,3 +347,14 @@ def test_delivery_alerts_are_kept_apart_by_kind():
     )
     assert 'kind="HelmRelease"' in by_name["AFHelmReleaseNotReady"]["expr"]
     assert "absent(" in by_name["AFFluxStateUnknown"]["expr"]
+
+
+def test_a_stuck_session_alerts_before_the_hub_deletes_the_pod():
+    """A rule that waits past the spawn timeout can never see an ordinary stuck spawn."""
+    rule = next(r for r in rules() if r["alert"] == "AFSessionStuckPending")
+    minutes = int(re.fullmatch(r"(\d+)m", rule["for"]).group(1))
+    config = (
+        REPO / "apps/jupyterhub/jupyterhub/extraFiles/set-user-info.py"
+    ).read_text()
+    timeout = int(re.search(r"KubeSpawner\.start_timeout = (\d+)", config).group(1))
+    assert minutes * 60 < timeout

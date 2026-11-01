@@ -500,15 +500,17 @@ serverFiles:
                 logs for "[gpu-availability] refused".
           - alert: AFSessionStuckPending
             expr: kube_pod_status_phase{namespace="cms",pod=~"purdue-af-.*",phase="Pending"} == 1
-            for: 15m
+            for: 8m
             labels:
               severity: warning
               component: access
             annotations:
-              summary: Session pod {{ $labels.pod }} has been Pending for 15m
+              summary: Session pod {{ $labels.pod }} has been Pending for 8m
               description: >
-                A session pod cannot be scheduled — usually no node with the
-                requested CPU/RAM/GPU, or a volume that will not bind.
+                A session pod is not starting: usually a home volume that will
+                not mount, then an image that will not pull, then no node with
+                the requested CPU/RAM/GPU. The hub deletes the pod at 10 minutes,
+                so look now.
                 Check: kubectl -n cms describe pod {{ $labels.pod }}
 
       # Do users have worker capacity? -------------------------------------
