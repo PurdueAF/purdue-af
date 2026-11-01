@@ -237,7 +237,7 @@
       },
       "id": 3,
       "options": {
-        "alertInstanceLabelFilter": "namespace=\"cms\", severity=~\"^(error|critical)$\"",
+        "alertInstanceLabelFilter": "severity=~\"^(error|critical)$\"",
         "alertName": "",
         "dashboardAlerts": false,
         "groupBy": [],
@@ -253,7 +253,8 @@
           "pending": true,
           "recovering": true
         },
-        "viewMode": "list"
+        "viewMode": "list",
+        "datasource": "prometheus"
       },
       "title": "Errors",
       "type": "alertlist"
@@ -270,7 +271,7 @@
       },
       "id": 2,
       "options": {
-        "alertInstanceLabelFilter": "namespace=\"cms\", severity=\"warning\"",
+        "alertInstanceLabelFilter": "severity=\"warning\"",
         "alertName": "",
         "dashboardAlerts": false,
         "groupBy": [],
@@ -286,7 +287,8 @@
           "pending": true,
           "recovering": true
         },
-        "viewMode": "list"
+        "viewMode": "list",
+        "datasource": "prometheus"
       },
       "title": "Warnings",
       "type": "alertlist"
@@ -303,7 +305,7 @@
       },
       "id": 1,
       "options": {
-        "alertInstanceLabelFilter": "namespace=\"cms\", severity!~\"^(warning|error|critical)$\"",
+        "alertInstanceLabelFilter": "namespace=\"cms\"",
         "alertName": "",
         "dashboardAlerts": false,
         "groupBy": [],
@@ -319,9 +321,10 @@
           "pending": true,
           "recovering": true
         },
-        "viewMode": "list"
+        "viewMode": "list",
+        "datasource": "prometheus-rancher"
       },
-      "title": "Info",
+      "title": "Rancher alerts in cms",
       "type": "alertlist"
     }
   ],
