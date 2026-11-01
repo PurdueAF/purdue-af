@@ -3662,6 +3662,8 @@ async def test_the_gateway_stops_when_its_code_or_settings_change(
 async def test_the_gateway_stops_when_a_module_it_imports_changes(
     monkeypatch, tmp_path
 ):
+    """On a ConfigMap mount Python imports a module from the versioned directory
+    behind the links, which the next swap deletes."""
     stopped = asyncio.Event()
 
     async def serve():
@@ -3670,11 +3672,13 @@ async def test_the_gateway_stops_when_a_module_it_imports_changes(
         finally:
             stopped.set()
 
+    files = {"gateway.py": "running", "placing.py": "placing"}
+    mount_configmap(tmp_path, 1, files)
     code, module = tmp_path / "gateway.py", tmp_path / "placing.py"
-    code.write_text("running")
-    module.write_text("placing")
     monkeypatch.setitem(
-        sys.modules, "placing", types.SimpleNamespace(__file__=str(module))
+        sys.modules,
+        "placing",
+        types.SimpleNamespace(__file__=str(tmp_path / "..1" / "placing.py")),
     )
     monkeypatch.setattr(gw, "serve", serve)
     monkeypatch.setattr(gw, "CODE", code)
@@ -3682,7 +3686,7 @@ async def test_the_gateway_stops_when_a_module_it_imports_changes(
     assert gw.code_files() == [code, module]
     main = asyncio.create_task(gw.main())
     await asyncio.sleep(0)
-    module.write_text("placing anew")
+    mount_configmap(tmp_path, 2, {**files, "placing.py": "placing anew"})
     await asyncio.wait_for(main, timeout=5)
     assert stopped.is_set()
 
