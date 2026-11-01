@@ -7,47 +7,11 @@ import metrics
 import pytest
 import respx
 import server
-from context import current_user
-from mcp.server.auth.provider import AccessToken
-from prometheus_client import REGISTRY
+from agentic_helpers import SendCollector, as_user, counter, http_scope, noop_receive
 
 
 def _counter_value(route: str, status: str) -> float:
-    return (
-        REGISTRY.get_sample_value(
-            "purdue_af_mcp_api_calls_total",
-            {"route": route, "status": status},
-        )
-        or 0.0
-    )
-
-
-async def noop_receive():  # pragma: no cover
-    return {"type": "http.request"}
-
-
-class SendCollector:
-    def __init__(self):
-        self.messages = []
-
-    async def __call__(self, message):
-        self.messages.append(message)
-
-    @property
-    def status(self):
-        return self.messages[0]["status"]
-
-    @property
-    def body(self):
-        return b"".join(m.get("body", b"") for m in self.messages[1:])
-
-
-def http_scope(path, headers=None):
-    return {
-        "type": "http",
-        "path": path,
-        "headers": headers or [],
-    }
+    return counter("purdue_af_mcp_api_calls_total", route=route, status=status)
 
 
 async def test_metrics_endpoint_returns_prometheus_format():
@@ -64,12 +28,7 @@ async def test_metrics_endpoint_returns_prometheus_format():
     assert _counter_value("metrics", "200") == before + 1
 
 
-async def test_mcp_request_increments_api_call_counter(monkeypatch):
-    async def accept(token):
-        return AccessToken(token="t", client_id="alice", scopes=[])
-
-    monkeypatch.setattr(server, "verify_token", accept)
-
+async def test_mcp_request_increments_api_call_counter(accept_token):
     class Inner:
         calls = 0
 
@@ -95,18 +54,6 @@ async def test_mcp_request_increments_api_call_counter(monkeypatch):
     assert _counter_value("mcp", "200") == before + 1
 
 
-async def test_unauthorized_mcp_request_records_401(monkeypatch):
-    before = _counter_value("mcp", "401")
-    send = SendCollector()
-
-    await server._AuthMiddleware((lambda *a: None))(
-        http_scope(f"{server.SERVICE_PREFIX}/mcp"), noop_receive, send
-    )
-
-    assert send.status == 401
-    assert _counter_value("mcp", "401") == before + 1
-
-
 def test_record_request_increments_counter():
     before = _counter_value("other", "418")
     metrics.record_request("other", 418)
@@ -117,22 +64,13 @@ def test_record_request_increments_counter():
 
 
 def _tool_counter_value(tool: str, outcome: str, username: str = "unknown") -> float:
-    return (
-        REGISTRY.get_sample_value(
-            "purdue_af_mcp_tool_calls_total",
-            {"tool": tool, "outcome": outcome, "username": username},
-        )
-        or 0.0
+    return counter(
+        "purdue_af_mcp_tool_calls_total", tool=tool, outcome=outcome, username=username
     )
 
 
 def _tool_duration_count(tool: str) -> float:
-    return (
-        REGISTRY.get_sample_value(
-            "purdue_af_mcp_tool_duration_seconds_count", {"tool": tool}
-        )
-        or 0.0
-    )
+    return counter("purdue_af_mcp_tool_duration_seconds_count", tool=tool)
 
 
 def _instrumented():
@@ -193,11 +131,8 @@ async def test_instrumented_tool_records_username_from_context():
         return "you"
 
     before = _tool_counter_value("whoami", "success", username="alice")
-    ctx_token = current_user.set({"username": "alice"})
-    try:
+    with as_user(username="alice"):
         await mcp.call_tool("whoami", {})
-    finally:
-        current_user.reset(ctx_token)
 
     assert _tool_counter_value("whoami", "success", username="alice") == before + 1
 
@@ -250,12 +185,8 @@ async def test_instrumented_tool_records_exception():
 
 
 def _upstream_counter_value(target: str, outcome: str) -> float:
-    return (
-        REGISTRY.get_sample_value(
-            "purdue_af_mcp_upstream_requests_total",
-            {"target": target, "outcome": outcome},
-        )
-        or 0.0
+    return counter(
+        "purdue_af_mcp_upstream_requests_total", target=target, outcome=outcome
     )
 
 

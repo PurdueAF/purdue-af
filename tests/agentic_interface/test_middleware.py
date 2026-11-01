@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 import server
+from agentic_helpers import SendCollector, counter, http_scope, noop_receive
 from context import current_user
 
 PREFIX = server.SERVICE_PREFIX  # /services/agentic-interface (default)
@@ -24,34 +25,6 @@ class RecordingApp:
         self.user_during_request = current_user.get(None)
         await send({"type": "http.response.start", "status": 200, "headers": []})
         await send({"type": "http.response.body", "body": b"inner"})
-
-
-class SendCollector:
-    def __init__(self):
-        self.messages = []
-
-    async def __call__(self, message):
-        self.messages.append(message)
-
-    @property
-    def status(self):
-        return self.messages[0]["status"]
-
-    @property
-    def body(self):
-        return b"".join(m.get("body", b"") for m in self.messages[1:])
-
-
-async def noop_receive():  # pragma: no cover - never awaited in these tests
-    return {"type": "http.request"}
-
-
-def http_scope(path, headers=None):
-    return {
-        "type": "http",
-        "path": path,
-        "headers": headers or [],
-    }
 
 
 def bearer(token):
@@ -81,22 +54,13 @@ async def test_prefixed_health_is_unauthenticated():
     assert send.status == 200
 
 
-async def test_unknown_path_is_404():
+async def test_unknown_path_is_404_and_names_the_endpoint():
     send = SendCollector()
     await server._AuthMiddleware(RecordingApp())(
         http_scope("/anything-else"), noop_receive, send
     )
     assert send.status == 404
-
-
-async def test_unprefixed_metrics_is_served():
-    # Prometheus scrapes the pod directly at the unprefixed path.
-    send = SendCollector()
-    await server._AuthMiddleware(RecordingApp())(
-        http_scope("/metrics"), noop_receive, send
-    )
-    assert send.status == 200
-    assert b"purdue_af_mcp_api_calls_total" in send.body
+    assert _body(send)["hint"] == f"The MCP endpoint is {PREFIX}/mcp."
 
 
 async def test_prefixed_metrics_is_404():
@@ -113,22 +77,26 @@ async def test_prefixed_metrics_is_404():
     assert inner.calls == 0
 
 
-async def test_missing_token_is_401():
+async def test_missing_token_is_401_with_a_hint_and_a_bare_challenge():
     inner = RecordingApp()
     send = SendCollector()
+    before = _api_calls("401")
 
     await server._AuthMiddleware(inner)(http_scope(f"{PREFIX}/mcp"), noop_receive, send)
 
     assert send.status == 401
-    assert json.loads(send.body)["error"] == "Missing Bearer token"
+    body = _body(send)
+    assert body["error"] == "Missing Bearer token"
+    assert "/hub/token" in body["hint"]
+    assert (
+        _headers(send)["www-authenticate"]
+        == 'Bearer realm="purdue-af-agentic-interface"'
+    )
     assert inner.calls == 0
+    assert _api_calls("401") == before + 1
 
 
-async def test_invalid_token_is_401(monkeypatch):
-    async def reject(token):
-        return None
-
-    monkeypatch.setattr(server, "verify_token", reject)
+async def test_invalid_token_is_401_and_says_how_to_recover(accept_token):
     inner = RecordingApp()
     send = SendCollector()
 
@@ -137,24 +105,17 @@ async def test_invalid_token_is_401(monkeypatch):
     )
 
     assert send.status == 401
-    assert json.loads(send.body)["error"] == "Invalid JupyterHub token"
+    body = _body(send)
+    assert body["error"] == "Invalid JupyterHub token"
+    assert "/hub/token" in body["hint"]
+    assert "JUPYTERHUB_API_TOKEN" in body["hint"]
+    challenge = _headers(send)["www-authenticate"]
+    assert 'error="invalid_token"' in challenge
+    assert "error_description=" in challenge
     assert inner.calls == 0
 
 
-@pytest.fixture
-def accept_alice(monkeypatch):
-    from mcp.server.auth.provider import AccessToken
-
-    user = {"username": "alice", "namespace": server.NAMESPACE, "token": "t"}
-
-    async def accept(token):
-        return AccessToken(token="t", client_id="alice", scopes=[])
-
-    monkeypatch.setattr(server, "verify_token", accept)
-    return user
-
-
-async def test_valid_token_reaches_inner_app(accept_alice):
+async def test_valid_token_reaches_inner_app(accept_token):
     inner = RecordingApp()
     send = SendCollector()
 
@@ -166,7 +127,7 @@ async def test_valid_token_reaches_inner_app(accept_alice):
     assert send.status == 200
 
 
-async def test_user_context_is_bound_during_request_and_reset_after(accept_alice):
+async def test_user_context_is_bound_during_request_and_reset_after(accept_token):
     inner = RecordingApp()
 
     await server._AuthMiddleware(inner)(
@@ -175,11 +136,11 @@ async def test_user_context_is_bound_during_request_and_reset_after(accept_alice
         SendCollector(),
     )
 
-    assert inner.user_during_request == accept_alice
+    assert inner.user_during_request == accept_token
     assert current_user.get(None) is None  # reset once the request is done
 
 
-async def test_host_header_is_rewritten_for_dns_rebinding_protection(accept_alice):
+async def test_host_header_is_rewritten_for_dns_rebinding_protection(accept_token):
     inner = RecordingApp()
 
     await server._AuthMiddleware(inner)(
@@ -239,26 +200,16 @@ def _body(send):
     return json.loads(send.body)
 
 
+def _api_calls(status):
+    return counter("purdue_af_mcp_api_calls_total", route="mcp", status=status)
+
+
 @pytest.fixture
 def never_resolve(monkeypatch):
     verify = AsyncMock()
     monkeypatch.setattr(server, "verify_token", verify)
     yield
     verify.assert_not_awaited()
-
-
-async def test_missing_token_carries_a_hint_and_a_bare_challenge():
-    send = SendCollector()
-    await server._AuthMiddleware(RecordingApp())(
-        http_scope(f"{PREFIX}/mcp"), noop_receive, send
-    )
-    body = _body(send)
-    assert body["error"] == "Missing Bearer token"
-    assert "/hub/token" in body["hint"]
-    assert (
-        _headers(send)["www-authenticate"]
-        == 'Bearer realm="purdue-af-agentic-interface"'
-    )
 
 
 async def test_empty_token_is_diagnosed_without_asking_the_hub(never_resolve):
@@ -316,7 +267,7 @@ async def test_wrong_scheme_is_diagnosed(never_resolve):
     assert "'token'" in body["hint"]
 
 
-async def test_bearer_scheme_is_case_insensitive(accept_alice):
+async def test_bearer_scheme_is_case_insensitive(accept_token):
     inner = RecordingApp()
     headers = [(b"authorization", b"bearer good"), (b"host", b"hub:9999")]
     await server._AuthMiddleware(inner)(
@@ -325,42 +276,14 @@ async def test_bearer_scheme_is_case_insensitive(accept_alice):
     assert inner.calls == 1
 
 
-async def test_invalid_token_hint_says_how_to_recover(monkeypatch):
-    async def reject(token):
-        return None
-
-    monkeypatch.setattr(server, "verify_token", reject)
-    send = SendCollector()
-    await server._AuthMiddleware(RecordingApp())(
-        http_scope(f"{PREFIX}/mcp", headers=bearer("bad")), noop_receive, send
-    )
-    body = _body(send)
-    assert body["error"] == "Invalid JupyterHub token"
-    assert "/hub/token" in body["hint"]
-    assert "JUPYTERHUB_API_TOKEN" in body["hint"]
-    challenge = _headers(send)["www-authenticate"]
-    assert 'error="invalid_token"' in challenge
-    assert "error_description=" in challenge
-
-
 async def test_hub_unavailable_is_503_not_401(monkeypatch):
     from auth import HubUnavailable
-    from prometheus_client import REGISTRY
 
     async def down(token):
         raise HubUnavailable("JupyterHub API unreachable — connection refused")
 
     monkeypatch.setattr(server, "verify_token", down)
-
-    def counter():
-        return (
-            REGISTRY.get_sample_value(
-                "purdue_af_mcp_api_calls_total", {"route": "mcp", "status": "503"}
-            )
-            or 0.0
-        )
-
-    before = counter()
+    before = _api_calls("503")
     inner = RecordingApp()
     send = SendCollector()
     await server._AuthMiddleware(inner)(
@@ -376,15 +299,7 @@ async def test_hub_unavailable_is_503_not_401(monkeypatch):
     assert headers["retry-after"] == "10"
     assert "www-authenticate" not in headers
     assert inner.calls == 0
-    assert counter() == before + 1
-
-
-async def test_unknown_path_hint_names_the_endpoint():
-    send = SendCollector()
-    await server._AuthMiddleware(RecordingApp())(
-        http_scope("/nope"), noop_receive, send
-    )
-    assert _body(send)["hint"] == f"The MCP endpoint is {PREFIX}/mcp."
+    assert _api_calls("503") == before + 1
 
 
 # ── process entry point ───────────────────────────────────────────────────────

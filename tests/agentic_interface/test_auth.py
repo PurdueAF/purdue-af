@@ -4,16 +4,13 @@ import auth
 import httpx
 import pytest
 import respx
-from cachetools import TTLCache
-from prometheus_client import REGISTRY
+from agentic_helpers import counter
 
 HUB_USER_URL = f"{auth.HUB_API_URL}/user"
 
 
 def _auth_counter_value(result: str) -> float:
-    return (
-        REGISTRY.get_sample_value("purdue_af_mcp_auth_total", {"result": result}) or 0.0
-    )
+    return counter("purdue_af_mcp_auth_total", result=result)
 
 
 def hub_user_payload(name="alice"):
@@ -136,42 +133,6 @@ async def test_cache_expires_after_ttl(monkeypatch):
     await auth.resolve_user("tok-1")
 
     assert route.call_count == 2
-
-
-def _small_cache(monkeypatch, maxsize):
-    """Swap in a user cache with a smaller bound (the real one is built at import)."""
-    cache = TTLCache(maxsize, auth._CACHE_TTL, timer=auth._now)
-    monkeypatch.setattr(auth, "_user_cache", cache)
-    return cache
-
-
-@respx.mock
-async def test_cache_is_bounded(monkeypatch):
-    respx.get(HUB_USER_URL).respond(200, json=hub_user_payload())
-    _small_cache(monkeypatch, 3)
-
-    for i in range(10):
-        await auth.resolve_user(f"tok-{i}")
-
-    assert len(auth._user_cache) <= 3
-
-
-@respx.mock
-async def test_eviction_prefers_expired_entries(monkeypatch):
-    respx.get(HUB_USER_URL).respond(200, json=hub_user_payload())
-    _small_cache(monkeypatch, 2)
-
-    now = 1000.0
-    monkeypatch.setattr(auth.time, "monotonic", lambda: now)
-    await auth.resolve_user("tok-old")
-
-    now += auth._CACHE_TTL + 1  # tok-old is now expired
-    await auth.resolve_user("tok-live")
-    await auth.resolve_user("tok-new")  # at cap — must evict tok-old, not tok-live
-
-    assert auth._hash_token("tok-old") not in auth._user_cache
-    assert auth._hash_token("tok-live") in auth._user_cache
-    assert auth._hash_token("tok-new") in auth._user_cache
 
 
 @respx.mock

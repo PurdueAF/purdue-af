@@ -9,6 +9,7 @@ import json
 
 import httpx
 import server
+from agentic_helpers import STABLE_PROFILE, counter, fake_profiles
 from asgi_lifespan import LifespanManager
 
 EXPECTED_TOOLS = {
@@ -99,18 +100,8 @@ MCP_URL = f"{server.SERVICE_PREFIX}/mcp"
 MCP_HEADERS = {"Accept": "application/json, text/event-stream"}
 
 
-async def test_full_stack_handshake_and_auth(monkeypatch):
+async def test_full_stack_handshake_and_auth(monkeypatch, accept_token):
     """One lifespan (the session manager is single-run), both auth outcomes."""
-
-    from mcp.server.auth.provider import AccessToken
-
-    async def accept(token):
-        if token != "good-token":
-            return None
-        return AccessToken(token=token, client_id="alice", scopes=[])
-
-    monkeypatch.setattr(server, "verify_token", accept)
-
     app = server.build_app()
     async with LifespanManager(app) as manager:
         transport = httpx.ASGITransport(app=manager.app)
@@ -118,7 +109,7 @@ async def test_full_stack_handshake_and_auth(monkeypatch):
             ok = await c.post(
                 MCP_URL,
                 json=initialize_payload(),
-                headers={**MCP_HEADERS, "Authorization": "Bearer good-token"},
+                headers={**MCP_HEADERS, "Authorization": "Bearer good"},
             )
             assert ok.status_code == 200
             assert "purdue-af-agentic-interface" in ok.text  # serverInfo.name
@@ -132,33 +123,9 @@ async def test_full_stack_handshake_and_auth(monkeypatch):
             assert json.loads(denied.text)["error"] == "Invalid JupyterHub token"
 
             # tools/call must increment the tool counter via call_tool instrumentation.
-            from prometheus_client import REGISTRY
-            from tools import profiles
-
-            async def fake_get_profiles():
-                return [
-                    {
-                        "display_name": "Stable",
-                        "slug": "stable",
-                        "default": True,
-                        "description": "",
-                        "options": {},
-                    }
-                ]
-
-            monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
-
-            before = (
-                REGISTRY.get_sample_value(
-                    "purdue_af_mcp_tool_calls_total",
-                    {
-                        "tool": "list_af_profiles",
-                        "outcome": "success",
-                        "username": "alice",
-                    },
-                )
-                or 0
-            )
+            fake_profiles(monkeypatch, STABLE_PROFILE)
+            success = dict(tool="list_af_profiles", outcome="success", username="alice")
+            before = counter("purdue_af_mcp_tool_calls_total", **success)
             tool_resp = await c.post(
                 MCP_URL,
                 json={
@@ -167,21 +134,10 @@ async def test_full_stack_handshake_and_auth(monkeypatch):
                     "method": "tools/call",
                     "params": {"name": "list_af_profiles", "arguments": {}},
                 },
-                headers={**MCP_HEADERS, "Authorization": "Bearer good-token"},
+                headers={**MCP_HEADERS, "Authorization": "Bearer good"},
             )
             assert tool_resp.status_code == 200
-            after = (
-                REGISTRY.get_sample_value(
-                    "purdue_af_mcp_tool_calls_total",
-                    {
-                        "tool": "list_af_profiles",
-                        "outcome": "success",
-                        "username": "alice",
-                    },
-                )
-                or 0
-            )
-            assert after == before + 1
+            assert counter("purdue_af_mcp_tool_calls_total", **success) == before + 1
 
 
 # ── a declined elicitation must still be readable by the agent ────────────────

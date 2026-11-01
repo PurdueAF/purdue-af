@@ -3,32 +3,22 @@
 import json
 import types
 
+import httpx
 import pytest
 import respx
-from agentic_helpers import failure, needs_choices, register_tools
+from agentic_helpers import (
+    STABLE_PROFILE,
+    FakeCtx,
+    failure,
+    fake_profiles,
+    needs_choices,
+    register_tools,
+)
+from httpx import ConnectError
 from tools import profiles, session
 
 USER_URL = f"{session.HUB_API_URL}/users/alice"
 SERVER_URL = f"{session.HUB_API_URL}/users/alice/server"
-
-
-class _Result:
-    def __init__(self, action, data=None):
-        self.action = action
-        self.data = data
-
-
-class FakeCtx:
-    """Stand-in for the MCP SDK Context; scripts elicit() responses in order."""
-
-    def __init__(self, *responses):
-        self._responses = list(responses)
-        self.calls = []
-
-    async def elicit(self, message, schema):
-        self.calls.append((message, schema))
-        action, data = self._responses.pop(0)  # IndexError: unexpected elicit
-        return _Result(action, data)
 
 
 def accept(**kwargs):
@@ -48,93 +38,42 @@ def server_payload(ready=True, options=None, pending=None):
     }
 
 
-def fake_profiles(monkeypatch):
-    parsed = [
-        {
-            "display_name": "Stable",
-            "slug": "stable",
-            "default": True,
-            "description": "",
-            "options": {},
-        }
-    ]
-
-    async def fake_get_profiles():
-        return parsed
-
-    monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
-    return parsed
-
-
-_STABLE_OPTIONS = {
-    "3-interface": {
-        "display_name": "Interface",
-        "choices": {"1": "JupyterLab (default)", "2": "VS Code"},
-    },
-    "0-cpu": {
-        "display_name": "CPU cores",
-        "choices": {"1": "1 (default)", "2": "4", "3": "8"},
+WITH_OPTIONS = {
+    **STABLE_PROFILE,
+    "options": {
+        "3-interface": {
+            "display_name": "Interface",
+            "choices": {"1": "JupyterLab (default)", "2": "VS Code"},
+        },
+        "0-cpu": {
+            "display_name": "CPU cores",
+            "choices": {"1": "1 (default)", "2": "4", "3": "8"},
+        },
     },
 }
-
-
-def fake_profiles_with_options(monkeypatch, *, multi=False):
-    parsed = [
-        {
-            "display_name": "Stable",
-            "slug": "stable",
-            "default": True,
-            "description": "",
-            "options": _STABLE_OPTIONS,
-        }
-    ]
-    if multi:
-        parsed.append(
-            {
-                "display_name": "Pre-release",
-                "slug": "pre-release",
-                "default": False,
-                "description": "",
-                "options": {},
-            }
-        )
-
-    async def fake_get_profiles():
-        return parsed
-
-    monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
-    return parsed
-
-
-def fake_profiles_gpu(monkeypatch):
-    parsed = [
-        {
-            "display_name": "Stable",
-            "slug": "stable",
-            "default": True,
-            "description": "",
-            "options": {
-                "1-gpu": {
-                    "display_name": "GPUs",
-                    "choices": {
-                        "1": "0",
-                        "2": "1 A100 GPU slice (5GB)",
-                        "3": "1 full A100 GPU (40GB) - subject to availability",
-                    },
-                    "gpu": {
-                        "2": "nvidia.com/mig-1g.5gb",
-                        "3": "nvidia.com/mig-7g.40gb",
-                    },
-                }
+PRE_RELEASE = {
+    **STABLE_PROFILE,
+    "display_name": "Pre-release",
+    "slug": "pre-release",
+    "default": False,
+}
+WITH_GPUS = {
+    **STABLE_PROFILE,
+    "options": {
+        "1-gpu": {
+            "display_name": "GPUs",
+            "choices": {
+                "1": "0",
+                "2": "1 A100 GPU slice (5GB)",
+                "3": "1 full A100 GPU (40GB) - subject to availability",
+            },
+            "gpu": {
+                "2": "nvidia.com/mig-1g.5gb",
+                "3": "nvidia.com/mig-7g.40gb",
             },
         }
-    ]
-
-    async def fake_get_profiles():
-        return parsed
-
-    monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
-    return parsed
+    },
+}
 
 
 # ── get_session_status ────────────────────────────────────────────────────────
@@ -142,7 +81,7 @@ def fake_profiles_gpu(monkeypatch):
 
 @respx.mock
 async def test_status_no_session(user_ctx):
-    respx.get(USER_URL).respond(200, json={"servers": {}})
+    respx.get(USER_URL).respond(200, json={"name": "alice", "servers": {}})
 
     tools = register_tools(session).tools
     out = await tools["get_session_status"]()
@@ -168,34 +107,11 @@ async def test_status_running_with_jupyterlab_active(user_ctx):
     assert "0-cpu: 1" in out
 
 
+@pytest.mark.parametrize("key", ["3-interface", "4-interface", "interface"])
 @respx.mock
-async def test_status_vscode_active_marker(user_ctx):
-    respx.get(USER_URL).respond(200, json=server_payload(options={"3-interface": "2"}))
-
-    tools = register_tools(session).tools
-    out = await tools["get_session_status"]()
-
-    vscode_line = next(line for line in out.splitlines() if "VS Code" in line)
-    assert "← active" in vscode_line
-
-
-@respx.mock
-async def test_status_interface_scan_survives_renumbering(user_ctx):
-    """The interface key is found by scanning ("*-interface"), not hardcoded —
-    profile renumbering (e.g. "4-interface") must still mark VS Code active."""
-    respx.get(USER_URL).respond(200, json=server_payload(options={"4-interface": "2"}))
-
-    tools = register_tools(session).tools
-    out = await tools["get_session_status"]()
-
-    vscode_line = next(line for line in out.splitlines() if "VS Code" in line)
-    assert "← active" in vscode_line
-
-
-@respx.mock
-async def test_status_bare_interface_key(user_ctx):
+async def test_status_vscode_active_marker(user_ctx, key):
     respx.get(USER_URL).respond(
-        200, json=server_payload(options={"0-cpu": "1", "interface": "2"})
+        200, json=server_payload(options={"0-cpu": "1", key: "2"})
     )
 
     tools = register_tools(session).tools
@@ -212,15 +128,6 @@ async def test_status_pending(user_ctx):
     tools = register_tools(session).tools
     out = await tools["get_session_status"]()
     assert "pending (spawn)" in out
-
-
-@respx.mock
-async def test_status_api_error(user_ctx):
-    respx.get(USER_URL).respond(500)
-
-    tools = register_tools(session).tools
-    out = await failure(tools["get_session_status"]())
-    assert "HTTP 500" in out
 
 
 # ── start_af_session ──────────────────────────────────────────────────────────
@@ -240,7 +147,7 @@ async def test_start_session(user_ctx):
 
 @respx.mock
 async def test_start_with_profile_and_options(user_ctx, monkeypatch):
-    fake_profiles(monkeypatch)
+    fake_profiles(monkeypatch, STABLE_PROFILE)
     route = respx.post(SERVER_URL).respond(201)
 
     tools = register_tools(session).tools
@@ -253,7 +160,7 @@ async def test_start_with_profile_and_options(user_ctx, monkeypatch):
 
 
 async def test_start_unknown_profile(user_ctx, monkeypatch):
-    fake_profiles(monkeypatch)
+    fake_profiles(monkeypatch, STABLE_PROFILE)
 
     tools = register_tools(session).tools
     out = await failure(tools["start_af_session"](FakeCtx(), profile_name="ghost"))
@@ -271,21 +178,12 @@ async def test_start_already_running(user_ctx):
     assert "already running" in out
 
 
-@respx.mock
-async def test_start_rejected_options_not_masked(user_ctx):
-    respx.post(SERVER_URL).respond(400, text="Invalid profile option 'x'")
-
-    tools = register_tools(session).tools
-    out = await failure(tools["start_af_session"](FakeCtx()))
-    assert "rejected the spawn request" in out
-
-
 # ── start_af_session: elicitation flows ───────────────────────────────────────
 
 
 @respx.mock
 async def test_start_elicits_profile_and_options(user_ctx, monkeypatch):
-    fake_profiles_with_options(monkeypatch, multi=True)
+    fake_profiles(monkeypatch, WITH_OPTIONS, PRE_RELEASE)
     route = respx.post(SERVER_URL).respond(201)
 
     ctx = FakeCtx(
@@ -304,7 +202,7 @@ async def test_start_elicits_profile_and_options(user_ctx, monkeypatch):
 
 @respx.mock
 async def test_start_single_profile_skips_profile_question(user_ctx, monkeypatch):
-    fake_profiles_with_options(monkeypatch, multi=False)
+    fake_profiles(monkeypatch, WITH_OPTIONS)
     route = respx.post(SERVER_URL).respond(201)
 
     ctx = FakeCtx(
@@ -321,7 +219,7 @@ async def test_start_single_profile_skips_profile_question(user_ctx, monkeypatch
 
 @respx.mock
 async def test_start_only_elicits_missing_options(user_ctx, monkeypatch):
-    fake_profiles_with_options(monkeypatch, multi=False)
+    fake_profiles(monkeypatch, WITH_OPTIONS)
     route = respx.post(SERVER_URL).respond(201)
 
     ctx = FakeCtx(accept(value="3"))  # only cpu asked; interface pre-supplied
@@ -337,7 +235,7 @@ async def test_start_only_elicits_missing_options(user_ctx, monkeypatch):
 
 @respx.mock
 async def test_start_use_defaults_skips_elicitation(user_ctx, monkeypatch):
-    fake_profiles_with_options(monkeypatch, multi=True)
+    fake_profiles(monkeypatch, WITH_OPTIONS, PRE_RELEASE)
     route = respx.post(SERVER_URL).respond(201)
 
     tools = register_tools(session).tools
@@ -347,42 +245,38 @@ async def test_start_use_defaults_skips_elicitation(user_ctx, monkeypatch):
     assert body == {"profile": "stable"}
 
 
-async def test_start_unsupported_client_returns_fallback(user_ctx, monkeypatch):
-    fake_profiles_with_options(monkeypatch, multi=True)
-
-    tools = register_tools(session).tools
-    out = await needs_choices(tools["start_af_session"](None))
-    assert "use_defaults=True" in out
-    assert "list_af_profiles" in out
-
-
+@pytest.mark.parametrize(
+    ("answers", "question"),
+    [
+        (None, None),
+        ([("decline", None)], "Choose a session profile."),
+        ([accept(profile="stable"), RuntimeError("boom")], "Interface:"),
+    ],
+    ids=["no-context", "profile", "option"],
+)
 @respx.mock
-async def test_start_cancel_falls_back_not_dead_end(user_ctx, monkeypatch):
-    # A dismissed/cancelled prompt (also happens on a flaky server→client stream)
-    # must NOT dead-end — it returns the actionable fallback so the agent recovers.
-    fake_profiles_with_options(monkeypatch, multi=True)
-
-    ctx = FakeCtx(("cancel", None))
+async def test_start_falls_back_at_every_question(
+    user_ctx, monkeypatch, answers, question
+):
+    fake_profiles(monkeypatch, WITH_OPTIONS, PRE_RELEASE)
+    ctx = answers and FakeCtx(*answers)
     tools = register_tools(session).tools
+
     out = await needs_choices(tools["start_af_session"](ctx))
-    assert "list_af_profiles" in out
+
     assert "use_defaults=True" in out
-
-
-async def test_start_decline_falls_back(user_ctx, monkeypatch):
-    fake_profiles_with_options(monkeypatch, multi=True)
-
-    ctx = FakeCtx(("decline", None))
-    tools = register_tools(session).tools
-    out = await needs_choices(tools["start_af_session"](ctx))
     assert "list_af_profiles" in out
+    assert not respx.calls  # nothing is spawned on a partial set of choices
+    if ctx:
+        assert len(ctx.calls) == len(answers)
+        assert ctx.calls[-1][0] == question
 
 
 @respx.mock
 async def test_start_gpu_question_shows_counts_and_hides_exhausted(
     user_ctx, monkeypatch
 ):
-    fake_profiles_gpu(monkeypatch)
+    fake_profiles(monkeypatch, WITH_GPUS)
 
     async def fake_free():
         return {"nvidia.com/mig-1g.5gb": 3, "nvidia.com/mig-7g.40gb": 0}
@@ -407,7 +301,7 @@ async def test_start_gpu_question_shows_counts_and_hides_exhausted(
 
 @respx.mock
 async def test_start_gpu_question_unknown_keeps_all(user_ctx, monkeypatch):
-    fake_profiles_gpu(monkeypatch)
+    fake_profiles(monkeypatch, WITH_GPUS)
 
     async def fake_free():
         return None  # Prometheus unreachable → fail open
@@ -504,12 +398,7 @@ async def test_wait_timeout_is_clamped_to_600s(user_ctx, monkeypatch):
 
 
 @respx.mock
-async def test_restart_reuses_prior_options(user_ctx, monkeypatch):
-    async def no_sleep(_):
-        return None
-
-    monkeypatch.setattr(session.asyncio, "sleep", no_sleep)
-
+async def test_restart_reuses_prior_options(user_ctx, no_sleep):
     respx.get(USER_URL).respond(
         200, json=server_payload(options={"0-cpu": "2", "profile": "stable"})
     )
@@ -525,12 +414,7 @@ async def test_restart_reuses_prior_options(user_ctx, monkeypatch):
 
 
 @respx.mock
-async def test_restart_overrides_take_precedence(user_ctx, monkeypatch):
-    async def no_sleep(_):
-        return None
-
-    monkeypatch.setattr(session.asyncio, "sleep", no_sleep)
-
+async def test_restart_overrides_take_precedence(user_ctx, no_sleep):
     respx.get(USER_URL).respond(200, json=server_payload(options={"0-cpu": "2"}))
     respx.delete(SERVER_URL).respond(204)
     start_route = respx.post(SERVER_URL).respond(201)
@@ -554,12 +438,7 @@ async def test_restart_when_not_running_starts_fresh(user_ctx):
 
 
 @respx.mock
-async def test_restart_pod_still_terminating(user_ctx, monkeypatch):
-    async def no_sleep(_):
-        return None
-
-    monkeypatch.setattr(session.asyncio, "sleep", no_sleep)
-
+async def test_restart_pod_still_terminating(user_ctx, no_sleep):
     respx.get(USER_URL).respond(200, json=server_payload())
     respx.delete(SERVER_URL).respond(204)
     respx.post(SERVER_URL).respond(400, text="pod still terminating")
@@ -589,8 +468,6 @@ def test_default_profile_helpers():
 
 @respx.mock
 async def test_status_hub_unreachable(user_ctx):
-    from httpx import ConnectError
-
     respx.get(USER_URL).mock(side_effect=ConnectError("down"))
     tools = register_tools(session).tools
     assert "unreachable" in await failure(tools["get_session_status"]())
@@ -598,12 +475,10 @@ async def test_status_hub_unreachable(user_ctx):
 
 @respx.mock
 async def test_start_skips_empty_choices_and_option_cancel(user_ctx, monkeypatch):
-    parsed = [
+    fake_profiles(
+        monkeypatch,
         {
-            "display_name": "Stable",
-            "slug": "stable",
-            "default": True,
-            "description": "",
+            **STABLE_PROFILE,
             "options": {
                 "empty": {"display_name": "Empty", "choices": {}},
                 "0-cpu": {
@@ -611,25 +486,19 @@ async def test_start_skips_empty_choices_and_option_cancel(user_ctx, monkeypatch
                     "choices": {"1": "1 (default)", "2": "4"},
                 },
             },
-        }
-    ]
-
-    async def fake_get_profiles():
-        return parsed
-
-    monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
+        },
+    )
 
     tools = register_tools(session).tools
     ctx = FakeCtx(("cancel", None))
     out = await needs_choices(tools["start_af_session"](ctx))
     assert "list_af_profiles" in out  # option cancel → fallback
     assert len(ctx.calls) == 1  # empty choices skipped; only cpu asked
+    assert ctx.calls[0][0] == "CPU cores:"
 
 
 @respx.mock
 async def test_start_hub_unreachable_and_status_codes(user_ctx):
-    from httpx import ConnectError
-
     tools = register_tools(session).tools
     respx.post(SERVER_URL).mock(side_effect=ConnectError("down"))
     assert "unreachable" in await failure(tools["start_af_session"](FakeCtx()))
@@ -646,8 +515,6 @@ async def test_start_hub_unreachable_and_status_codes(user_ctx):
 
 @respx.mock
 async def test_stop_unreachable_and_http_error(user_ctx):
-    from httpx import ConnectError
-
     tools = register_tools(session).tools
     respx.delete(SERVER_URL).mock(side_effect=ConnectError("down"))
     assert "unreachable" in await failure(tools["stop_af_session"]())
@@ -657,19 +524,10 @@ async def test_stop_unreachable_and_http_error(user_ctx):
 
 
 @respx.mock
-async def test_wait_retries_through_transient_errors(user_ctx, monkeypatch):
-    from httpx import ConnectError
-
-    async def no_sleep(_):
-        return None
-
-    monkeypatch.setattr(session.asyncio, "sleep", no_sleep)
-
+async def test_wait_retries_through_transient_errors(user_ctx, no_sleep):
     calls = {"n": 0}
 
     def responder(_request):
-        import httpx
-
         calls["n"] += 1
         if calls["n"] == 1:
             raise ConnectError("blip")
@@ -683,13 +541,7 @@ async def test_wait_retries_through_transient_errors(user_ctx, monkeypatch):
 
 
 @respx.mock
-async def test_restart_error_paths(user_ctx, monkeypatch):
-    from httpx import ConnectError
-
-    async def no_sleep(_):
-        return None
-
-    monkeypatch.setattr(session.asyncio, "sleep", no_sleep)
+async def test_restart_error_paths(user_ctx, monkeypatch, no_sleep):
     tools = register_tools(session).tools
 
     # prior-options fetch fails → still restarts with empty opts
@@ -700,10 +552,7 @@ async def test_restart_error_paths(user_ctx, monkeypatch):
     assert "default options" in out
 
     # unknown profile
-    async def fake_get_profiles():
-        return [{"slug": "stable", "display_name": "Stable", "default": True}]
-
-    monkeypatch.setattr(profiles, "get_profiles", fake_get_profiles)
+    fake_profiles(monkeypatch, STABLE_PROFILE)
     respx.get(USER_URL).respond(200, json=server_payload())
     out = await failure(tools["restart_af_session"](profile_name="ghost"))
     assert "Unknown profile" in out
@@ -737,10 +586,7 @@ async def test_restart_error_paths(user_ctx, monkeypatch):
 
 @respx.mock
 async def test_restart_unknown_profile_when_list_empty(user_ctx, monkeypatch):
-    async def empty_profiles():
-        return []
-
-    monkeypatch.setattr(profiles, "get_profiles", empty_profiles)
+    fake_profiles(monkeypatch)
     respx.get(USER_URL).respond(200, json=server_payload())
     tools = register_tools(session).tools
     out = await failure(tools["restart_af_session"](profile_name="ghost"))
@@ -749,12 +595,8 @@ async def test_restart_unknown_profile_when_list_empty(user_ctx, monkeypatch):
 
 
 @respx.mock
-async def test_restart_with_named_profile(user_ctx, monkeypatch):
-    async def no_sleep(_):
-        return None
-
-    monkeypatch.setattr(session.asyncio, "sleep", no_sleep)
-    fake_profiles(monkeypatch)
+async def test_restart_with_named_profile(user_ctx, monkeypatch, no_sleep):
+    fake_profiles(monkeypatch, STABLE_PROFILE)
 
     respx.get(USER_URL).respond(200, json=server_payload(options={"0-cpu": "1"}))
     respx.delete(SERVER_URL).respond(204)
@@ -779,34 +621,14 @@ def test_missing_servers_key_is_unknown_not_absent():
     assert session._servers({"servers": {"": {"ready": True}}}) == {"": {"ready": True}}
 
 
-@pytest.mark.asyncio
+@respx.mock
 async def test_status_never_claims_no_session_when_it_cannot_see(user_ctx):
     """A singleuser server token's user model has no `servers` key; that is
     unknown, not "no active session"."""
-    from httpx import Response
-
-    tools = register_tools(session)
-    with respx.mock:
-        respx.get(USER_URL).mock(
-            return_value=Response(200, json={"name": "alice", "kind": "user"})
-        )
-        out = await failure(tools.tools["get_session_status"]())
+    respx.get(USER_URL).respond(200, json={"name": "alice", "kind": "user"})
+    out = await failure(register_tools(session).tools["get_session_status"]())
     assert "No active session" not in out
     assert "cannot tell" in out.lower() or "cannot read" in out.lower()
-
-
-@pytest.mark.asyncio
-async def test_status_still_reports_a_genuinely_stopped_session(user_ctx):
-    """The permission fix must not hide a real "you have no session"."""
-    from httpx import Response
-
-    tools = register_tools(session)
-    with respx.mock:
-        respx.get(USER_URL).mock(
-            return_value=Response(200, json={"name": "alice", "servers": {}})
-        )
-        out = await tools.tools["get_session_status"]()
-    assert "No active session" in out
 
 
 # ── failure translation ───────────────────────────────────────────────────────
@@ -836,8 +658,12 @@ async def test_status_403_explains_token_permissions(user_ctx):
 
 @respx.mock
 async def test_status_5xx_carries_reason_and_retry_advice(user_ctx):
+    tools = register_tools(session).tools
+    respx.get(USER_URL).respond(500)
+    assert "HTTP 500" in await failure(tools["get_session_status"]())
+
     respx.get(USER_URL).respond(502, text="<html><body>Bad Gateway</body></html>")
-    out = await failure(register_tools(session).tools["get_session_status"]())
+    out = await failure(tools["get_session_status"]())
     assert (
         "returned HTTP 502 while trying to read the session state (it is down or "
         "restarting behind its proxy) — Bad Gateway" in out
@@ -871,10 +697,7 @@ async def test_start_403_and_rejected_options_are_explained(user_ctx):
 
 @pytest.fixture
 def no_profile_list(monkeypatch):
-    async def none():
-        return []
-
-    monkeypatch.setattr(profiles, "get_profiles", none)
+    fake_profiles(monkeypatch)
     monkeypatch.setattr(
         profiles,
         "profiles_error",
@@ -974,8 +797,6 @@ async def test_wait_detects_a_failed_or_never_started_spawn(user_ctx, monkeypatc
 @respx.mock
 async def test_wait_tolerates_a_single_empty_look(user_ctx, monkeypatch):
     """One empty answer can be a race with the Hub; the second is conclusive."""
-    import httpx
-
     _fake_clock(monkeypatch)
     calls = {"n": 0}
 
@@ -1002,9 +823,6 @@ async def test_wait_stops_when_session_is_stopping(user_ctx, monkeypatch):
 
 @respx.mock
 async def test_wait_timeout_reports_what_it_saw(user_ctx, monkeypatch):
-    import httpx
-    from httpx import ConnectError
-
     _fake_clock(monkeypatch)
     calls = {"n": 0}
 
@@ -1024,11 +842,7 @@ async def test_wait_timeout_reports_what_it_saw(user_ctx, monkeypatch):
 
 
 @respx.mock
-async def test_restart_reports_unreadable_prior_options(user_ctx, monkeypatch):
-    async def no_sleep(_):
-        return None
-
-    monkeypatch.setattr(session.asyncio, "sleep", no_sleep)
+async def test_restart_reports_unreadable_prior_options(user_ctx, no_sleep):
     respx.get(USER_URL).respond(500)
     respx.delete(SERVER_URL).respond(204)
     respx.post(SERVER_URL).respond(201)
@@ -1047,11 +861,7 @@ async def test_restart_403_on_read_does_not_stop_the_session(user_ctx):
 
 
 @respx.mock
-async def test_restart_rejected_options_after_stop_are_explained(user_ctx, monkeypatch):
-    async def no_sleep(_):
-        return None
-
-    monkeypatch.setattr(session.asyncio, "sleep", no_sleep)
+async def test_restart_rejected_options_after_stop_are_explained(user_ctx, no_sleep):
     respx.get(USER_URL).respond(200, json=server_payload())
     respx.delete(SERVER_URL).respond(204)
     respx.post(SERVER_URL).respond(400, json={"message": "Invalid option"})
