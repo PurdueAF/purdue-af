@@ -59,10 +59,12 @@ trap 'rm -rf "$workdir"' EXIT
 failed=0
 releases_seen=0
 
-# Render one Flux environment exactly like kustomize-controller does:
-# LoadRestrictionsNone + non-strict postBuild substitution, honouring the
+# Render one Flux environment like kustomize-controller does:
+# LoadRestrictionsNone + postBuild substitution, honouring the
 # `kustomize.toolkit.fluxcd.io/substitute: disabled` per-resource annotation
-# (used by ConfigMaps that carry shell scripts).
+# (used by ConfigMaps that carry shell scripts). Stricter than the controller,
+# which blanks an undeclared variable. The caller's `if` turns errexit off here,
+# so each step exits by hand.
 SUBST_DISABLED='.metadata.annotations["kustomize.toolkit.fluxcd.io/substitute"] == "disabled"'
 render_env() {
 	local env_dir=$1
@@ -71,8 +73,8 @@ render_env() {
 			export "${key}=${value}"
 		done < <(yq -r '.spec.postBuild.substitute // {} | to_entries[] | .key + "=" + .value' \
 			"${env_dir}flux-kustomization.yaml")
-		kustomize build --load-restrictor LoadRestrictionsNone "$env_dir" >"$workdir/raw.yaml"
-		yq "select(${SUBST_DISABLED} | not)" "$workdir/raw.yaml" | flux envsubst
+		kustomize build --load-restrictor LoadRestrictionsNone "$env_dir" >"$workdir/raw.yaml" || exit 1
+		yq "select(${SUBST_DISABLED} | not)" "$workdir/raw.yaml" | flux envsubst --strict || exit 1
 		echo "---"
 		yq "select(${SUBST_DISABLED})" "$workdir/raw.yaml"
 	)
@@ -315,7 +317,7 @@ for env_dir in flux/*/; do
 	name=$(basename "$env_dir")
 	rendered="$workdir/rendered-${name}.yaml"
 	if ! render_env "$env_dir" >"$rendered"; then
-		echo "✗ ${name}: kustomize build failed" >&2
+		echo "✗ ${name}: render failed" >&2
 		failed=1
 	fi
 done
