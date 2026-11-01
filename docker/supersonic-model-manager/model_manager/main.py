@@ -13,7 +13,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -95,10 +95,6 @@ async def state() -> dict:
     )
     storage = await asyncio.to_thread(repository.storage_usage, pvc_capacity)
 
-    servers = triton_state["servers"]
-    server_names = [s["name"] for s in servers]
-    live_servers = [s["name"] for s in servers if s["live"]]
-
     by_name = {entry.name: entry.to_dict() for entry in models_on_pvc}
     rows = []
     for name in sorted(set(by_name) | set(triton_state["models"]), key=str.lower):
@@ -135,9 +131,7 @@ async def state() -> dict:
                 "modified": pvc_entry["modified"] if pvc_entry else None,
                 "hasConfig": pvc_entry["hasConfig"] if pvc_entry else None,
                 "serverStates": server_states,
-                "loadedOn": sorted(loaded),
                 "loadedCount": len(loaded),
-                "knownToServers": sorted(server_states),
                 "metrics": prom["models"].get(name, {}),
             }
         )
@@ -149,21 +143,16 @@ async def state() -> dict:
         "refreshSeconds": settings.refresh_seconds,
         "maxUploadBytes": settings.max_upload_bytes,
         "storage": storage,
-        "pvcName": settings.pvc_name,
         "inference": inference,
         "grafana": grafana,
-        "servers": servers,
-        "serverNames": server_names,
-        "liveServerCount": len(live_servers),
+        "servers": triton_state["servers"],
         "models": rows,
         "prometheus": {
             "configured": prom.get("configured", False),
-            "url": settings.prometheus_url,
             "window": prom.get("window"),
             "error": prom.get("error"),
         },
         "kubernetes": {
-            "available": kube.api_available(),
             "discovery": settings.triton_discovery,
         },
         "updatedAt": time.time(),
@@ -175,25 +164,20 @@ async def state() -> dict:
 # --------------------------------------------------------------------------
 
 
-async def _control(name: str, action: str, request: Request) -> JSONResponse:
+async def _control(name: str, action: str) -> JSONResponse:
     _require_writable()
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-    servers = body.get("servers") if isinstance(body, dict) else None
-    result = await triton.control_model(name, action, servers)
+    result = await triton.control_model(name, action)
     return JSONResponse(result, status_code=200 if result["ok"] else 502)
 
 
 @app.post("/api/models/{name}/load")
-async def load_model(name: str, request: Request) -> JSONResponse:
-    return await _control(name, "load", request)
+async def load_model(name: str) -> JSONResponse:
+    return await _control(name, "load")
 
 
 @app.post("/api/models/{name}/unload")
-async def unload_model(name: str, request: Request) -> JSONResponse:
-    return await _control(name, "unload", request)
+async def unload_model(name: str) -> JSONResponse:
+    return await _control(name, "unload")
 
 
 @app.delete("/api/models/{name}")
@@ -231,15 +215,12 @@ async def _spool_to_disk(upload: UploadFile, destination: Path, limit: int) -> i
 
 @app.post("/api/upload")
 async def upload(
-    request: Request,
     files: list[UploadFile],
     name: str = Form(""),
     paths: str = Form(""),
     overwrite: bool = Form(False),
 ) -> dict:
     _require_writable()
-    if not files:
-        raise HTTPException(status_code=400, detail="No files were uploaded.")
 
     staging_root = repository.repo_root() / repository.STAGING_DIRNAME
     try:
@@ -328,8 +309,6 @@ async def upload(
         )
     except repository.RepositoryError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    except HTTPException:
-        raise
     except Exception as exc:
         log.exception("Upload failed")
         raise HTTPException(status_code=500, detail=f"Upload failed: {exc}")

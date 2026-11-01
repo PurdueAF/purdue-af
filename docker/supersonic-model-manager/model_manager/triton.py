@@ -22,9 +22,6 @@ _EXPLICIT_HINTS = (
     "not allowed",
 )
 
-# server address -> bool | None (None = not probed yet)
-_control_capability = {}
-
 
 def discover_servers() -> list:
     """Every Triton replica we should talk to."""
@@ -41,9 +38,6 @@ def discover_servers() -> list:
                     "name": address,
                     "address": address,
                     "url": f"http://{address}",
-                    "node": None,
-                    "ready": None,
-                    "phase": None,
                 }
             )
         return servers
@@ -56,9 +50,6 @@ def discover_servers() -> list:
                 "name": pod["name"],
                 "address": address,
                 "url": f"http://{address}",
-                "node": pod["node"],
-                "ready": pod["ready"],
-                "phase": pod["phase"],
             }
         )
     return servers
@@ -92,7 +83,6 @@ async def _repository_index(client: httpx.AsyncClient, server: dict) -> dict:
         ]
     except Exception as exc:
         out["error"] = _short_error(exc)
-    out["controlEnabled"] = _control_capability.get(server["address"])
     return out
 
 
@@ -134,7 +124,6 @@ async def _control_one(
         if response.status_code >= 400:
             message = response.text[:400]
             if any(hint in message.lower() for hint in _EXPLICIT_HINTS):
-                _control_capability[server["address"]] = False
                 return {
                     "server": server["name"],
                     "ok": False,
@@ -147,21 +136,17 @@ async def _control_one(
                 "ok": False,
                 "error": f"HTTP {response.status_code}: {message}",
             }
-        _control_capability[server["address"]] = True
         return {"server": server["name"], "ok": True, "error": None}
     except Exception as exc:
         return {"server": server["name"], "ok": False, "error": _short_error(exc)}
 
 
-async def control_model(model: str, action: str, server_names=None) -> dict:
-    """Load or unload ``model`` on all (or the named) servers."""
+async def control_model(model: str, action: str) -> dict:
+    """Load or unload ``model`` on every server."""
     if action not in ("load", "unload"):
         raise ValueError(f"Unsupported action: {action}")
 
     servers = discover_servers()
-    if server_names:
-        wanted = set(server_names)
-        servers = [s for s in servers if s["name"] in wanted or s["address"] in wanted]
     if not servers:
         return {
             "action": action,

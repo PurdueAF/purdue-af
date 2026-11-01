@@ -5,6 +5,8 @@ supersonicRelease: supersonic-af
 image:
   repository: geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/supersonic-model-manager
   tag: "latest"
+  # The code is in the image, so a restart must fetch the moved tag.
+  pullPolicy: Always
 
 modelRepository:
   # RWX: the manager writes while the Triton pods read.

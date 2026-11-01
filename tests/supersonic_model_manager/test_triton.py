@@ -3,7 +3,7 @@
 import httpx
 import pytest
 import respx
-from model_manager import triton
+from model_manager import kube, triton
 from model_manager.config import settings
 
 SERVERS = ["10.0.0.1:8000", "10.0.0.2:8000"]
@@ -14,9 +14,6 @@ def static_servers(monkeypatch):
     monkeypatch.setattr(settings, "triton_discovery", "static")
     monkeypatch.setattr(settings, "triton_endpoints", list(SERVERS))
     monkeypatch.setattr(settings, "triton_timeout_s", 1)
-    triton._control_capability.clear()
-    yield
-    triton._control_capability.clear()
 
 
 def index_payload(*models):
@@ -37,22 +34,10 @@ def test_discovers_static_endpoints_and_defaults_the_port(monkeypatch):
 
 
 def test_discovers_kubernetes_pods(monkeypatch):
-    from model_manager import kube
-
     monkeypatch.setattr(settings, "triton_discovery", "kubernetes")
     monkeypatch.setattr(settings, "triton_http_port", 8000)
     monkeypatch.setattr(
-        kube,
-        "list_triton_pods",
-        lambda: [
-            {
-                "name": "triton-0",
-                "ip": "10.1.1.2",
-                "node": "n1",
-                "phase": "Running",
-                "ready": True,
-            }
-        ],
+        kube, "list_triton_pods", lambda: [{"name": "triton-0", "ip": "10.1.1.2"}]
     )
 
     assert triton.discover_servers() == [
@@ -60,9 +45,6 @@ def test_discovers_kubernetes_pods(monkeypatch):
             "name": "triton-0",
             "address": "10.1.1.2:8000",
             "url": "http://10.1.1.2:8000",
-            "node": "n1",
-            "ready": True,
-            "phase": "Running",
         }
     ]
 
@@ -128,21 +110,6 @@ async def test_load_fans_out_to_every_server():
 
 
 @respx.mock
-async def test_control_can_target_a_single_server():
-    first = respx.post(f"http://{SERVERS[0]}/v2/repository/models/m/unload").mock(
-        return_value=httpx.Response(200, json={})
-    )
-    second = respx.post(f"http://{SERVERS[1]}/v2/repository/models/m/unload").mock(
-        return_value=httpx.Response(200, json={})
-    )
-
-    result = await triton.control_model("m", "unload", server_names=[SERVERS[0]])
-
-    assert first.called and not second.called
-    assert len(result["results"]) == 1
-
-
-@respx.mock
 async def test_partial_failure_is_not_reported_as_success():
     respx.post(f"http://{SERVERS[0]}/v2/repository/models/m/load").mock(
         return_value=httpx.Response(200, json={})
@@ -174,7 +141,6 @@ async def test_detects_servers_without_explicit_model_control():
     assert result["ok"] is False
     assert all(r.get("controlDisabled") for r in result["results"])
     assert "--model-control-mode=explicit" in result["error"]
-    assert triton._control_capability[SERVERS[0]] is False
 
 
 @respx.mock
@@ -192,30 +158,18 @@ async def test_index_http_error_is_reported_with_its_body():
 
 
 @respx.mock
-async def test_control_capability_is_remembered_per_server():
-    respx.post(f"http://{SERVERS[0]}/v2/repository/models/m/load").mock(
-        return_value=httpx.Response(200, json={})
-    )
-    respx.post(f"http://{SERVERS[0]}/v2/repository/index").mock(
-        return_value=httpx.Response(200, json=[])
-    )
-
-    await triton.control_model("m", "load", server_names=[SERVERS[0]])
-    state = await triton.collect_state()
-
-    assert state["servers"][0]["controlEnabled"] is True
-    assert state["servers"][1]["controlEnabled"] is None
-
-
-@respx.mock
 async def test_unreachable_server_fails_its_control_call():
     respx.post(f"http://{SERVERS[0]}/v2/repository/models/m/unload").mock(
+        return_value=httpx.Response(200, json={})
+    )
+    respx.post(f"http://{SERVERS[1]}/v2/repository/models/m/unload").mock(
         side_effect=httpx.ConnectError("refused")
     )
 
-    result = await triton.control_model("m", "unload", server_names=[SERVERS[0]])
+    result = await triton.control_model("m", "unload")
 
     assert result["ok"] is False
+    assert [r["ok"] for r in result["results"]] == [True, False]
     assert result["error"] == "ConnectError: refused"
 
 

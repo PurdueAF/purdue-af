@@ -1,7 +1,7 @@
 """Minimal in-cluster Kubernetes API access.
 
-Two GETs against the API server with httpx: Triton pod discovery and the
-model repository PVC's capacity.
+GETs against the API server with httpx: Triton pod discovery, the model
+repository PVC's capacity, and the release's Ingresses and Services.
 
 Everything degrades to ``None``/empty when the app runs outside a cluster or
 lacks RBAC, so the dashboard still works.
@@ -11,6 +11,8 @@ import logging
 import re
 from pathlib import Path
 
+# Not the official Kubernetes client: it pulls in cryptography, whose Rust
+# extension aborts the interpreter on import in this image.
 import httpx
 
 from .config import settings
@@ -212,7 +214,7 @@ def find_grafana_url() -> dict:
 
 
 def list_triton_pods() -> list:
-    """Triton pods as ``[{"name", "ip", "node", "phase", "ready"}]``."""
+    """Triton pods as ``[{"name", "ip"}]``."""
     payload = _get(
         f"/api/v1/namespaces/{settings.triton_namespace}/pods",
         params={"labelSelector": settings.triton_label_selector},
@@ -226,18 +228,8 @@ def list_triton_pods() -> list:
         pod_ip = status.get("podIP")
         if not pod_ip or status.get("phase") not in ("Running", "Pending"):
             continue
-        ready = any(
-            condition.get("type") == "Ready" and condition.get("status") == "True"
-            for condition in status.get("conditions") or []
-        )
         result.append(
-            {
-                "name": (pod.get("metadata") or {}).get("name", pod_ip),
-                "ip": pod_ip,
-                "node": (pod.get("spec") or {}).get("nodeName"),
-                "phase": status.get("phase"),
-                "ready": ready,
-            }
+            {"name": (pod.get("metadata") or {}).get("name", pod_ip), "ip": pod_ip}
         )
     result.sort(key=lambda p: p["name"])
     return result

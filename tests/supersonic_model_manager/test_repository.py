@@ -5,6 +5,7 @@ import os
 import tarfile
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from model_manager import repository
@@ -37,11 +38,6 @@ MODEL_FILES = {
     "mymodel/config.pbtxt": 'name: "mymodel"\nplatform: "onnxruntime_onnx"\n',
     "mymodel/1/model.onnx": "weights",
 }
-
-
-# --------------------------------------------------------------------------
-# Scanning
-# --------------------------------------------------------------------------
 
 
 def test_scan_reports_size_versions_and_platform(repo, make_model):
@@ -102,11 +98,6 @@ def test_scan_of_missing_repository_is_empty(tmp_path, monkeypatch):
     assert repository.scan_models() == []
 
 
-# --------------------------------------------------------------------------
-# Usage accounting
-# --------------------------------------------------------------------------
-
-
 def test_usage_separates_claim_fullness_from_model_footprint(repo, make_model):
     make_model("m1", size=1024)
 
@@ -119,13 +110,17 @@ def test_usage_separates_claim_fullness_from_model_footprint(repo, make_model):
     assert usage["usedBytes"] >= usage["modelsBytes"]
 
 
-def test_usage_never_reports_more_free_than_the_filesystem_has(repo, make_model):
+def test_usage_never_reports_more_free_than_the_filesystem_has(
+    repo, make_model, monkeypatch
+):
     """A shared claim's free space is bounded by the filesystem, not the quota."""
     make_model("m1", size=1024)
+    fs = SimpleNamespace(f_blocks=10_000, f_bavail=5_000, f_frsize=4096)
+    monkeypatch.setattr(os, "statvfs", lambda path: fs)
 
     usage = repository.storage_usage(pvc_capacity_bytes=40 * 1024**4)  # 40 TiB claim
 
-    assert usage["freeBytes"] <= usage["filesystemFreeBytes"]
+    assert usage["freeBytes"] == 5_000 * 4096
 
 
 def test_usage_falls_back_to_statvfs_without_pvc_capacity(repo):
@@ -148,7 +143,6 @@ def test_usage_without_statvfs_uses_the_pvc_capacity(repo, make_model, monkeypat
     assert usage["source"] == "pvc"
     assert usage["usedBytes"] == usage["modelsBytes"]
     assert usage["freeBytes"] == 10_000 - usage["modelsBytes"]
-    assert usage["filesystemTotalBytes"] is None
 
 
 def test_usage_of_a_missing_repository_is_unknown(tmp_path, monkeypatch):
@@ -161,11 +155,6 @@ def test_usage_of_a_missing_repository_is_unknown(tmp_path, monkeypatch):
     assert usage["usedBytes"] == 0
     assert usage["freeBytes"] is None
     assert usage["writable"] is False
-
-
-# --------------------------------------------------------------------------
-# Archive extraction safety
-# --------------------------------------------------------------------------
 
 
 def test_installs_model_from_zip(repo, tmp_path):
@@ -368,11 +357,6 @@ def test_unwraps_archive_with_a_single_wrapping_directory(repo, tmp_path):
 
     assert (repo / "mymodel" / "1" / "model.onnx").is_file()
     assert result["name"] == "mymodel"
-
-
-# --------------------------------------------------------------------------
-# Overwrite, delete, naming
-# --------------------------------------------------------------------------
 
 
 def test_refuses_to_replace_existing_model_without_overwrite(

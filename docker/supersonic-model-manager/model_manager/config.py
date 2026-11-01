@@ -72,7 +72,7 @@ class Settings:
 
     # -- Prometheus -------------------------------------------------------
     prometheus_url: str = field(default_factory=lambda: _str("PROMETHEUS_URL"))
-    # Extra PromQL label matchers, e.g. 'release="sonic-interlink",namespace="sonic"'
+    # Extra PromQL label matchers, e.g. 'release="supersonic-af"'
     prometheus_selector: str = field(
         default_factory=lambda: _str("PROMETHEUS_SELECTOR")
     )
@@ -120,10 +120,6 @@ class Settings:
         if self.triton_endpoints:
             # An explicit endpoint list always wins over label discovery.
             self.triton_discovery = "static"
-
-    @property
-    def auth_configured(self) -> bool:
-        return bool(self.auth_enabled and self.auth_password)
 
 
 settings = Settings()

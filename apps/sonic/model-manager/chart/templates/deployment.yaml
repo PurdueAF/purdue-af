@@ -32,7 +32,6 @@ spec:
       {{- $uid := .Values.podSecurityContext.runAsUser | default 10001 }}
       {{- if and .Values.modelRepository.fixOwnership (not .Values.modelRepository.readOnly) }}
       initContainers:
-        # CephFS ignores fsGroup on RWX volumes; take ownership once.
         - name: fix-ownership
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}

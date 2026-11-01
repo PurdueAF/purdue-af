@@ -40,59 +40,23 @@ The dashboard is served at `supersonic-models.geddes.rcac.purdue.edu` (`ingress`
 kubectl -n cms port-forward svc/supersonic-model-manager 8080:80
 ```
 
-Standalone install:
-
-```bash
-helm install model-manager ./chart -n cms -f values-supersonic-af.yaml --set auth.password='...'
-```
-
 `supersonicRelease` is the value worth setting: it derives the Triton pod selector
 (`app.kubernetes.io/component=inference-server,app.kubernetes.io/instance=<release>`) and the Prometheus
 matcher (`release="<release>"`). The latter must be overridden when a ServiceMonitor-based
 Prometheus scrapes Triton without adding a `release` label.
 
-To let Triton serve what you upload, point it at the same claim — this is how
-[`apps/sonic/supersonic-af/values.yaml`](../supersonic-af/values.yaml) is wired:
-
-```yaml
-inferenceServer:
-  modelRepository: { enabled: true, storageType: pvc, mountPath: /models, pvc: { claimName: supersonic-model-repository } }
-  args:
-    - |
-      /opt/tritonserver/bin/tritonserver --model-repository=/models \
-      --model-control-mode=explicit --load-model=*
-```
+To let Triton serve what you upload, point it at the same claim, as
+[`apps/sonic/supersonic-af/values.yaml`](../supersonic-af/values.yaml) does.
 
 ## Configuration
 
-Every chart value maps to an environment variable, so the image also runs standalone.
-
-| Value | Env var | Default |
-| --- | --- | --- |
-| `modelRepository.claimName` | `PVC_NAME` | `supersonic-model-repository` |
-| `modelRepository.mountPath` | `MODEL_REPOSITORY_PATH` | `/models` |
-| `modelRepository.subPath` | *(volume mount)* | *(empty)* |
-| `modelRepository.readOnly` | `READ_ONLY` | `false` |
-| `modelRepository.maxUploadBytes` | `MAX_UPLOAD_BYTES` | 8 GiB |
-| `triton.labelSelector` | `TRITON_LABEL_SELECTOR` | derived from `supersonicRelease` |
-| `triton.endpoints` | `TRITON_ENDPOINTS` | *(empty; setting it forces static discovery)* |
-| `triton.httpPort` | `TRITON_HTTP_PORT` | `8000` |
-| `prometheus.url` / `.selector` / `.window` | `PROMETHEUS_URL` / `_SELECTOR` / `_WINDOW` | *(empty)* / derived / `5m` |
-| `auth.enabled` / `.username` / `.password` | `AUTH_ENABLED` / `AUTH_USERNAME` / `AUTH_PASSWORD` | `true` / `admin` / *(required)* |
-| `inferenceEndpoint` | `INFERENCE_ENDPOINT` | *(empty — discovered from the Envoy ingress/service)* |
-| `refreshSeconds` | `REFRESH_SECONDS` | `15` |
+Every chart value maps to an environment variable, so the image also runs standalone:
+[`chart/values.yaml`](chart/values.yaml) lists the values and their defaults, and
+[`config.py`](../../../docker/supersonic-model-manager/model_manager/config.py) the variables.
 
 `subPath` mounts a subdirectory of the claim as the repository root, for when models live inside a
 larger shared claim. The gauge always shows how full the *claim* is, with the models' own
 footprint next to the model count.
-
-The PVC carries `helm.sh/resource-policy: keep` and is created only if absent, so uninstalling
-never deletes models.
-
-CephFS (and any CSI driver whose `fsGroupPolicy` is not `File`) ignores `podSecurityContext.fsGroup`
-on ReadWriteMany volumes, so the claim mounts as `root:root 0755` and the unprivileged app cannot
-write. `modelRepository.fixOwnership` (default true) runs a one-shot init container that chowns the
-mount to the app's uid. Set it false when the volume is already writable.
 
 ## Uploads
 
@@ -100,13 +64,9 @@ Accepts a `.zip`/`.tar.*` archive or a directory (picker or drag-and-drop), land
 `<model>/config.pbtxt` + `<model>/1/model.onnx`. Streamed straight to the PVC; extraction rejects
 absolute paths, `..` traversal and symlinks, and drops `._*`/`__MACOSX`/`.DS_Store` noise.
 
-Each upload is checked against Triton's layout rules before install, so malformed models are
-rejected at the dashboard (HTTP 422, all problems at once) instead of silently failing to load:
-missing/empty/zero version directories, files dropped outside a version directory, a
-`config.pbtxt` `name:` that does not match the directory, and a version missing the artifact its
-platform requires (`model.onnx`, `model.plan`, `model.savedmodel/`, … honouring
-`default_model_filename`). Missing `config.pbtxt` is a warning for autocompletable backends and an
-error otherwise. See `validation.py` for the full rule set.
+Each upload is checked against Triton's layout rules before install, so a malformed model is
+rejected at the dashboard with all its problems at once, not left failing to load. The rules are in
+[`validation.py`](../../../docker/supersonic-model-manager/model_manager/validation.py).
 
 ## Security
 
@@ -124,18 +84,7 @@ MODEL_REPOSITORY_PATH=/tmp/models TRITON_ENDPOINTS=127.0.0.1:8000 AUTH_ENABLED=f
 ```
 
 Outside a cluster there is no Kubernetes API access: use `TRITON_ENDPOINTS` for discovery, and PVC
-capacity falls back to `statvfs`. The app calls the API server over `httpx`: the official client
-pulls in `cryptography`, whose Rust extension aborts the interpreter on import in this image.
-
-## CI
-
-Built and published like every other image ([`docker/REGISTRY.md`](../../../docker/REGISTRY.md)),
-tested by the unit suite:
-
-```bash
-docker build -f docker/supersonic-model-manager/Dockerfile -t supersonic-model-manager:dev .
-uv run --project tests pytest -c tests/pyproject.toml tests/supersonic_model_manager
-```
+capacity falls back to `statvfs`.
 
 ## Credits
 

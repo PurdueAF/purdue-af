@@ -8,7 +8,7 @@ from starlette.responses import JSONResponse, Response
 
 from .config import settings
 
-PUBLIC_PATHS = ("/healthz", "/readyz")
+PUBLIC_PATHS = ("/healthz",)
 
 _UNAUTHORIZED_HEADERS = {
     "WWW-Authenticate": 'Basic realm="SuperSONIC Model Manager", charset="UTF-8"'

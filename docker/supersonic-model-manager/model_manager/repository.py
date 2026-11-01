@@ -215,8 +215,6 @@ def storage_usage(pvc_capacity_bytes=None) -> dict:
         "totalBytes": total,
         "freeBytes": free,
         "source": source,
-        "filesystemTotalBytes": fs_total,
-        "filesystemFreeBytes": fs_free,
         "path": str(root),
         "writable": os.access(root, os.W_OK) if root.is_dir() else False,
     }

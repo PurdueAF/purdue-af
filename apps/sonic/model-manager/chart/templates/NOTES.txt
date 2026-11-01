@@ -25,20 +25,3 @@ Triton discovery: {{ .Values.triton.discovery }} ({{ include "modelManager.trito
 NOTE: prometheus.url is empty, so per-model metrics will be blank.
       Point it at the Prometheus that scrapes your Triton servers.
 {{- end }}
-
-To let Triton serve models from this PVC, mount the same claim in your
-SuperSONIC release and enable explicit model control:
-
-  inferenceServer:
-    modelRepository:
-      enabled: true
-      storageType: pvc
-      mountPath: /models
-      pvc:
-        claimName: {{ .Values.modelRepository.claimName }}
-    args:
-      - |
-        /opt/tritonserver/bin/tritonserver \
-        --model-repository=/models \
-        --model-control-mode=explicit \
-        --load-model=*

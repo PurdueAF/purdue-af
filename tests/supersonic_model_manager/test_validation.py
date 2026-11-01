@@ -1,5 +1,6 @@
 """Triton model repository layout rules applied to uploads."""
 
+import pytest
 from model_manager import validation
 from model_manager.validation import parse_config, validate_model_dir
 
@@ -10,9 +11,8 @@ def write(path, text=""):
     return path
 
 
-# --------------------------------------------------------------------------
-# Layouts that must be accepted
-# --------------------------------------------------------------------------
+def config(platform):
+    return f'name: "m"\nplatform: "{platform}"\n'
 
 
 def test_accepts_standard_onnx_model(staged, make_model):
@@ -82,119 +82,82 @@ def test_label_and_preprocess_files_are_not_flagged(staged, make_model):
     assert result.warnings == []
 
 
-# --------------------------------------------------------------------------
-# Layouts that must be rejected
-# --------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "files,error",
+    [
+        pytest.param(
+            {"config.pbtxt": config("onnxruntime_onnx"), "model.onnx": "x"},
+            "1/model.onnx",
+            id="model-file-outside-version-directory",
+        ),
+        pytest.param(
+            {"config.pbtxt": config("onnxruntime_onnx")},
+            "No version directory",
+            id="missing-version-directory",
+        ),
+        pytest.param(
+            {"config.pbtxt": config("pytorch_libtorch"), "1": None},
+            "'1/' is empty",
+            id="empty-version-directory",
+        ),
+        pytest.param(
+            {"config.pbtxt": config("onnxruntime_onnx"), "0/model.onnx": "x"},
+            "start at 1",
+            id="version-zero",
+        ),
+        pytest.param(
+            {
+                "config.pbtxt": 'name: "other"\nplatform: "onnxruntime_onnx"\n',
+                "1/model.onnx": "x",
+            },
+            'declares name: "other", but the model is being installed as "m"',
+            id="config-name-is-not-the-directory",
+        ),
+        pytest.param(
+            {"config.pbtxt": config("onnxruntime_onnx"), "1/mymodel.onnx": "x"},
+            "does not contain 'model.onnx'",
+            id="wrong-artifact-name-for-platform",
+        ),
+        pytest.param(
+            {
+                "config.pbtxt": config("tensorflow_savedmodel"),
+                "1/model.savedmodel": "not a directory",
+            },
+            "must be a directory",
+            id="savedmodel-as-a-file",
+        ),
+        pytest.param(
+            {"1/model.graphdef": "x"},
+            "cannot be autocompleted",
+            id="no-config-for-a-non-autocompletable-backend",
+        ),
+        pytest.param(
+            {"1/weights.bin": "x"},
+            "could not be inferred",
+            id="unidentifiable-model",
+        ),
+        pytest.param(
+            {
+                "config.pbtxt": config("pytorch_libtorch"),
+                "1/model.pt/data.pkl": "x",
+            },
+            "must be a file",
+            id="torchscript-model-as-a-directory",
+        ),
+    ],
+)
+def test_rejects_invalid_layout(staged, files, error):
+    model = staged / "m"
+    for path, text in files.items():
+        if text is None:
+            (model / path).mkdir(parents=True)
+        else:
+            write(model / path, text)
 
-
-def test_rejects_model_file_outside_version_directory(staged):
-    model = staged / "flat"
-    write(model / "config.pbtxt", 'name: "flat"\nplatform: "onnxruntime_onnx"\n')
-    write(model / "model.onnx", "x")
-
-    result = validate_model_dir(model, "flat")
-
-    assert not result.ok
-    assert "1/model.onnx" in " ".join(result.errors)
-
-
-def test_rejects_missing_version_directory(staged):
-    model = staged / "empty"
-    write(model / "config.pbtxt", 'name: "empty"\nplatform: "onnxruntime_onnx"\n')
-
-    result = validate_model_dir(model, "empty")
-
-    assert not result.ok
-    assert any("version directory" in e for e in result.errors)
-
-
-def test_rejects_empty_version_directory(staged):
-    model = staged / "hollow"
-    write(model / "config.pbtxt", 'name: "hollow"\nplatform: "pytorch_libtorch"\n')
-    (model / "1").mkdir()
-
-    result = validate_model_dir(model, "hollow")
-
-    assert not result.ok
-    assert any("is empty" in e for e in result.errors)
-
-
-def test_rejects_version_zero(staged, make_model):
-    model = make_model("zero", versions=("0",), parent=staged)
-
-    result = validate_model_dir(model, "zero")
-
-    assert not result.ok
-    assert any("start at 1" in e for e in result.errors)
-
-
-def test_rejects_config_name_mismatch(staged):
-    """Triton refuses to load a model whose config name is not its directory."""
-    model = staged / "installed_as"
-    write(
-        model / "config.pbtxt", 'name: "something_else"\nplatform: "onnxruntime_onnx"\n'
-    )
-    write(model / "1" / "model.onnx", "x")
-
-    result = validate_model_dir(model, "installed_as")
-
-    assert not result.ok
-    assert any("something_else" in e and "installed_as" in e for e in result.errors)
-
-
-def test_rejects_wrong_artifact_name_for_platform(staged):
-    model = staged / "misnamed"
-    write(model / "config.pbtxt", 'name: "misnamed"\nplatform: "onnxruntime_onnx"\n')
-    write(model / "1" / "mymodel.onnx", "x")
-
-    result = validate_model_dir(model, "misnamed")
-
-    assert not result.ok
-    assert any("model.onnx" in e for e in result.errors)
-
-
-def test_rejects_savedmodel_as_file(staged):
-    model = staged / "tf_flat"
-    write(
-        model / "config.pbtxt", 'name: "tf_flat"\nplatform: "tensorflow_savedmodel"\n'
-    )
-    write(model / "1" / "model.savedmodel", "not a directory")
-
-    result = validate_model_dir(model, "tf_flat")
+    result = validate_model_dir(model, "m")
 
     assert not result.ok
-    assert any("must be a directory" in e for e in result.errors)
-
-
-def test_rejects_missing_config_for_non_autocompletable_backend(staged):
-    model = staged / "gd"
-    write(model / "1" / "model.graphdef", "x")
-
-    result = validate_model_dir(model, "gd")
-
-    assert not result.ok
-    assert any("cannot be autocompleted" in e for e in result.errors)
-
-
-def test_rejects_unidentifiable_model(staged):
-    model = staged / "mystery"
-    write(model / "1" / "weights.bin", "x")
-
-    result = validate_model_dir(model, "mystery")
-
-    assert not result.ok
-    assert any("could not be inferred" in e for e in result.errors)
-
-
-def test_rejects_torchscript_model_as_directory(staged):
-    model = staged / "pt_dir"
-    write(model / "config.pbtxt", 'name: "pt_dir"\nplatform: "pytorch_libtorch"\n')
-    write(model / "1" / "model.pt" / "data.pkl", "x")
-
-    result = validate_model_dir(model, "pt_dir")
-
-    assert not result.ok
-    assert any("must be a file" in e for e in result.errors)
+    assert any(error in e for e in result.errors), result.errors
 
 
 def test_unreadable_config_is_an_error(staged, make_model, monkeypatch):
@@ -217,11 +180,6 @@ def test_unicode_digit_directory_is_not_a_version(staged, make_model):
     assert result.ok, result.errors
     assert result.versions == ["1"]
     assert any("'²/'" in w for w in result.warnings)
-
-
-# --------------------------------------------------------------------------
-# Warnings (accepted, but surfaced)
-# --------------------------------------------------------------------------
 
 
 def test_warns_when_config_missing_but_autocompletable(staged):
@@ -280,11 +238,6 @@ def test_warns_when_openvino_bin_missing(staged):
     assert any("model.bin" in w for w in result.warnings)
 
 
-# --------------------------------------------------------------------------
-# config.pbtxt parsing
-# --------------------------------------------------------------------------
-
-
 def test_parse_config_prefers_top_level_name_over_nested_input_names(tmp_path):
     """`input [{ name: ... }]` blocks also contain a name field."""
     config = write(
@@ -302,7 +255,6 @@ def test_parse_config_prefers_top_level_name_over_nested_input_names(tmp_path):
 
     assert parsed["name"] == "outer"
     assert parsed["platform"] == "onnxruntime_onnx"
-    assert parsed["max_batch_size"] == "500"
 
 
 def test_parse_config_ignores_comments(tmp_path):

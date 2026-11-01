@@ -40,15 +40,3 @@ def test_explicit_endpoints_force_static_discovery(monkeypatch):
 
     assert s.triton_discovery == "static"
     assert s.triton_endpoints == ["a:8000", "b"]
-
-
-def test_auth_is_configured_only_with_a_password(monkeypatch):
-    monkeypatch.setenv("AUTH_ENABLED", "true")
-    monkeypatch.delenv("AUTH_PASSWORD", raising=False)
-    assert Settings().auth_configured is False
-
-    monkeypatch.setenv("AUTH_PASSWORD", "s3cret")
-    assert Settings().auth_configured is True
-
-    monkeypatch.setenv("AUTH_ENABLED", "false")
-    assert Settings().auth_configured is False
