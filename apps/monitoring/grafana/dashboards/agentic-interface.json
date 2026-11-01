@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "Use of the Purdue AF agentic interface (MCP server): who is using it, what they use it for, and whether it works. Private instance — panels name individual users.",
+  "description": "Use of the Purdue AF agentic interface (MCP server): who is using it, what they use it for, and whether it works. Private instance \u2014 panels name individual users.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -33,7 +33,6 @@
             "mode": "thresholds"
           },
           "decimals": 0,
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -43,8 +42,7 @@
               }
             ]
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 4,
@@ -68,13 +66,8 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "count(sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\"}[$__range])) > 0) or vector(0)",
           "instant": true,
@@ -97,7 +90,6 @@
             "mode": "thresholds"
           },
           "decimals": 0,
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -107,8 +99,7 @@
               }
             ]
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 4,
@@ -132,13 +123,8 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\"}[$__range]))) or vector(0)",
           "instant": true,
@@ -161,7 +147,6 @@
             "mode": "thresholds"
           },
           "decimals": 0,
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -171,8 +156,7 @@
               }
             ]
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 4,
@@ -196,13 +180,8 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"create_dask_cluster|scale_dask_cluster|stop_dask_cluster|start_af_session|stop_af_session|restart_af_session\", outcome=\"success\"}[$__range]))) or vector(0)",
           "instant": true,
@@ -218,14 +197,13 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "Share of tool calls that returned a result. needs_input counts as success — the agent was told what to ask for.",
+      "description": "Share of tool calls that returned a result. needs_input counts as success \u2014 the agent was told what to ask for.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
           "decimals": 1,
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -244,8 +222,7 @@
             ]
           },
           "unit": "percent"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 4,
@@ -269,13 +246,8 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "100 * sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", outcome=~\"success|needs_input\"}[$__range])) / clamp_min(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\"}[$__range])), 1)",
           "instant": true,
@@ -291,14 +263,13 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "Tool calls that failed because a backend did — the facility's fault, not the caller's.",
+      "description": "Tool calls that failed because a backend did \u2014 the facility's fault, not the caller's.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
           "decimals": 0,
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -312,8 +283,7 @@
               }
             ]
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 4,
@@ -337,13 +307,8 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", outcome=\"upstream_error\"}[$__range]))) or vector(0)",
           "instant": true,
@@ -366,7 +331,6 @@
             "mode": "thresholds"
           },
           "decimals": 2,
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -377,8 +341,7 @@
             ]
           },
           "unit": "s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 4,
@@ -402,13 +365,8 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "histogram_quantile(0.95, sum(rate(purdue_af_mcp_tool_duration_seconds_bucket[$__range])) by (le))",
           "instant": true,
@@ -444,47 +402,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "lineWidth": 2
           },
           "decimals": 0,
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -507,13 +434,8 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"list_dask_clusters|list_dask_cluster_options|create_dask_cluster|get_dask_cluster_info|get_dask_worker_count|get_dask_cluster_usage|scale_dask_cluster|stop_dask_cluster\"}[$__rate_interval])))",
           "legendFormat": "Dask clusters",
@@ -521,10 +443,6 @@
           "refId": "A"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"list_af_profiles|get_session_status|start_af_session|stop_af_session|restart_af_session|wait_for_session\"}[$__rate_interval])))",
           "legendFormat": "Session",
@@ -532,10 +450,6 @@
           "refId": "B"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"query_notebook_logs|query_dask_logs\"}[$__rate_interval])))",
           "legendFormat": "Logs",
@@ -543,10 +457,6 @@
           "refId": "C"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"query_storage_usage\"}[$__rate_interval])))",
           "legendFormat": "Storage",
@@ -554,10 +464,6 @@
           "refId": "D"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"get_facility_health\"}[$__rate_interval])))",
           "legendFormat": "Health",
@@ -565,10 +471,6 @@
           "refId": "E"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool!~\"list_dask_clusters|list_dask_cluster_options|create_dask_cluster|get_dask_cluster_info|get_dask_worker_count|get_dask_cluster_usage|scale_dask_cluster|stop_dask_cluster|list_af_profiles|get_session_status|start_af_session|stop_af_session|restart_af_session|wait_for_session|query_notebook_logs|query_dask_logs|query_storage_usage|get_facility_health\"}[$__rate_interval])))",
           "legendFormat": "Ungrouped",
@@ -599,7 +501,6 @@
             "inspect": false
           },
           "decimals": 0,
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -731,13 +632,8 @@
           }
         ]
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"list_dask_clusters|list_dask_cluster_options|create_dask_cluster|get_dask_cluster_info|get_dask_worker_count|get_dask_cluster_usage|scale_dask_cluster|stop_dask_cluster\"}[$__range]))",
           "format": "table",
@@ -746,10 +642,6 @@
           "refId": "A"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"list_af_profiles|get_session_status|start_af_session|stop_af_session|restart_af_session|wait_for_session\"}[$__range]))",
           "format": "table",
@@ -758,10 +650,6 @@
           "refId": "B"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"query_notebook_logs|query_dask_logs\"}[$__range]))",
           "format": "table",
@@ -770,10 +658,6 @@
           "refId": "C"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"query_storage_usage\"}[$__range]))",
           "format": "table",
@@ -782,10 +666,6 @@
           "refId": "D"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"get_facility_health\"}[$__range]))",
           "format": "table",
@@ -794,10 +674,6 @@
           "refId": "E"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"list_dask_clusters|list_dask_cluster_options|create_dask_cluster|get_dask_cluster_info|get_dask_worker_count|get_dask_cluster_usage|scale_dask_cluster|stop_dask_cluster|list_af_profiles|get_session_status|start_af_session|stop_af_session|restart_af_session|wait_for_session|query_notebook_logs|query_dask_logs|query_storage_usage|get_facility_health\"}[$__range]))",
           "format": "table",
@@ -875,14 +751,12 @@
             }
           },
           "decimals": 0,
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 9,
@@ -913,13 +787,8 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "topk(15, round(sum by (tool) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\"}[$__range]))))",
           "format": "table",
@@ -943,47 +812,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "lineWidth": 2
           },
           "decimals": 0,
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 9,
@@ -1006,13 +844,8 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum by (tool) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"create_dask_cluster|scale_dask_cluster|stop_dask_cluster|start_af_session|stop_af_session|restart_af_session\", outcome=\"success\"}[$__rate_interval])))",
           "legendFormat": "{{tool}}",
@@ -1048,47 +881,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "lineWidth": 2
           },
           "decimals": 0,
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -1111,13 +913,8 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\"}[$__rate_interval])))",
           "legendFormat": "{{username}}",
@@ -1160,14 +957,12 @@
             }
           },
           "decimals": 0,
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -1198,13 +993,8 @@
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "topk(15, round(sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", outcome=~\"user_error|upstream_error|exception\"}[$__range]))))",
           "format": "table",
@@ -1241,47 +1031,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "lineWidth": 2
           },
           "decimals": 0,
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -1304,13 +1063,8 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\"}[$__rate_interval])) by (outcome))",
           "legendFormat": "{{outcome}}",
@@ -1333,47 +1087,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "lineWidth": 2
           },
           "decimals": 0,
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -1396,16 +1119,11 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", outcome!~\"success|needs_input\"}[$__rate_interval])) by (tool, outcome))",
-          "legendFormat": "{{tool}} · {{outcome}}",
+          "legendFormat": "{{tool}} \u00b7 {{outcome}}",
           "range": true,
           "refId": "A"
         }
@@ -1418,55 +1136,24 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "Slow tools are usually waiting on a backend — compare with upstream latency.",
+      "description": "Slow tools are usually waiting on a backend \u2014 compare with upstream latency.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "lineWidth": 2
           },
           "decimals": 0,
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           },
           "unit": "s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -1489,13 +1176,8 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "histogram_quantile(0.95, sum(rate(purdue_af_mcp_tool_duration_seconds_bucket[$__rate_interval])) by (tool, le))",
           "legendFormat": "{{tool}}",
@@ -1518,47 +1200,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "lineWidth": 2
           },
           "decimals": 0,
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -1581,16 +1232,11 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_upstream_requests_total{outcome!=\"success\"}[$__rate_interval])) by (target, outcome))",
-          "legendFormat": "{{target}} · {{outcome}}",
+          "legendFormat": "{{target}} \u00b7 {{outcome}}",
           "range": true,
           "refId": "A"
         }
@@ -1610,48 +1256,17 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "lineWidth": 2
           },
           "decimals": 0,
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           },
           "unit": "s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -1674,13 +1289,8 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "histogram_quantile(0.95, sum(rate(purdue_af_mcp_upstream_duration_seconds_bucket[$__rate_interval])) by (target, le))",
           "legendFormat": "{{target}}",
@@ -1703,47 +1313,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "lineWidth": 2
           },
           "decimals": 0,
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -1766,13 +1345,8 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_auth_total[$__rate_interval])) by (result))",
           "legendFormat": "{{result}}",
@@ -1808,47 +1382,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "lineWidth": 2
           },
           "decimals": 0,
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -1871,13 +1414,8 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_api_calls_total{route=\"mcp\"}[$__rate_interval])) by (status))",
           "legendFormat": "{{status}}",
@@ -1900,47 +1438,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "lineWidth": 2
           },
           "decimals": 0,
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -1963,13 +1470,8 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_api_calls_total[$__rate_interval])) by (route))",
           "legendFormat": "{{route}}",
@@ -2021,6 +1523,5 @@
   "timepicker": {},
   "timezone": "",
   "title": "Purdue AF Agentic Interface",
-  "uid": "purdue-af-agentic-interface",
-  "version": 1
+  "uid": "purdue-af-agentic-interface"
 }

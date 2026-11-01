@@ -18,7 +18,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 2,
   "links": [],
   "panels": [
     {
@@ -38,10 +37,6 @@
       "id": 10,
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "count(ALERTS{alertstate=\"firing\", severity=~\"error|critical\"}) or vector(0)",
           "instant": true,
@@ -65,7 +60,6 @@
         "showPercentChange": false,
         "percentChangeColorMode": "standard"
       },
-      "pluginVersion": "12.1.0",
       "fieldConfig": {
         "defaults": {
           "mappings": [
@@ -121,8 +115,7 @@
           "color": {
             "mode": "thresholds"
           }
-        },
-        "overrides": []
+        }
       }
     },
     {
@@ -142,10 +135,6 @@
       "id": 11,
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "count by (component, severity) (ALERTS{alertstate=\"firing\"})",
           "format": "table",
@@ -184,7 +173,6 @@
         },
         "showHeader": true
       },
-      "pluginVersion": "12.1.0",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -239,8 +227,7 @@
     },
     {
       "fieldConfig": {
-        "defaults": {},
-        "overrides": []
+        "defaults": {}
       },
       "gridPos": {
         "h": 7,
@@ -268,14 +255,12 @@
         },
         "viewMode": "list"
       },
-      "pluginVersion": "12.1.0",
       "title": "Errors",
       "type": "alertlist"
     },
     {
       "fieldConfig": {
-        "defaults": {},
-        "overrides": []
+        "defaults": {}
       },
       "gridPos": {
         "h": 7,
@@ -303,14 +288,12 @@
         },
         "viewMode": "list"
       },
-      "pluginVersion": "12.1.0",
       "title": "Warnings",
       "type": "alertlist"
     },
     {
       "fieldConfig": {
-        "defaults": {},
-        "overrides": []
+        "defaults": {}
       },
       "gridPos": {
         "h": 7,
@@ -338,7 +321,6 @@
         },
         "viewMode": "list"
       },
-      "pluginVersion": "12.1.0",
       "title": "Info",
       "type": "alertlist"
     }
@@ -356,6 +338,5 @@
   "timepicker": {},
   "timezone": "browser",
   "title": "Alerts",
-  "uid": "purdue-af-alerts",
-  "version": 1
+  "uid": "purdue-af-alerts"
 }

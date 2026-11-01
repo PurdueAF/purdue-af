@@ -18,13 +18,11 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 9,
   "links": [],
   "panels": [
     {
       "fieldConfig": {
-        "defaults": {},
-        "overrides": []
+        "defaults": {}
       },
       "gridPos": {
         "h": 2,
@@ -42,14 +40,12 @@
         "content": "<h1 style=\"text-align:center;\">USCMS Dedicated GPUs (Slurm)</h1>",
         "mode": "html"
       },
-      "pluginVersion": "12.1.0",
       "title": "",
       "type": "text"
     },
     {
       "fieldConfig": {
-        "defaults": {},
-        "overrides": []
+        "defaults": {}
       },
       "gridPos": {
         "h": 2,
@@ -67,14 +63,12 @@
         "content": "<h1 style=\"text-align:center;\">T4 GPUs (AF + SONIC)</h1>",
         "mode": "html"
       },
-      "pluginVersion": "12.1.0",
       "title": "",
       "type": "text"
     },
     {
       "fieldConfig": {
-        "defaults": {},
-        "overrides": []
+        "defaults": {}
       },
       "gridPos": {
         "h": 2,
@@ -92,7 +86,6 @@
         "content": "<h1 style=\"text-align:center;\">Analysis Facility GPUs</h1>",
         "mode": "html"
       },
-      "pluginVersion": "12.1.0",
       "title": "",
       "type": "text"
     },
@@ -106,7 +99,6 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -117,8 +109,7 @@
             ]
           },
           "unit": "GPUs"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 4,
@@ -142,13 +133,8 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "count(DCGM_FI_DEV_GPU_UTIL)",
           "legendFormat": "__auto",
@@ -169,7 +155,6 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -180,8 +165,7 @@
             ]
           },
           "unit": "GPUs"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 4,
@@ -205,13 +189,8 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "count(\n  DCGM_FI_DEV_GPU_UTIL{\n  kubernetes_node=~\"paf.*\"\n  }\n)",
           "legendFormat": "__auto",
@@ -232,7 +211,6 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -243,8 +221,7 @@
             ]
           },
           "unit": "GPUs"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 4,
@@ -268,13 +245,8 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "count(\ncount by (UUID) (\nDCGM_FI_PROF_GR_ENGINE_ACTIVE{\n  kubernetes_node=~\"(geddes-g000|geddes-g001|geddes-g002)\"\n}\n)\n)",
           "legendFormat": "__auto",
@@ -302,7 +274,6 @@
             },
             "inspect": false
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -312,8 +283,7 @@
               }
             ]
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 4,
@@ -332,13 +302,8 @@
         },
         "showHeader": true
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "exemplar": false,
           "expr": "count by (GPU_I_PROFILE) (\nDCGM_FI_PROF_GR_ENGINE_ACTIVE{\n  kubernetes_node=~\"(geddes-g000|geddes-g001|geddes-g002)\"\n}\n)",
@@ -387,7 +352,6 @@
             "mode": "thresholds"
           },
           "fieldMinMax": false,
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -398,8 +362,7 @@
             ]
           },
           "unit": "in use over selected period"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 2,
@@ -423,13 +386,8 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "count(\n  max_over_time(\n    (DCGM_FI_DEV_GPU_UTIL > 0)[$__range:]\n  ) > 0\n)\nor on() vector(0)",
           "legendFormat": " ",
@@ -451,7 +409,6 @@
             "mode": "thresholds"
           },
           "fieldMinMax": false,
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -462,8 +419,7 @@
             ]
           },
           "unit": "in use over selected period"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 2,
@@ -487,13 +443,8 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "count(\n  max_over_time(\n    (DCGM_FI_DEV_GPU_UTIL{\n      kubernetes_node=~\"paf.*\"\n    } > 0)[$__range:]\n  ) > 0\n)\nor on() vector(0)",
           "legendFormat": " ",
@@ -515,7 +466,6 @@
             "mode": "thresholds"
           },
           "fieldMinMax": false,
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -526,8 +476,7 @@
             ]
           },
           "unit": "in use over selected period"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 2,
@@ -551,13 +500,8 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "count(\n  max_over_time(\n    (DCGM_FI_PROF_GR_ENGINE_ACTIVE{\n      kubernetes_node=~\"(geddes-g000|geddes-g001|geddes-g002)\"\n    } > 0)[$__range:]\n  ) > 0\n)\nor on() vector(0)",
           "legendFormat": " ",
@@ -578,40 +522,6 @@
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -625,8 +535,7 @@
               }
             ]
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 9,
@@ -648,13 +557,8 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "label_replace(\n  DCGM_FI_DEV_GPU_UTIL,\n  \"host\",\n  \"$1\",\n  \"Hostname\",\n  \"^(.*)\\\\.rcac\\\\.purdue\\\\.edu$\"\n)",
           "legendFormat": "{{host}} - {{modelName}} - #{{gpu}}",
@@ -675,40 +579,6 @@
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -722,8 +592,7 @@
               }
             ]
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 9,
@@ -745,13 +614,8 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "DCGM_FI_DEV_GPU_UTIL{\n  kubernetes_node=~\"paf.*\"\n}",
           "legendFormat": "{{kubernetes_node}} - {{modelName}} - #{{gpu}}",
@@ -772,40 +636,6 @@
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -819,8 +649,7 @@
               }
             ]
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 9,
@@ -842,13 +671,8 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "DCGM_FI_PROF_GR_ENGINE_ACTIVE{\n  kubernetes_node=~\"(geddes-g000|geddes-g001|geddes-g002)\"\n}\n# DCGM_FI_DEV_GPU_UTIL{\n#   kubernetes_node=~\"(geddes-g000|geddes-g001|geddes-g002)\"\n# }",
           "legendFormat": "{{kubernetes_node}} - A100 - {{GPU_I_PROFILE}} - #{{gpu}}",
@@ -869,40 +693,6 @@
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -917,8 +707,7 @@
             ]
           },
           "unit": "mbytes"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 9,
@@ -940,13 +729,8 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "label_replace(\n  DCGM_FI_DEV_FB_USED,\n  \"host\",\n  \"$1\",\n  \"Hostname\",\n  \"^(.*)\\\\.rcac\\\\.purdue\\\\.edu$\"\n)",
           "legendFormat": "{{host}} - {{modelName}} - #{{gpu}}",
@@ -967,40 +751,6 @@
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1015,8 +765,7 @@
             ]
           },
           "unit": "mbytes"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 9,
@@ -1038,13 +787,8 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "DCGM_FI_DEV_FB_USED{\n  kubernetes_node=~\"paf.*\"\n}",
           "legendFormat": "{{kubernetes_node}} - {{modelName}} - #{{gpu}}",
@@ -1065,40 +809,6 @@
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1113,8 +823,7 @@
             ]
           },
           "unit": "mbytes"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 9,
@@ -1136,13 +845,8 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "DCGM_FI_DEV_FB_USED{\n  kubernetes_node=~\"(geddes-g000|geddes-g001|geddes-g002)\"\n}",
           "legendFormat": "{{kubernetes_node}} - A100 - {{GPU_I_PROFILE}} - #{{gpu}}",
@@ -1167,6 +871,5 @@
   "timepicker": {},
   "timezone": "browser",
   "title": "Purdue Tier-2 GPU Monitoring",
-  "uid": "tier2-gpu-monitoring",
-  "version": 40
+  "uid": "tier2-gpu-monitoring"
 }

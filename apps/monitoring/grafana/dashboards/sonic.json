@@ -18,14 +18,11 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": 6,
   "links": [],
   "panels": [
     {
-      "description": "",
       "fieldConfig": {
-        "defaults": {},
-        "overrides": []
+        "defaults": {}
       },
       "gridPos": {
         "h": 4,
@@ -43,7 +40,6 @@
         "content": "<div style=\"display: flex; align-items: center; background: transparent !important;\">\n  <img src=\"https://github.com/fastmachinelearning/SuperSONIC/blob/main/docs/img/SuperSONIC_small_light_256.png?raw=true\" \n       alt=\"SONIC Logo\" style=\"width: 100px; margin-right: 15px; display: inline-block;\">\n  <div style=\"display: inline-block;\">\n    <h1 style=\"margin: 0; padding: 0;\">SuperSONIC Dashboard</h1>\n   <div style=\"margin: 5px 0;\">\n      <a href=\"https://fastmachinelearning.org/SuperSONIC\" target=\"_blank\" \n         style=\"margin-right: 15px; text-decoration: none;\">\n        <i class=\"fa fa-book\"></i> Documentation\n      </a>\n      <a href=\"https://github.com/fastmachinelearning/SuperSONIC/issues\" target=\"_blank\" \n         style=\"margin-right: 15px; text-decoration: none;\">\n        <i class=\"fa fa-github\"></i> GitHub Issues\n      </a>\n   </div>\n  </div>\n</div>",
         "mode": "html"
       },
-      "pluginVersion": "12.0.1",
       "title": "",
       "transparent": true,
       "type": "text"
@@ -58,7 +54,6 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -71,8 +66,7 @@
               }
             ]
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 4,
@@ -96,13 +90,8 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.0.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "disableTextWrap": false,
           "editorMode": "code",
           "expr": "count by(release)(nv_gpu_utilization{app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"})",
@@ -130,39 +119,13 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
             "fillOpacity": 100,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "normal"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -223,13 +186,8 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.0.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "sum (rate(nv_inference_compute_infer_duration_us{app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"}[30s])) / sum ((rate(nv_inference_exec_count{app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"}[30s]) * 1000))",
           "instant": false,
@@ -238,10 +196,6 @@
           "refId": "A"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "sum (rate(nv_inference_queue_duration_us{app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"}[30s])) / sum ((rate(nv_inference_exec_count{app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"}[30s]) * 1000))",
           "hide": false,
@@ -251,10 +205,6 @@
           "refId": "B"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "sum (rate(nv_inference_compute_input_duration_us{app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"}[30s])) / sum ((rate(nv_inference_exec_count{app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"}[30s]) * 1000))",
           "hide": false,
@@ -264,10 +214,6 @@
           "refId": "C"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "sum (rate(nv_inference_compute_output_duration_us{app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"}[30s])) / sum ((rate(nv_inference_exec_count{app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"}[30s]) * 1000))",
           "hide": false,
@@ -277,10 +223,6 @@
           "refId": "D"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "sum(rate(envoy_http_downstream_rq_time_sum{envoy_http_conn_manager_prefix=\"ingress_grpc\", app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"}[30s])) / sum(rate(envoy_http_downstream_rq_time_count{envoy_http_conn_manager_prefix=\"ingress_grpc\", app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"}[30s]))",
           "hide": false,
@@ -298,46 +240,11 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -348,8 +255,7 @@
             ]
           },
           "unit": "none"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 10,
@@ -371,18 +277,12 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.0.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "exemplar": false,
           "expr": "sum (rate(nv_inference_count{app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"}[30s])) by(release)",
           "instant": false,
-          "interval": "",
           "legendFormat": "{{ release }}",
           "range": true,
           "refId": "A"
@@ -401,40 +301,6 @@
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -447,8 +313,7 @@
               }
             ]
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 6,
@@ -470,13 +335,8 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.0.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "disableTextWrap": false,
           "editorMode": "code",
           "expr": "count by(release)(nv_gpu_utilization{app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"})",
@@ -503,39 +363,8 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "fillOpacity": 10
           },
-          "mappings": [],
           "max": 1,
           "min": 0,
           "thresholds": {
@@ -559,8 +388,7 @@
             ]
           },
           "unit": "percentunit"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -582,13 +410,8 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.0.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "avg_over_time(nv_gpu_utilization{release=~\"$release\", namespace=~\"$namespace\"}[5m])",
           "hide": false,
@@ -612,39 +435,8 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "fillOpacity": 10
           },
-          "mappings": [],
           "max": 1,
           "min": 0,
           "thresholds": {
@@ -668,8 +460,7 @@
             ]
           },
           "unit": "percentunit"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -691,13 +482,8 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.0.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "(avg_over_time(nv_gpu_power_usage{release=~\"$release\", namespace=~\"$namespace\"}[5m]) / avg_over_time(nv_gpu_power_limit{release=~\"$release\", namespace=~\"$namespace\"}[5m]))",
           "hide": false,
@@ -721,39 +507,8 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "fillOpacity": 10
           },
-          "mappings": [],
           "max": 1,
           "min": 0,
           "thresholds": {
@@ -777,8 +532,7 @@
             ]
           },
           "unit": "percentunit"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -800,13 +554,8 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.0.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "nv_gpu_memory_used_bytes{release=~\"$release\", namespace=~\"$namespace\"}/nv_gpu_memory_total_bytes{release=~\"$release\", namespace=~\"$namespace\"}",
           "hide": false,
@@ -824,46 +573,11 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -874,8 +588,7 @@
             ]
           },
           "unit": "none"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -897,18 +610,12 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.0.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "exemplar": false,
           "expr": "sum (rate(nv_inference_count{app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"}[30s])) by(pod)",
           "instant": false,
-          "interval": "",
           "legendFormat": "{{ pod }}",
           "range": true,
           "refId": "A"
@@ -922,46 +629,11 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -972,8 +644,7 @@
             ]
           },
           "unit": "none"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -995,18 +666,12 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.0.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "exemplar": false,
           "expr": "sum (rate(nv_inference_count{app=~\"supersonic\", release=~\"$release\", namespace=~\"$namespace\"}[30s])) by(model)",
           "instant": false,
-          "interval": "",
           "legendFormat": "{{ model }}",
           "range": true,
           "refId": "A"
@@ -1073,6 +738,5 @@
   "timepicker": {},
   "timezone": "",
   "title": "SuperSONIC Dashboard",
-  "uid": "sonic-dashboard",
-  "version": 20
+  "uid": "sonic-dashboard"
 }

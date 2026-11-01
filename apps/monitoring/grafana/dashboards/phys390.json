@@ -35,7 +35,6 @@
   "timezone": "browser",
   "refresh": "1m",
   "schemaVersion": 42,
-  "version": 1,
   "panels": [
     {
       "id": 1,
@@ -69,10 +68,6 @@
           "refId": "A",
           "expr": "max((ALERTS{alertstate=\"firing\",component!=\"dev\",severity=\"critical\"} unless on(node) group by (node)(af_node_mount_result_fresh{node_pool=\"dev\"})) * 3 or (ALERTS{alertstate=\"firing\",component!=\"dev\",severity=\"error\"} unless on(node) group by (node)(af_node_mount_result_fresh{node_pool=\"dev\"})) * 2 or (ALERTS{alertstate=\"firing\",component!=\"dev\",severity=\"warning\"} unless on(node) group by (node)(af_node_mount_result_fresh{node_pool=\"dev\"}))) or vector(0)",
           "legendFormat": "health",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         }
@@ -119,8 +114,7 @@
           "color": {
             "mode": "thresholds"
           }
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -163,10 +157,6 @@
           "refId": "A",
           "expr": "max(jupyterhub_running_servers{job=\"jupyterhub\"})",
           "legendFormat": "running",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -174,10 +164,6 @@
           "refId": "B",
           "expr": "count(kube_pod_status_phase{namespace=\"cms\",pod=~\"purdue-af-.*\",phase=\"Pending\"} == 1) or vector(0)",
           "legendFormat": "pending",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -185,10 +171,6 @@
           "refId": "C",
           "expr": "sum(increase(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"failure\"}[$__range])) or vector(0)",
           "legendFormat": "failed starts",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -196,10 +178,6 @@
           "refId": "D",
           "expr": "count((time() - kube_pod_deletion_timestamp{namespace=\"cms\",pod=~\"purdue-af-.*\"}) > 300) or vector(0)",
           "legendFormat": "stuck terminating",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         }
@@ -207,7 +185,6 @@
       "description": "Interactive JupyterLab sessions. Running: right now. Pending: waiting for a node right now, non-zero for long means no node has the requested CPU, RAM or GPU. Failed starts: sessions the hub could not start within the selected time range. Stuck terminating: sessions deleted more than 5 minutes ago whose pod still exists, right now.",
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -335,10 +312,6 @@
           "refId": "A",
           "expr": "max(jupyterhub_active_users{job=\"jupyterhub\",period=\"24h\"})",
           "legendFormat": "active 24 h",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -346,10 +319,6 @@
           "refId": "B",
           "expr": "max(jupyterhub_active_users{job=\"jupyterhub\",period=\"7d\"})",
           "legendFormat": "active 7 d",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -357,10 +326,6 @@
           "refId": "C",
           "expr": "max(jupyterhub_active_users{job=\"jupyterhub\",period=\"30d\"})",
           "legendFormat": "active 30 d",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -368,10 +333,6 @@
           "refId": "D",
           "expr": "max(jupyterhub_total_users{job=\"jupyterhub\"})",
           "legendFormat": "registered",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         }
@@ -379,7 +340,6 @@
       "description": "Distinct users who used the hub in each period, and all users registered with the hub.",
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -393,8 +353,7 @@
             "mode": "thresholds"
           },
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -661,8 +620,7 @@
               }
             ]
           }
-        },
-        "overrides": []
+        }
       },
       "options": {
         "mergeValues": true,
@@ -691,18 +649,14 @@
         "h": 12
       },
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "targets": [
         {
           "refId": "A",
           "expr": "sum(clamp_min(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"success\"} - jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"success\"} offset $__interval, 0))",
           "legendFormat": "succeeded",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false,
           "interval": "5m"
@@ -711,10 +665,6 @@
           "refId": "B",
           "expr": "sum(clamp_min(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"failure\"} - jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"failure\"} offset $__interval, 0))",
           "legendFormat": "failed",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false,
           "interval": "5m"
@@ -723,10 +673,6 @@
           "refId": "C",
           "expr": "sum(clamp_min(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=~\"throttled|too-many-users\"} - jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=~\"throttled|too-many-users\"} offset $__interval, 0))",
           "legendFormat": "refused",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false,
           "interval": "5m"
@@ -739,34 +685,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -859,10 +780,6 @@
           "refId": "A",
           "expr": "count(count by (instance)(dask_scheduler_clients)) or vector(0)",
           "legendFormat": "clusters",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -870,10 +787,6 @@
           "refId": "B",
           "expr": "count(kube_pod_info{namespace=\"cms\",pod=~\"dask-worker-.*\",priority_class!=\"low-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"dask-worker-.*\",phase=\"Running\"} == 1)) or vector(0)",
           "legendFormat": "guaranteed workers",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -881,10 +794,6 @@
           "refId": "C",
           "expr": "count(kube_pod_info{namespace=\"cms\",pod=~\"dask-worker-.*\",priority_class=\"low-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"dask-worker-.*\",phase=\"Running\"} == 1)) or vector(0)",
           "legendFormat": "preemptible workers",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         }
@@ -892,7 +801,6 @@
       "description": "Dask Gateway clusters right now, and their running workers. Preemptible workers are those past a cluster's guaranteed ones: Kubernetes evicts them when a pod of higher priority needs their place.",
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -906,8 +814,7 @@
             "mode": "thresholds"
           },
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -957,10 +864,6 @@
           "refId": "C",
           "expr": "count(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\",pod=~\"ray-(train|job)-.+-worker-.+\",priority_class!=\"medium-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",phase=\"Running\"} == 1)) or vector(0)",
           "legendFormat": "guaranteed workers",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -968,10 +871,6 @@
           "refId": "D",
           "expr": "count(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\",pod=~\"ray-(train|job)-.+-worker-.+\",priority_class=\"medium-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",phase=\"Running\"} == 1)) or vector(0)",
           "legendFormat": "preemptible workers",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         }
@@ -979,7 +878,6 @@
       "description": "Users' Ray clusters and jobs at Purdue right now, and their running workers. Preemptible workers are those past a cluster's first: a session or another user's first worker takes their GPUs.",
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -993,8 +891,7 @@
             "mode": "thresholds"
           },
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -1044,7 +941,6 @@
       "description": "Ray jobs running on NRP Nautilus right now, and their workers, one GPU each.",
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1058,8 +954,7 @@
             "mode": "thresholds"
           },
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -1099,10 +994,6 @@
           "refId": "A",
           "expr": "sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\"))",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -1111,10 +1002,6 @@
           "refId": "B",
           "expr": "sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\"))",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -1123,10 +1010,6 @@
           "refId": "C",
           "expr": "sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\")) - sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\"))",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -1135,10 +1018,6 @@
           "refId": "D",
           "expr": "sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\")) / sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\"))",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -1201,7 +1080,6 @@
             "inspect": false,
             "filterable": false
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1552,7 +1430,6 @@
             "inspect": false,
             "filterable": false
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1794,7 +1671,6 @@
       "description": "/work is the AF shared volume, as reported by kubelet. /home is a small per-user volume: median and fullest among running sessions. At 100% a session stops working. The distribution over all users is on the right.",
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1819,8 +1695,7 @@
           "unit": "percentunit",
           "max": 1,
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -1861,10 +1736,6 @@
       "targets": [
         {
           "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "af_home_dir_util{namespace=\"cms\",job=\"af-pod-monitor\",username!=\"\"} * 100",
           "instant": true,
           "range": false,
@@ -1916,7 +1787,6 @@
               "viz": false
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [

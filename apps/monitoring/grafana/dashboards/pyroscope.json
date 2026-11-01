@@ -18,7 +18,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 8,
   "links": [],
   "panels": [
     {
@@ -27,8 +26,7 @@
         "uid": "pyroscope"
       },
       "fieldConfig": {
-        "defaults": {},
-        "overrides": []
+        "defaults": {}
       },
       "gridPos": {
         "h": 18,
@@ -38,13 +36,8 @@
       },
       "id": 1,
       "options": {},
-      "pluginVersion": "12.1.0",
       "targets": [
         {
-          "datasource": {
-            "type": "grafana-pyroscope-datasource",
-            "uid": "pyroscope"
-          },
           "groupBy": [],
           "labelSelector": "",
           "profileTypeId": "process_cpu:cpu:nanoseconds:cpu:nanoseconds",
@@ -70,6 +63,5 @@
   "timepicker": {},
   "timezone": "browser",
   "title": "Pyroscope profiling",
-  "uid": "pyroscope-dashboard",
-  "version": 3
+  "uid": "pyroscope-dashboard"
 }
