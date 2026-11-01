@@ -12,8 +12,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY docker/supersonic-model-manager/model_manager /app/model_manager
 
-# Runs unprivileged; the PVC must be group- or world-writable, or use
-# podSecurityContext.fsGroup in the chart (default) to fix ownership.
+# The chart's runAsUser and fix-ownership init container use this uid.
 RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin appuser
 USER 10001
 

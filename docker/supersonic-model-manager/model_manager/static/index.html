@@ -45,103 +45,31 @@
 
       --letter-overline: 0.07em;
       --dur: 160ms;
+
+      --bg: light-dark(#f4f5f7, #0e1014);
+      --surface: light-dark(#ffffff, #171a20);
+      --surface-sunken: light-dark(#fafafb, #13161b);
+      --surface-hover: light-dark(#f6f7f9, #1d212a);
+      --border: light-dark(#e3e5ea, #272c36);
+      --border-strong: light-dark(#cfd3da, #363c48);
+      --text: light-dark(#12141a, #e8eaef);
+      --text-muted: light-dark(#6b7280, #9aa2b1);
+      --text-faint: light-dark(#9aa1ac, #6b7382);
+      --accent: light-dark(#2f6df6, #5b8dff);
+      --accent-soft: light-dark(rgba(47, 109, 246, 0.1), rgba(91, 141, 255, 0.14));
+      --ok: light-dark(#12a37a, #3ecfa0);
+      --ok-soft: light-dark(rgba(18, 163, 122, 0.12), rgba(62, 207, 160, 0.14));
+      --warn: light-dark(#d18700, #eab456);
+      --warn-soft: light-dark(rgba(209, 135, 0, 0.13), rgba(234, 180, 86, 0.14));
+      --danger: light-dark(#dc4b4b, #f08585);
+      --danger-soft: light-dark(rgba(220, 75, 75, 0.12), rgba(240, 133, 133, 0.14));
+      --track: light-dark(#e6e8ec, #262b34);
+      --shadow: 0 1px 2px light-dark(rgba(16, 20, 30, 0.05), rgba(0, 0, 0, 0.4)), 0 4px 16px light-dark(rgba(16, 20, 30, 0.05), rgba(0, 0, 0, 0.3));
+      --shadow-pop: 0 8px 32px light-dark(rgba(16, 20, 30, 0.14), rgba(0, 0, 0, 0.5));
     }
 
-    html[data-theme="light"] {
-      --bg: #f4f5f7;
-      --surface: #ffffff;
-      --surface-sunken: #fafafb;
-      --surface-hover: #f6f7f9;
-      --border: #e3e5ea;
-      --border-strong: #cfd3da;
-      --text: #12141a;
-      --text-muted: #6b7280;
-      --text-faint: #9aa1ac;
-      --accent: #2f6df6;
-      --accent-soft: rgba(47, 109, 246, 0.1);
-      --ok: #12a37a;
-      --ok-soft: rgba(18, 163, 122, 0.12);
-      --warn: #d18700;
-      --warn-soft: rgba(209, 135, 0, 0.13);
-      --danger: #dc4b4b;
-      --danger-soft: rgba(220, 75, 75, 0.12);
-      --track: #e6e8ec;
-      --shadow: 0 1px 2px rgba(16, 20, 30, 0.05), 0 4px 16px rgba(16, 20, 30, 0.05);
-      --shadow-pop: 0 8px 32px rgba(16, 20, 30, 0.14);
-    }
-
-    html[data-theme="dark"] {
-      --bg: #0e1014;
-      --surface: #171a20;
-      --surface-sunken: #13161b;
-      --surface-hover: #1d212a;
-      --border: #272c36;
-      --border-strong: #363c48;
-      --text: #e8eaef;
-      --text-muted: #9aa2b1;
-      --text-faint: #6b7382;
-      --accent: #5b8dff;
-      --accent-soft: rgba(91, 141, 255, 0.14);
-      --ok: #3ecfa0;
-      --ok-soft: rgba(62, 207, 160, 0.14);
-      --warn: #eab456;
-      --warn-soft: rgba(234, 180, 86, 0.14);
-      --danger: #f08585;
-      --danger-soft: rgba(240, 133, 133, 0.14);
-      --track: #262b34;
-      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
-      --shadow-pop: 0 8px 32px rgba(0, 0, 0, 0.5);
-    }
-
-    @media (prefers-color-scheme: dark) {
-      html[data-theme="system"] {
-        --bg: #0e1014;
-        --surface: #171a20;
-        --surface-sunken: #13161b;
-        --surface-hover: #1d212a;
-        --border: #272c36;
-        --border-strong: #363c48;
-        --text: #e8eaef;
-        --text-muted: #9aa2b1;
-        --text-faint: #6b7382;
-        --accent: #5b8dff;
-        --accent-soft: rgba(91, 141, 255, 0.14);
-        --ok: #3ecfa0;
-        --ok-soft: rgba(62, 207, 160, 0.14);
-        --warn: #eab456;
-        --warn-soft: rgba(234, 180, 86, 0.14);
-        --danger: #f08585;
-        --danger-soft: rgba(240, 133, 133, 0.14);
-        --track: #262b34;
-        --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
-        --shadow-pop: 0 8px 32px rgba(0, 0, 0, 0.5);
-      }
-    }
-
-    @media (prefers-color-scheme: light) {
-      html[data-theme="system"] {
-        --bg: #f4f5f7;
-        --surface: #ffffff;
-        --surface-sunken: #fafafb;
-        --surface-hover: #f6f7f9;
-        --border: #e3e5ea;
-        --border-strong: #cfd3da;
-        --text: #12141a;
-        --text-muted: #6b7280;
-        --text-faint: #9aa1ac;
-        --accent: #2f6df6;
-        --accent-soft: rgba(47, 109, 246, 0.1);
-        --ok: #12a37a;
-        --ok-soft: rgba(18, 163, 122, 0.12);
-        --warn: #d18700;
-        --warn-soft: rgba(209, 135, 0, 0.13);
-        --danger: #dc4b4b;
-        --danger-soft: rgba(220, 75, 75, 0.12);
-        --track: #e6e8ec;
-        --shadow: 0 1px 2px rgba(16, 20, 30, 0.05), 0 4px 16px rgba(16, 20, 30, 0.05);
-        --shadow-pop: 0 8px 32px rgba(16, 20, 30, 0.14);
-      }
-    }
+    html[data-theme="light"] { color-scheme: light; }
+    html[data-theme="dark"] { color-scheme: dark; }
 
     * { box-sizing: border-box; }
 
@@ -819,7 +747,7 @@
           <div class="bar"><i id="upload-bar"></i></div>
           <div class="meta"><span id="upload-name">–</span><span id="upload-pct">0%</span></div>
         </div>
-        <input type="file" id="input-archive" class="sr-only" accept=".zip,.tar,.gz,.tgz,.bz2,.xz" />
+        <input type="file" id="input-archive" class="sr-only" accept=".zip,.tar,.gz,.tgz,.bz2,.tbz2,.xz,.txz" />
         <input type="file" id="input-dir" class="sr-only" webkitdirectory directory multiple />
       </section>
     </div>
@@ -1659,9 +1587,12 @@
         return;
       }
       const reader = entry.createReader();
-      const children = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
-      for (const child of children) {
-        await walkEntry(child, prefix ? `${prefix}/${entry.name}` : entry.name, out);
+      const childPrefix = prefix ? `${prefix}/${entry.name}` : entry.name;
+      // Chromium returns at most 100 entries per call.
+      for (;;) {
+        const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+        if (!batch.length) break;
+        for (const child of batch) await walkEntry(child, childPrefix, out);
       }
     }
 

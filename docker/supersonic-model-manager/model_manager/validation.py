@@ -44,14 +44,7 @@ BACKEND_ARTIFACTS = {
 
 # Filename -> platform, used when there is no config.pbtxt to read.
 ARTIFACT_PLATFORMS = {
-    "model.plan": "tensorrt_plan",
-    "model.onnx": "onnxruntime_onnx",
-    "model.savedmodel": "tensorflow_savedmodel",
-    "model.graphdef": "tensorflow_graphdef",
-    "model.pt": "pytorch_libtorch",
-    "model.xml": "openvino",
-    "model.py": "python",
-    "model.dali": "dali",
+    name: platform for platform, (name, _) in PLATFORM_ARTIFACTS.items()
 }
 
 # Backends that can infer their config, so config.pbtxt is optional when the
@@ -105,8 +98,8 @@ def parse_config(config_file: Path) -> dict:
     except OSError as exc:
         return {"_error": str(exc)}
 
-    def scalar(field_name: str, quoted: bool = True):
-        pattern = r'"([^"]*)"' if quoted else r"([0-9]+)"
+    def scalar(field_name: str):
+        pattern = r'"([^"]*)"'
         # An unindented match is top-level; fall back to the first match anywhere.
         top = re.search(rf"^{field_name}\s*:\s*{pattern}", text, re.MULTILINE)
         if top:
@@ -119,7 +112,6 @@ def parse_config(config_file: Path) -> dict:
         "platform": scalar("platform"),
         "backend": scalar("backend"),
         "default_model_filename": scalar("default_model_filename"),
-        "max_batch_size": scalar("max_batch_size", quoted=False),
     }
 
 
