@@ -19,7 +19,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": 55,
   "links": [],
   "liveNow": true,
   "panels": [
@@ -28,41 +27,19 @@
         "type": "datasource",
         "uid": "-- Mixed --"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "fillOpacity": 6,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A"
             },
             "thresholdsStyle": {}
           },
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -108,7 +85,6 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "v11.0.0",
       "targets": [
         {
           "datasource": {
@@ -116,7 +92,6 @@
             "uid": "prometheus-rancher"
           },
           "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=\"cms\",pod=\"$user\", container=\"notebook\"}[5m])\n) by (pod)\n    /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=\"cms\",pod=\"$user\", resource=\"cpu\", container=\"notebook\"}\n)\n",
-          "interval": "",
           "legendFormat": "CPU utilization",
           "refId": "A"
         },
@@ -126,7 +101,6 @@
             "uid": "prometheus-rancher"
           },
           "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=\"cms\", pod=~\"$user\", container=\"notebook\"}\n) /\nsum by (pod)(\n    kube_pod_container_resource_requests{namespace=\"cms\", pod=~\"$user\", resource=\"memory\", container=\"notebook\"}\n)\n",
-          "interval": "",
           "legendFormat": "Memory utilization",
           "refId": "B"
         },
@@ -136,7 +110,6 @@
             "uid": "prometheus-rancher"
           },
           "expr": "sum by (pod) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"$user\"})\n",
-          "interval": "",
           "legendFormat": "GPU engine utilization",
           "refId": "C"
         },
@@ -146,7 +119,6 @@
             "uid": "prometheus-rancher"
           },
           "expr": "sum by (pod) (\n  ( DCGM_FI_DEV_FB_USED{pod=~\"$user\"}\n    / ( \n      DCGM_FI_DEV_FB_USED{pod=~\"$user\"} +\n      DCGM_FI_DEV_FB_FREE{pod=~\"$user\"}\n    )\n  )\n)\n",
-          "interval": "",
           "legendFormat": "GPU memory utilization",
           "refId": "D"
         },
@@ -156,7 +128,6 @@
             "uid": "prometheus"
           },
           "expr": "sum(af_home_dir_util{namespace=\"cms\",job=\"af-pod-monitor\",pod=~\"$user\"})",
-          "interval": "",
           "legendFormat": "/home/ storage utilization",
           "refId": "E"
         },
@@ -166,7 +137,6 @@
             "uid": "prometheus-rancher"
           },
           "expr": "\n        sum by (pod) (\n          irate(container_network_transmit_bytes_total{namespace=\"cms\", pod=~\"$user\"}[5m])\n        )\n      ",
-          "interval": "",
           "legendFormat": "I/O send",
           "refId": "F"
         },
@@ -176,7 +146,6 @@
             "uid": "prometheus-rancher"
           },
           "expr": "\n        sum by (pod) (\n          irate(container_network_receive_bytes_total{namespace=\"cms\", pod=~\"$user\"}[5m])\n        )\n      ",
-          "interval": "",
           "legendFormat": "I/O receive",
           "refId": "G"
         }
@@ -197,44 +166,22 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "fillOpacity": 6,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A"
             },
             "thresholdsStyle": {}
           },
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -280,25 +227,14 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "v11.0.0",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "expr": "sum(\n    irate(container_cpu_usage_seconds_total{namespace=\"cms\",pod=\"$user\", container=\"notebook\"}[5m])\n) by (pod)\n",
-          "interval": "",
           "legendFormat": "CPU utilization",
           "refId": "A"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "expr": "sum by (pod)(\n    container_memory_working_set_bytes{namespace=\"cms\", pod=~\"$user\", container=\"notebook\"}\n)\n",
-          "interval": "",
           "legendFormat": "Memory utilization",
           "refId": "B"
         }
@@ -378,6 +314,5 @@
   "timezone": "browser",
   "title": "Single User Statistics",
   "uid": "single-user-stat-dashboard",
-  "version": 852,
   "weekStart": ""
 }

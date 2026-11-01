@@ -16,6 +16,13 @@ repos:
 
   - repo: local
     hooks:
+      # Before prettier, which keeps the formatting.
+      - id: normalize-dashboards
+        name: normalize Grafana dashboards
+        language: python
+        entry: python .github/workflows/normalize-dashboards.py
+        files: ^apps/monitoring/grafana/dashboards/.*\.json$
+
       - id: prettier
         name: prettier (JSON/YAML)
         language: node

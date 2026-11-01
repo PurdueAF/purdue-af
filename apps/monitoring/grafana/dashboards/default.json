@@ -72,7 +72,6 @@
   "timezone": "browser",
   "refresh": "1m",
   "schemaVersion": 42,
-  "version": 1,
   "panels": [
     {
       "id": 1,
@@ -106,10 +105,6 @@
           "refId": "A",
           "expr": "max((ALERTS{alertstate=\"firing\",component!=\"dev\",severity=\"critical\"} unless on(node) group by (node)(af_node_mount_result_fresh{node_pool=\"dev\"})) * 3 or (ALERTS{alertstate=\"firing\",component!=\"dev\",severity=\"error\"} unless on(node) group by (node)(af_node_mount_result_fresh{node_pool=\"dev\"})) * 2 or (ALERTS{alertstate=\"firing\",component!=\"dev\",severity=\"warning\"} unless on(node) group by (node)(af_node_mount_result_fresh{node_pool=\"dev\"}))) or vector(0)",
           "legendFormat": "health",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         }
@@ -156,8 +151,7 @@
           "color": {
             "mode": "thresholds"
           }
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -200,10 +194,6 @@
           "refId": "A",
           "expr": "count((ALERTS{alertstate=\"firing\",component!=\"dev\",severity=\"error\"} unless on(node) group by (node)(af_node_mount_result_fresh{node_pool=\"dev\"})) or (ALERTS{alertstate=\"firing\",component!=\"dev\",severity=\"critical\"} unless on(node) group by (node)(af_node_mount_result_fresh{node_pool=\"dev\"}))) or vector(0)",
           "legendFormat": "errors",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -211,10 +201,6 @@
           "refId": "B",
           "expr": "count((ALERTS{alertstate=\"firing\",component!=\"dev\",severity=\"warning\"} unless on(node) group by (node)(af_node_mount_result_fresh{node_pool=\"dev\"}))) or vector(0)",
           "legendFormat": "warnings",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         }
@@ -222,7 +208,6 @@
       "description": "Firing alerts on cms-af-prod nodes. Click the panel link for details.",
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -540,8 +525,7 @@
               }
             ]
           }
-        },
-        "overrides": []
+        }
       },
       "options": {
         "mergeValues": true,
@@ -578,10 +562,6 @@
           "refId": "A",
           "expr": "max(jupyterhub_running_servers{job=\"jupyterhub\"})",
           "legendFormat": "running",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -589,10 +569,6 @@
           "refId": "B",
           "expr": "count(kube_pod_status_phase{namespace=\"cms\",pod=~\"purdue-af-.*\",phase=\"Pending\"} == 1) or vector(0)",
           "legendFormat": "pending",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -600,10 +576,6 @@
           "refId": "C",
           "expr": "sum(increase(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"failure\"}[$__range])) or vector(0)",
           "legendFormat": "failed starts",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -611,10 +583,6 @@
           "refId": "D",
           "expr": "count((time() - kube_pod_deletion_timestamp{namespace=\"cms\",pod=~\"purdue-af-.*\"}) > 300) or vector(0)",
           "legendFormat": "stuck terminating",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         }
@@ -622,7 +590,6 @@
       "description": "Interactive JupyterLab sessions. Running: right now. Pending: waiting for a node right now, non-zero for long means no node has the requested CPU, RAM or GPU. Failed starts: sessions the hub could not start within the selected time range. Stuck terminating: sessions deleted more than 5 minutes ago whose pod still exists, right now.",
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -750,10 +717,6 @@
           "refId": "A",
           "expr": "max(jupyterhub_active_users{job=\"jupyterhub\",period=\"24h\"})",
           "legendFormat": "active 24 h",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -761,10 +724,6 @@
           "refId": "B",
           "expr": "max(jupyterhub_active_users{job=\"jupyterhub\",period=\"7d\"})",
           "legendFormat": "active 7 d",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -772,10 +731,6 @@
           "refId": "C",
           "expr": "max(jupyterhub_active_users{job=\"jupyterhub\",period=\"30d\"})",
           "legendFormat": "active 30 d",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -783,10 +738,6 @@
           "refId": "D",
           "expr": "max(jupyterhub_total_users{job=\"jupyterhub\"})",
           "legendFormat": "registered",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         }
@@ -794,7 +745,6 @@
       "description": "Distinct users who used the hub in each period, and all users registered with the hub.",
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -808,8 +758,7 @@
             "mode": "thresholds"
           },
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -837,18 +786,14 @@
         "h": 4
       },
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "targets": [
         {
           "refId": "A",
           "expr": "sum(clamp_min(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"success\"} - jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"success\"} offset $__interval, 0))",
           "legendFormat": "succeeded",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false,
           "interval": "5m"
@@ -857,10 +802,6 @@
           "refId": "B",
           "expr": "sum(clamp_min(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"failure\"} - jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=\"failure\"} offset $__interval, 0))",
           "legendFormat": "failed",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false,
           "interval": "5m"
@@ -869,10 +810,6 @@
           "refId": "C",
           "expr": "sum(clamp_min(jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=~\"throttled|too-many-users\"} - jupyterhub_server_spawn_duration_seconds_count{job=\"jupyterhub\",status=~\"throttled|too-many-users\"} offset $__interval, 0))",
           "legendFormat": "refused",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false,
           "interval": "5m"
@@ -885,34 +822,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1005,10 +917,6 @@
           "refId": "A",
           "expr": "sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\"))",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -1017,10 +925,6 @@
           "refId": "B",
           "expr": "sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\"))",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -1029,10 +933,6 @@
           "refId": "C",
           "expr": "sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\")) - sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\"))",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -1041,10 +941,6 @@
           "refId": "D",
           "expr": "sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\")) / sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\"))",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -1107,7 +1003,6 @@
             "inspect": false,
             "filterable": false
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1458,7 +1353,6 @@
             "inspect": false,
             "filterable": false
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1700,7 +1594,6 @@
       "description": "/work is the AF shared volume, as reported by kubelet. /home is a small per-user volume: median and fullest among running sessions. At 100% a session stops working. The distribution over all users is on the right.",
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1725,8 +1618,7 @@
           "unit": "percentunit",
           "max": 1,
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -1767,10 +1659,6 @@
       "targets": [
         {
           "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "af_home_dir_util{namespace=\"cms\",job=\"af-pod-monitor\",username!=\"\"} * 100",
           "instant": true,
           "range": false,
@@ -1822,7 +1710,6 @@
               "viz": false
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1868,10 +1755,6 @@
           "refId": "A",
           "expr": "count(count by (instance)(dask_scheduler_clients)) or vector(0)",
           "legendFormat": "clusters",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -1879,10 +1762,6 @@
           "refId": "B",
           "expr": "count(kube_pod_info{namespace=\"cms\",pod=~\"dask-worker-.*\",priority_class!=\"low-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"dask-worker-.*\",phase=\"Running\"} == 1)) or vector(0)",
           "legendFormat": "guaranteed workers",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -1890,10 +1769,6 @@
           "refId": "C",
           "expr": "count(kube_pod_info{namespace=\"cms\",pod=~\"dask-worker-.*\",priority_class=\"low-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"dask-worker-.*\",phase=\"Running\"} == 1)) or vector(0)",
           "legendFormat": "preemptible workers",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         }
@@ -1901,7 +1776,6 @@
       "description": "Dask Gateway clusters right now, and their running workers. Preemptible workers are those past a cluster's guaranteed ones: Kubernetes evicts them when a pod of higher priority needs their place.",
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1915,8 +1789,7 @@
             "mode": "thresholds"
           },
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -1966,10 +1839,6 @@
           "refId": "C",
           "expr": "count(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\",pod=~\"ray-(train|job)-.+-worker-.+\",priority_class!=\"medium-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",phase=\"Running\"} == 1)) or vector(0)",
           "legendFormat": "guaranteed workers",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -1977,10 +1846,6 @@
           "refId": "D",
           "expr": "count(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\",pod=~\"ray-(train|job)-.+-worker-.+\",priority_class=\"medium-priority-preemptible\"} and on(pod) (kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",phase=\"Running\"} == 1)) or vector(0)",
           "legendFormat": "preemptible workers",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         }
@@ -1988,7 +1853,6 @@
       "description": "Users' Ray clusters and jobs at Purdue right now, and their running workers. Preemptible workers are those past a cluster's first: a session or another user's first worker takes their GPUs.",
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -2002,8 +1866,7 @@
             "mode": "thresholds"
           },
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -2053,7 +1916,6 @@
       "description": "Ray jobs running on NRP Nautilus right now, and their workers, one GPU each.",
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -2067,8 +1929,7 @@
             "mode": "thresholds"
           },
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -2121,10 +1982,6 @@
           "refId": "A",
           "expr": "(kube_node_status_condition{condition=\"Ready\",status=\"true\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -2133,10 +1990,6 @@
           "refId": "B",
           "expr": "(count by (node)(kube_pod_info{namespace=\"cms\",node!=\"\",pod=~\"purdue-af-.*\"})) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -2145,10 +1998,6 @@
           "refId": "C",
           "expr": "(count by (node)(kube_pod_info{namespace=\"cms\",node!=\"\",pod=~\"dask-worker-.*\"})) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -2157,10 +2006,6 @@
           "refId": "D",
           "expr": "(sum by (node)(kube_pod_container_resource_requests{namespace=\"cms\",resource=\"cpu\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) / sum by (node)(kube_node_status_allocatable{resource=\"cpu\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -2169,10 +2014,6 @@
           "refId": "E",
           "expr": "(sum by (node)(kube_node_status_allocatable{resource=\"cpu\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) - (sum by (node)(kube_pod_container_resource_requests{namespace=\"cms\",resource=\"cpu\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) or sum by (node)(kube_node_status_allocatable{resource=\"cpu\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) * 0)) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -2181,10 +2022,6 @@
           "refId": "F",
           "expr": "(sum by (node)(kube_pod_container_resource_requests{namespace=\"cms\",resource=\"memory\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) / sum by (node)(kube_node_status_allocatable{resource=\"memory\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -2193,10 +2030,6 @@
           "refId": "G",
           "expr": "(sum by (node)(kube_node_status_allocatable{resource=\"memory\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) - (sum by (node)(kube_pod_container_resource_requests{namespace=\"cms\",resource=\"memory\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) or sum by (node)(kube_node_status_allocatable{resource=\"memory\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) * 0)) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -2205,10 +2038,6 @@
           "refId": "H",
           "expr": "(sum by (node)(label_replace(rate(node_cpu_seconds_total{job=\"node-exporter\",mode!=\"idle\"}[5m]), \"node\", \"$1\", \"instance\", \"([^.]+)\\\\..*\")) / on(node) sum by (node)(kube_node_status_capacity{resource=\"cpu\"})) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -2217,10 +2046,6 @@
           "refId": "I",
           "expr": "(sum by (node)(label_replace(1 - node_memory_MemAvailable_bytes{job=\"node-exporter\"} / node_memory_MemTotal_bytes{job=\"node-exporter\"}, \"node\", \"$1\", \"instance\", \"([^.]+)\\\\..*\"))) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -2229,10 +2054,6 @@
           "refId": "J",
           "expr": "(sum by (node)(kube_pod_container_resource_requests{namespace=\"cms\",resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -2241,10 +2062,6 @@
           "refId": "K",
           "expr": "(sum by (node)(kube_node_status_allocatable{resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) > 0) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -2253,10 +2070,6 @@
           "refId": "L",
           "expr": "max by (node, node_pool)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -2265,10 +2078,6 @@
           "refId": "M",
           "expr": "(sum by (node)(kube_node_status_allocatable{resource=\"cpu\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -2277,10 +2086,6 @@
           "refId": "N",
           "expr": "(sum by (node)(kube_node_status_allocatable{resource=\"memory\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -2289,10 +2094,6 @@
           "refId": "O",
           "expr": "((sum by (node)(kube_pod_container_resource_requests{namespace=\"cms\",resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) or (sum by (node)(kube_node_status_allocatable{resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) > 0) * 0) / (sum by (node)(kube_node_status_allocatable{resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) > 0)) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -2301,10 +2102,6 @@
           "refId": "P",
           "expr": "((sum by (node)(kube_node_status_allocatable{resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) > 0) - (sum by (node)(kube_pod_container_resource_requests{namespace=\"cms\",resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) or (sum by (node)(kube_node_status_allocatable{resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) > 0) * 0)) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -2391,7 +2188,6 @@
             "inspect": false,
             "filterable": false
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -3067,34 +2863,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -3405,34 +3176,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -3721,34 +3467,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -3943,10 +3664,6 @@
           "refId": "A",
           "expr": "count by (mount_name)(af_node_mount_result_fresh{node_pool=\"prod\"})",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -3955,10 +3672,6 @@
           "refId": "B",
           "expr": "sum by (mount_name)(af_node_mount_valid{node_pool=\"prod\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{node_pool=\"prod\"} == 1))",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -3967,10 +3680,6 @@
           "refId": "C",
           "expr": "quantile by (mount_name)(0.5, af_node_mount_metadata_latency_ms{node_pool=\"prod\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{node_pool=\"prod\"} == 1))",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -3979,10 +3688,6 @@
           "refId": "D",
           "expr": "max by (mount_name)(af_node_mount_metadata_latency_ms{node_pool=\"prod\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{node_pool=\"prod\"} == 1))",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -4036,7 +3741,6 @@
             "inspect": false,
             "filterable": false
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -4215,18 +3919,14 @@
         "h": 8
       },
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "targets": [
         {
           "refId": "A",
           "expr": "quantile by (mount_name)(0.5, af_node_mount_metadata_latency_ms{node_pool=\"prod\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{node_pool=\"prod\"} == 1))",
           "legendFormat": "{{ mount_name }}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false
         }
@@ -4238,34 +3938,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -4353,18 +4028,14 @@
         "h": 8
       },
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "targets": [
         {
           "refId": "A",
           "expr": "avg by (mount_name)(af_node_mount_data_rate_gbps{node_pool=\"prod\", mount_name!=\"cvmfs\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{node_pool=\"prod\"} == 1))",
           "legendFormat": "{{ mount_name }}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false
         }
@@ -4376,34 +4047,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -4482,8 +4128,8 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "description": "Metadata latency per node, ms. A red column is a storage-side problem, a red row is one node.",
       "fieldConfig": {
@@ -4498,8 +4144,7 @@
               "type": "linear"
             }
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "x": 0,
@@ -4547,13 +4192,8 @@
           "reverse": false
         }
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "sum by (node) (af_node_mount_metadata_latency_ms{mount_name=\"/depot/\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{mount_name=\"/depot/\"} == 1))",
           "interval": "5m",
@@ -4567,8 +4207,8 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "description": "Metadata latency per node, ms. A red column is a storage-side problem, a red row is one node.",
       "fieldConfig": {
@@ -4583,8 +4223,7 @@
               "type": "linear"
             }
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "x": 6,
@@ -4632,13 +4271,8 @@
           "reverse": false
         }
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "sum by (node) (af_node_mount_metadata_latency_ms{mount_name=\"/work/\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{mount_name=\"/work/\"} == 1))",
           "interval": "5m",
@@ -4652,8 +4286,8 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "description": "Metadata latency per node, ms. A red column is a storage-side problem, a red row is one node.",
       "fieldConfig": {
@@ -4668,8 +4302,7 @@
               "type": "linear"
             }
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "x": 12,
@@ -4717,13 +4350,8 @@
           "reverse": false
         }
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "sum by (node) (af_node_mount_metadata_latency_ms{mount_name=\"eos\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{mount_name=\"eos\"} == 1))",
           "interval": "5m",
@@ -4737,8 +4365,8 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "description": "Metadata latency per node, ms. A red column is a storage-side problem, a red row is one node.",
       "fieldConfig": {
@@ -4753,8 +4381,7 @@
               "type": "linear"
             }
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "x": 18,
@@ -4802,13 +4429,8 @@
           "reverse": false
         }
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "sum by (node) (af_node_mount_metadata_latency_ms{mount_name=\"cvmfs\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{mount_name=\"cvmfs\"} == 1))",
           "interval": "5m",
@@ -4852,10 +4474,6 @@
           "refId": "A",
           "expr": "sum by (user)(dask_scheduler_tasks{state=\"processing\"}) > bool 0",
           "legendFormat": "{{ user }}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false
         }
@@ -4907,8 +4525,7 @@
               }
             ]
           }
-        },
-        "overrides": []
+        }
       },
       "options": {
         "mergeValues": true,
@@ -4945,10 +4562,6 @@
           "refId": "A",
           "expr": "(1 - sum(dask_scheduler_workers{state=\"idle\"}) / sum(dask_scheduler_workers)) or vector(0)",
           "legendFormat": "workers busy",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         },
@@ -4956,10 +4569,6 @@
           "refId": "B",
           "expr": "(sum(rate(dask_scheduler_tasks_compute_seconds_total[5m])) or vector(0)) / (sum(kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"dask-worker-.*\",resource=\"cpu\"}) > 0)",
           "legendFormat": "cores computing",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         }
@@ -4971,7 +4580,6 @@
           "min": 0,
           "max": 1,
           "decimals": 0,
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -4993,8 +4601,7 @@
             "mode": "thresholds"
           },
           "noValue": "no clusters"
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -5029,10 +4636,6 @@
           "refId": "A",
           "expr": "sum by (user)(increase(dask_scheduler_tasks_compute_seconds_total[$__range])) / 3600 > 0",
           "legendFormat": "{{ user }}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true
         }
@@ -5040,7 +4643,6 @@
       "description": "Task compute time delivered to each user over the selected time range, in core-hours. This is the useful work done, as opposed to cores merely reserved.",
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -5056,8 +4658,7 @@
           "min": 0,
           "unit": "none",
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -5087,18 +4688,14 @@
         "h": 6
       },
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "targets": [
         {
           "refId": "A",
           "expr": "sum(rate(dask_scheduler_tasks_compute_seconds_total[5m]))",
           "legendFormat": "computing",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false
         },
@@ -5106,10 +4703,6 @@
           "refId": "B",
           "expr": "sum(rate(dask_scheduler_tasks_transfer_seconds_total[5m]))",
           "legendFormat": "transferring",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false
         },
@@ -5117,10 +4710,6 @@
           "refId": "C",
           "expr": "sum(dask_scheduler_workers)",
           "legendFormat": "workers",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false
         }
@@ -5132,34 +4721,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -5259,10 +4823,6 @@
           "refId": "A",
           "expr": "label_replace(label_replace(sum by (user, pod)(dask_scheduler_workers), \"cluster\", \"$1\", \"pod\", \"dask-scheduler-([0-9a-f]{32})\"), \"id\", \"$1\", \"cluster\", \"(.{8}).*\")",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -5271,10 +4831,6 @@
           "refId": "B",
           "expr": "label_replace(sum by (pod)(dask_scheduler_workers{state=\"idle\"}), \"cluster\", \"$1\", \"pod\", \"dask-scheduler-([0-9a-f]{32})\")",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -5283,10 +4839,6 @@
           "refId": "C",
           "expr": "label_replace(sum by (pod)(dask_scheduler_clients), \"cluster\", \"$1\", \"pod\", \"dask-scheduler-([0-9a-f]{32})\")",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -5295,10 +4847,6 @@
           "refId": "D",
           "expr": "label_replace(sum by (pod)(dask_scheduler_tasks{state=\"processing\"}), \"cluster\", \"$1\", \"pod\", \"dask-scheduler-([0-9a-f]{32})\")",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -5307,10 +4855,6 @@
           "refId": "E",
           "expr": "label_replace(sum by (pod)(dask_scheduler_tasks{state=~\"queued|waiting\"}), \"cluster\", \"$1\", \"pod\", \"dask-scheduler-([0-9a-f]{32})\")",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -5319,10 +4863,6 @@
           "refId": "F",
           "expr": "sum by (cluster)(label_replace(kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"dask-worker-.*\",resource=\"cpu\"}, \"cluster\", \"$1\", \"pod\", \"dask-worker-([0-9a-f]{32})-.*\"))",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -5331,10 +4871,6 @@
           "refId": "G",
           "expr": "sum by (cluster)(label_replace(kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"dask-worker-.*\",resource=\"memory\"}, \"cluster\", \"$1\", \"pod\", \"dask-worker-([0-9a-f]{32})-.*\"))",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -5343,10 +4879,6 @@
           "refId": "H",
           "expr": "label_replace(sum by (pod)(dask_scheduler_tasks_output_bytes), \"cluster\", \"$1\", \"pod\", \"dask-scheduler-([0-9a-f]{32})\")",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -5355,10 +4887,6 @@
           "refId": "I",
           "expr": "sum by (cluster)(label_replace(time() - kube_pod_created{namespace=\"cms\",pod=~\"dask-scheduler-.*\"}, \"cluster\", \"$1\", \"pod\", \"dask-scheduler-([0-9a-f]{32})\"))",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -5367,10 +4895,6 @@
           "refId": "J",
           "expr": "label_replace(((sum by (pod)(dask_scheduler_workers) > 0) and on(pod) (sum by (pod)(dask_scheduler_clients) == 0) and on(pod) (sum by (pod)(dask_scheduler_tasks{state=\"processing\"}) == 0)) > bool 0, \"cluster\", \"$1\", \"pod\", \"dask-scheduler-([0-9a-f]{32})\")",
           "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": false,
           "instant": true,
           "format": "table"
@@ -5449,7 +4973,6 @@
             "inspect": false,
             "filterable": false
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -5730,18 +5253,14 @@
         "h": 7
       },
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "targets": [
         {
           "refId": "A",
           "expr": "sum by (state)(dask_scheduler_workers)",
           "legendFormat": "{{ state }}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false
         }
@@ -5753,34 +5272,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -5900,18 +5394,14 @@
       },
       "interval": "1m",
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
       },
       "targets": [
         {
           "refId": "A",
           "expr": "sum((scheduler_preemption_victims_sum - scheduler_preemption_victims_sum offset $__interval >= 0) or (scheduler_preemption_victims_sum < scheduler_preemption_victims_sum offset $__interval))",
           "legendFormat": "preempted",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "range": true,
           "instant": false
         }
@@ -5924,34 +5414,9 @@
             "fixedColor": "orange"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -5963,8 +5428,7 @@
           },
           "min": 0,
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "legend": {
@@ -5991,40 +5455,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "showPoints": "never"
           },
-          "mappings": [],
           "max": 1,
           "min": 0,
           "thresholds": {
@@ -6032,8 +5465,7 @@
             "steps": []
           },
           "unit": "percentunit"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "x": 12,
@@ -6054,7 +5486,6 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
           "datasource": {
@@ -6063,7 +5494,6 @@
           },
           "editorMode": "code",
           "expr": "max by (cluster_name) (\n  sum by (pod, cluster_name) (\n    label_replace(\n      container_memory_working_set_bytes{pod=~\"dask-worker-.*\", container=\"dask-worker\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n  /\n  sum by (pod, cluster_name) (\n    label_replace(\n      kube_pod_container_resource_limits{pod=~\"dask-worker-.*\", resource=\"memory\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n)\n",
-          "interval": "",
           "legendFormat": "Max: {{ cluster_name }}",
           "range": true,
           "refId": "A"
@@ -6086,8 +5516,8 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
       },
       "description": "A scheduler pinned at one core is the bottleneck for that cluster. Legend hidden: series are cluster ids, see the table above; hover for values.",
       "fieldConfig": {
@@ -6096,48 +5526,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "showPoints": "never"
           },
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           },
           "unit": "CPU"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "x": 18,
@@ -6158,16 +5556,10 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "label_replace(\n    rate(container_cpu_usage_seconds_total{pod=~\"dask-scheduler-.*\", container=\"dask-scheduler\"}[5m]),\n    \"cluster_name\",\n    \"$1\",\n    \"pod\",\n    \"dask-scheduler-([0-9a-f]{32})\"\n)\n\n\n\n",
-          "interval": "",
           "legendFormat": "{{ cluster_name }}",
           "range": true,
           "refId": "A"
@@ -6281,8 +5673,7 @@
               }
             ]
           }
-        },
-        "overrides": []
+        }
       },
       "options": {
         "mergeValues": true,
@@ -6319,10 +5710,6 @@
           "refId": "A",
           "expr": "(count(avg_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}[5m]) >= 0.01) or vector(0)) / count(avg_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}[5m]))",
           "legendFormat": "GPUs busy",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "range": false,
           "instant": true
         },
@@ -6330,10 +5717,6 @@
           "refId": "B",
           "expr": "avg(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"})",
           "legendFormat": "GPU compute",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "range": false,
           "instant": true
         }
@@ -6345,7 +5728,6 @@
           "min": 0,
           "max": 1,
           "decimals": 0,
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -6367,8 +5749,7 @@
             "mode": "thresholds"
           },
           "noValue": "no clusters"
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -6424,7 +5805,6 @@
       "description": "Graphics-engine activity of each user's Ray workers summed over the selected time range, in GPU-hours. This is the useful work done, as opposed to GPUs merely reserved. On NRP, from GPU utilization, the measure NRP reports.",
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -6440,8 +5820,7 @@
           "min": 0,
           "unit": "none",
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -6543,34 +5922,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -7146,7 +6500,6 @@
             "inspect": false,
             "filterable": false
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -7518,34 +6871,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -7559,8 +6887,7 @@
           "decimals": 0,
           "unit": "percentunit",
           "max": 1
-        },
-        "overrides": []
+        }
       },
       "options": {
         "legend": {
@@ -7595,10 +6922,6 @@
           "refId": "A",
           "expr": "sum((group by (pod, created_by_name)(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\",pod=~\"ray-(train|job)-.+-worker-.+\",priority_class=\"medium-priority-preemptible\"} offset $__interval) unless on(pod) kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-(train|job)-.+\",pod=~\"ray-(train|job)-.+-worker-.+\",priority_class=\"medium-priority-preemptible\"}) and on(created_by_name) ((kube_pod_info{namespace=\"cms\",pod=~\"ray-(train|job)-.+-head-.+\",created_by_kind=\"RayCluster\"} and on(pod) (kube_pod_info{namespace=\"cms\",pod=~\"ray-(train|job)-.+-head-.+\",created_by_kind=\"RayCluster\"} offset $__interval)) unless on(pod) kube_pod_deletion_timestamp{namespace=\"cms\"})) or vector(0)",
           "legendFormat": "preempted",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false
         }
@@ -7611,34 +6934,9 @@
             "fixedColor": "orange"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -7650,8 +6948,7 @@
           },
           "min": 0,
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "legend": {
@@ -7709,34 +7006,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -7749,8 +7021,7 @@
           "min": 0,
           "decimals": 0,
           "unit": "percentunit"
-        },
-        "overrides": []
+        }
       },
       "options": {
         "legend": {
@@ -7808,34 +7079,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -7849,8 +7095,7 @@
           "decimals": 0,
           "unit": "percentunit",
           "max": 1
-        },
-        "overrides": []
+        }
       },
       "options": {
         "legend": {
@@ -7889,18 +7134,14 @@
         "h": 8
       },
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "targets": [
         {
           "refId": "A",
           "expr": "slurm_cms_cores",
           "legendFormat": "{{ type }}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false
         }
@@ -7912,34 +7153,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -8024,18 +7240,14 @@
         "h": 8
       },
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "targets": [
         {
           "refId": "A",
           "expr": "slurm_info_core_user{user!~\"cmspilot|lcgadmin\"}",
           "legendFormat": "{{ user }}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false
         }
@@ -8047,34 +7259,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -8086,8 +7273,7 @@
           },
           "min": 0,
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "legend": {
@@ -8113,18 +7299,14 @@
         "h": 8
       },
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "targets": [
         {
           "refId": "A",
           "expr": "slurm_info_job_user{user!~\"cmspilot|lcgadmin\"}",
           "legendFormat": "{{ user }}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false
         }
@@ -8136,34 +7318,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -8175,8 +7332,7 @@
           },
           "min": 0,
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "legend": {
@@ -8206,8 +7362,8 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
       },
       "description": "Fraction of time the graphics engine is busy, per GPU or MIG slice. Reserved but flat at zero is a GPU nobody else can use.",
       "fieldConfig": {
@@ -8216,48 +7372,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "showPoints": "never"
           },
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           },
           "unit": "percentunit"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "x": 0,
@@ -8278,15 +7402,9 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "expr": "sum by (gpu, GPU_I_ID, GPU_I_PROFILE, kubernetes_node) (DCGM_FI_PROF_GR_ENGINE_ACTIVE{kubernetes_node=~\"geddes-g00[0-2]|paf-.*\"})",
-          "interval": "",
           "legendFormat": "{{kubernetes_node}} {{GPU_I_PROFILE}}",
           "refId": "A"
         }
@@ -8296,58 +7414,25 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "showPoints": "never"
           },
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           },
           "unit": "percentunit"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "x": 8,
@@ -8368,15 +7453,9 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "expr": "sum by (gpu, GPU_I_ID, GPU_I_PROFILE, kubernetes_node) (\n  DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00[0-2]|paf-.*\"} /\n  ( DCGM_FI_DEV_FB_USED{kubernetes_node=~\"geddes-g00[0-2]|paf-.*\"} + DCGM_FI_DEV_FB_FREE{kubernetes_node=~\"geddes-g00[0-2]|paf-.*\"} )\n)\n",
-          "interval": "",
           "legendFormat": "{{kubernetes_node}} {{GPU_I_PROFILE}}",
           "refId": "A"
         }
@@ -8386,56 +7465,23 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "showPoints": "never"
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": []
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "x": 16,
@@ -8456,15 +7502,9 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "expr": "avg by (gpu, kubernetes_node) (avg_over_time(DCGM_FI_DEV_POWER_USAGE{kubernetes_node=~\"geddes-g00[0-2]|paf-.*\"}[10m:1m]))",
-          "interval": "",
           "legendFormat": "{{kubernetes_node}}",
           "refId": "A"
         }
@@ -8651,53 +7691,32 @@
         "textMode": "value_and_name",
         "wideLayout": true
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "clamp_max(max(pixi_global_sync_in_sync{job=\"pixi-global-sync\"}), 1)",
           "legendFormat": "in sync",
           "refId": "A",
           "instant": true
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "clamp_max(max(pixi_global_sync_env_healthy{job=\"pixi-global-sync\"}), 1)",
           "legendFormat": "env healthy",
           "refId": "B",
           "instant": true
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "clamp_max(max(pixi_global_sync_paused{job=\"pixi-global-sync\"}), 1)",
           "legendFormat": "sync mode",
           "refId": "C",
           "instant": true
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "(time() - max(pixi_global_sync_loop_heartbeat_timestamp_seconds{job=\"pixi-global-sync\"})) < bool 300",
           "legendFormat": "daemon",
           "refId": "D",
           "instant": true
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "time() - max(pixi_global_sync_last_success_timestamp_seconds{job=\"pixi-global-sync\"})",
           "legendFormat": "last rebuild",
           "refId": "E",
@@ -8962,40 +7981,23 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "(max(pixi_global_sync_in_sync{job=\"pixi-global-sync\"}) == bool 1)",
           "legendFormat": "in sync",
           "refId": "A"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "(max(pixi_global_sync_env_healthy{job=\"pixi-global-sync\"}) == bool 1)",
           "legendFormat": "env healthy",
           "refId": "B"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "(max(pixi_global_sync_paused{job=\"pixi-global-sync\"}) == bool 1)",
           "legendFormat": "sync mode",
           "refId": "C"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "((time() - max(pixi_global_sync_loop_heartbeat_timestamp_seconds{job=\"pixi-global-sync\"})) < bool 300)",
           "legendFormat": "daemon",
           "refId": "D"
@@ -9016,40 +8018,12 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "bars",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
             "lineInterpolation": "stepAfter",
-            "lineWidth": 1,
             "pointSize": 7,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "showPoints": "never"
           },
           "decimals": 0,
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -9173,31 +8147,18 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "max(increase(pixi_global_sync_syncs_total{job=\"pixi-global-sync\"}[1h]))",
           "legendFormat": "syncs / h",
           "refId": "A"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "max(increase(pixi_global_sync_sync_failures_total{job=\"pixi-global-sync\"}[1h]))",
           "legendFormat": "failures / h",
           "refId": "B"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "max(pixi_global_sync_last_sync_duration_seconds{job=\"pixi-global-sync\"}) and on() (max(increase(pixi_global_sync_syncs_total{job=\"pixi-global-sync\"}[1h])) > 0)",
           "legendFormat": "sync duration",
           "refId": "C"
@@ -9221,57 +8182,24 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "showPoints": "never"
           },
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "x": 0,
@@ -9292,15 +8220,9 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "sum(\n  increase(\n    jupyterhub_request_duration_seconds_bucket{\n      job=\"jupyterhub\",\n      instance=\"cms.geddes.rcac.purdue.edu\",\n    }[2m]\n  )\n) by (code)\n",
-          "interval": "",
           "legendFormat": "{{ code }}",
           "refId": "A"
         }
@@ -9310,58 +8232,25 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "showPoints": "never"
           },
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": []
           },
           "unit": "s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "x": 8,
@@ -9382,35 +8271,19 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "histogram_quantile(\n  0.99,\n  sum(\n    rate(\n      jupyterhub_request_duration_seconds_bucket{\n        job=\"jupyterhub\",\n        instance=\"cms.geddes.rcac.purdue.edu\",\n        handler!=\"jupyterhub.apihandlers.users.SpawnProgressAPIHandler\"\n      }[5m]\n    )\n  ) by (le))\n",
-          "interval": "",
           "legendFormat": "99th percentile",
           "refId": "A"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "histogram_quantile(\n  0.5,\n  sum(\n    rate(\n      jupyterhub_request_duration_seconds_bucket{\n        job=\"jupyterhub\",\n        instance=\"cms.geddes.rcac.purdue.edu\",\n        handler!=\"jupyterhub.apihandlers.users.SpawnProgressAPIHandler\"\n      }[5m]\n    )\n  ) by (le))\n",
-          "interval": "",
           "legendFormat": "50th percentile",
           "refId": "B"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "histogram_quantile(\n  0.25,\n  sum(\n    rate(\n      jupyterhub_request_duration_seconds_bucket{\n        job=\"jupyterhub\",\n        instance=\"cms.geddes.rcac.purdue.edu\",\n        handler!=\"jupyterhub.apihandlers.users.SpawnProgressAPIHandler\"\n      }[5m]\n    )\n  ) by (le))\n",
-          "interval": "",
           "legendFormat": "25th percentile",
           "refId": "C"
         }
@@ -9420,50 +8293,22 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "points",
-            "fillOpacity": 0,
             "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
             "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
             "thresholdsStyle": {
               "mode": "area"
             }
           },
-          "mappings": [],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -9487,8 +8332,7 @@
             ]
           },
           "unit": "s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "x": 16,
@@ -9509,15 +8353,9 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "histogram_quantile(1, sum(rate(jupyterhub_server_spawn_duration_seconds_bucket{\njob=\"jupyterhub\"\n}[5m])) by (le))\n",
-          "interval": "",
           "legendFormat": "",
           "refId": "A"
         }
@@ -9536,40 +8374,8 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "showPoints": "never"
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -9583,8 +8389,7 @@
               }
             ]
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "x": 0,
@@ -9605,13 +8410,8 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "sum(increase(container_cpu_cfs_throttled_periods_total\n{namespace=\"cms\", pod=~\"purdue-af-.*\"}[5m])) by (pod) /\nsum(increase(container_cpu_cfs_periods_total{namespace=\"cms\"}[5m])) by (pod)",
           "legendFormat": "__auto",
@@ -9634,40 +8434,8 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "showPoints": "never"
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -9681,8 +8449,7 @@
               }
             ]
           }
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "x": 8,
@@ -9703,13 +8470,8 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.3.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
           "expr": "sum(increase(container_cpu_cfs_throttled_periods_total\n{namespace=\"cms\", pod=~\"dask-worker.*\"}[5m])) by (pod) /\nsum(increase(container_cpu_cfs_periods_total{namespace=\"cms\"}[5m])) by (pod)",
           "legendFormat": "__auto",
@@ -9732,18 +8494,14 @@
         "h": 8
       },
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "targets": [
         {
           "refId": "A",
           "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"cms\",pod=~\"purdue-af-.*\"}[1h]))",
           "legendFormat": "restarts",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false,
           "interval": "1h"
@@ -9756,34 +8514,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -9838,18 +8571,14 @@
         "h": 8
       },
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
       },
       "targets": [
         {
           "refId": "A",
           "expr": "max(kubelet_volume_stats_used_bytes{namespace=\"cms\",persistentvolumeclaim=\"prometheus-data-pvc\"} / kubelet_volume_stats_capacity_bytes{namespace=\"cms\",persistentvolumeclaim=\"prometheus-data-pvc\"})",
           "legendFormat": "Prometheus data",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "range": false,
           "instant": true
         },
@@ -9857,10 +8586,6 @@
           "refId": "B",
           "expr": "max(kubelet_volume_stats_used_bytes{namespace=\"cms\",persistentvolumeclaim=\"storage-loki-0\"} / kubelet_volume_stats_capacity_bytes{namespace=\"cms\",persistentvolumeclaim=\"storage-loki-0\"})",
           "legendFormat": "Loki",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "range": false,
           "instant": true
         },
@@ -9868,10 +8593,6 @@
           "refId": "C",
           "expr": "max(kubelet_volume_stats_used_bytes{namespace=\"cms\",persistentvolumeclaim=\"grafana\"} / kubelet_volume_stats_capacity_bytes{namespace=\"cms\",persistentvolumeclaim=\"grafana\"})",
           "legendFormat": "Grafana",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "range": false,
           "instant": true
         },
@@ -9879,10 +8600,6 @@
           "refId": "D",
           "expr": "max(kubelet_volume_stats_used_bytes{namespace=\"cms\",persistentvolumeclaim=\"hub-db-dir\"} / kubelet_volume_stats_capacity_bytes{namespace=\"cms\",persistentvolumeclaim=\"hub-db-dir\"})",
           "legendFormat": "Hub database",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "range": false,
           "instant": true
         },
@@ -9890,18 +8607,12 @@
           "refId": "E",
           "expr": "max(kubelet_volume_stats_used_bytes{namespace=\"cms\",persistentvolumeclaim=\"pyroscope-data\"} / kubelet_volume_stats_capacity_bytes{namespace=\"cms\",persistentvolumeclaim=\"pyroscope-data\"})",
           "legendFormat": "Pyroscope",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "range": false,
           "instant": true
         }
       ],
-      "description": "",
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -9926,8 +8637,7 @@
           "unit": "percentunit",
           "max": 1,
           "decimals": 0
-        },
-        "overrides": []
+        }
       },
       "options": {
         "reduceOptions": {
@@ -9961,18 +8671,14 @@
         "h": 8
       },
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "targets": [
         {
           "refId": "A",
           "expr": "prometheus_tsdb_head_series{job=\"prometheus\"}",
           "legendFormat": "series",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "range": true,
           "instant": false
         }
@@ -9984,34 +8690,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -10067,57 +8748,27 @@
         "h": 8
       },
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
       },
       "targets": [
         {
           "refId": "A",
           "expr": "avg by (gpu, kubernetes_node)(DCGM_FI_DEV_GPU_TEMP{kubernetes_node=~\"geddes-g00[0-2]|paf-.*\"})",
           "legendFormat": "{{ kubernetes_node }} #{{ gpu }}",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "range": true,
           "instant": false
         }
       ],
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
-            "pointSize": 4,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "axisPlacement": "auto",
-            "axisLabel": "",
-            "axisBorderShow": false,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "lineInterpolation": "linear",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
+            "pointSize": 4
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -10128,8 +8779,7 @@
             ]
           },
           "unit": "celsius"
-        },
-        "overrides": []
+        }
       },
       "options": {
         "legend": {
