@@ -1272,6 +1272,14 @@ async def test_the_metric_counts_live_links_and_names_nobody(make, monkeypatch):
     assert f"{agent.LINKED_METRIC} 0" in page.text
 
 
+def test_every_user_may_log_in_to_the_service_and_keeps_their_own_rights():
+    values = yaml.safe_load(
+        (REPO / "apps/jupyterhub/jupyterhub/values.yaml").read_text()
+    )
+    scopes = values["hub"]["loadRoles"]["user"]["scopes"]
+    assert set(scopes) == {"self", "access:services!service=mattermost-agent"}
+
+
 def test_every_key_the_pod_reads_is_in_the_secret():
     deployment = yaml.safe_load((APP / "deployment.yaml").read_text())
     container = deployment["spec"]["template"]["spec"]["containers"][0]

@@ -395,6 +395,12 @@ hub:
       oauth_client_allowed_scopes:
         ["tokens!user", "read:users!user", "servers!user"]
   loadRoles:
+    # Replaces the default role, so it keeps self. Without the service scope only admins could link on Mattermost.
+    user:
+      description: "Every user: their own things, and the login of PurdueAF Agent"
+      scopes:
+        - "self"
+        - "access:services!service=mattermost-agent"
     # read:servers!user lets a session see itself; delete:servers!server lets it shut itself down.
     server:
       description: "Singleuser server token: report activity, read own session, stop itself"
