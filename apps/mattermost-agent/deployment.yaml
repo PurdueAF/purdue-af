@@ -69,6 +69,15 @@ spec:
               value: "https://cms.geddes.rcac.purdue.edu"
             - name: STATE_FILE
               value: /state/oauth.json
+            - name: LINKS_FILE
+              value: /state/links.enc
+            - name: LINK_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mattermost-agent
+                  key: link-key
+            - name: HUB_API_URL
+              value: "http://hub:8081/hub/api"
             - name: MCP_URL
               value: "http://agentic-interface.cms.svc.cluster.local:8888/services/agentic-interface/mcp"
             - name: HUB_TOKEN_FILE

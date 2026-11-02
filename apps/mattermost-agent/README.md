@@ -14,9 +14,9 @@ a role of the [LLM proxy](../agentic-analysis/README.md#llm-proxy).
 | `system-prompt.md`   | What the model is told; read on each question                                 |
 | `deployment.yaml`    | Runs `agent.py` from the `mattermost-agent` ConfigMap, the docs from `mattermost-agent-docs` |
 | `networkpolicy.yaml` | Ingress from the Hub's proxy; egress to the agentic interface, the LLM proxy and HTTPS outside |
-| `pvc.yaml`           | The volume holding the current OAuth tokens                                   |
+| `pvc.yaml`           | The volume holding the Mattermost login and the linked people's tokens        |
 | `service.yaml`       | The route the Hub's proxy sends the login to                                  |
-| `secret.yaml`        | The `mattermost-agent` Secret, SOPS-encrypted: the OAuth application's `client-id` and `client-secret`, and the service account's `username` |
+| `secret.yaml`        | The `mattermost-agent` Secret, SOPS-encrypted: the OAuth application's `client-id` and `client-secret`, the service account's `username`, and `link-key`, the Fernet key of the linked tokens |
 
 ## Identity
 
@@ -24,6 +24,22 @@ The bot is the Hub service `mattermost-agent`, with no role, so the MCP server
 sees a caller with no session, storage or clusters. `FACILITY_TOOLS` in
 `agent.py` lists the tools it offers the model. It sends the model the
 conversation's text, never who wrote it, and a reply cannot mention anyone.
+
+## Linking
+
+A person links their account by sending `link` in a direct message. The link works
+once, for 24 hours. It opens a Hub login that shows a code, and the link is made only
+when that code comes back in a direct message from the same Mattermost user. Linking
+mints a 30-day Hub token noted "PurdueAF Agent on Mattermost" and retires that
+user's older ones. A person sends `link` again when it runs out, and `unlink` to stop;
+`unlink` forgets the token, which the Hub lists on its token page until it expires.
+
+Tokens are encrypted in `/state/links.enc` under `link-key`, keyed by Mattermost user id.
+
+Each question first goes to the model alone with its author's own posts, to decide
+whether they ask about their own things. If so, it runs with the author's token and
+`PERSONAL_TOOLS`, and the model reads only the author's posts and the bot's replies;
+otherwise it runs as above. The bot replies where it was asked.
 
 ## Running it
 
