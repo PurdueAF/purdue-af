@@ -1,4 +1,4 @@
-# Default SuperSONIC: the CMS Run 3 MiniAOD model set, served off CVMFS.
+# Default SuperSONIC: the MiniAOD model set (miniaod/values.yaml) on the AF GPUs.
 
 # Queue time per execution is intensive, so metricType Value.
 serverLoadMetric: |-
@@ -13,85 +13,18 @@ serverLoadMetric: |-
 serverLoadThreshold: 100
 
 scaleFromZero:
-  enabled: true
   readyTimeoutSeconds: 300
   holdMinReplicasSeconds: 300
 
 inferenceServer:
-  # Geometric build: ParticleNet and UParT need torch-geometric ops the stock image lacks.
-  image: fastml/triton-torchgeo:26.04-py3-geometric
-  command: ["/bin/sh", "-c"]
-  args:
-    - |
-      /opt/tritonserver/bin/tritonserver \
-      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoBTag/Combined/data/models/ \
-      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoEgamma/EgammaPhotonProducers/data/models/ \
-      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoTauTag/TrainingFiles/data/DeepTauIdSONIC/ \
-      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoMET/METPUSubtraction/data/models/ \
-      --model-control-mode=explicit \
-      --load-model=deepmet \
-      --load-model=deeptau_2018v2p5 \
-      --load-model=particleNetFromMiniAODAK4CHSCentral \
-      --load-model=particleNetFromMiniAODAK4PuppiCentral \
-      --load-model=particleNetFromMiniAODAK4PuppiForward \
-      --load-model=particleNetFromMiniAODAK8 \
-      --load-model=particlenet_AK8_MD-2prong_PT \
-      --load-model=particlenet_AK8_MassRegression_PT \
-      --load-model=particlenet_PT \
-      --load-model=unifiedparticletransformer_AK4_V01 \
-      --allow-gpu-metrics=true \
-      --log-verbose=0 \
-      --exit-timeout-secs=60
-
-  resources:
-    limits:
-      nvidia.com/gpu: 1
-      cpu: 4
-      memory: 16G
-    requests:
-      nvidia.com/gpu: 1
-      cpu: 4
-      memory: 16G
-  nodeSelector: { "cms-af-prod": "true" }
-  tolerations:
+  nodeSelector: &placement { "cms-af-prod": "true" }
+  tolerations: &tolerations
     - key: hub.jupyter.org/dedicated
       operator: Equal
       value: cms-af
       effect: NoSchedule
-  service:
-    labels:
-      scrape_metrics: "true"
-  modelRepository:
-    enabled: true
-    storageType: cvmfs-pvc
-    mountPath: /cvmfs
-  readinessProbe:
-    timeoutSeconds: 15
-    periodSeconds: 10
-    failureThreshold: 10
-    successThreshold: 1
-  startupProbe:
-    periodSeconds: 10
-    failureThreshold: 24
-    timeoutSeconds: 15
-    httpGet:
-      path: /v2/health/ready
-      port: http
 
 envoy:
-  enabled: true
-  nodeSelector: { "cms-af-prod": "true" }
-  tolerations:
-    - key: hub.jupyter.org/dedicated
-      operator: Equal
-      value: cms-af
-      effect: NoSchedule
-  loadBalancerPolicy: "ROUND_ROBIN"
-  service:
-    type: LoadBalancer
-  # No public inference ingress; clients use the private-pool LoadBalancer or the in-cluster Service.
-  ingress:
-    enabled: false
   rate_limiter:
     prometheus_based:
       enabled: false
@@ -99,9 +32,6 @@ envoy:
       enabled: false
 
 keda:
-  enabled: true
-  # RepositoryIndex raises this to 1 through the Envoy admission sidecar.
-  minReplicaCount: 0
   maxReplicaCount: 5
   # Poll often enough that the wake is not sitting behind a KEDA tick.
   pollingInterval: 1
@@ -109,28 +39,14 @@ keda:
   scaleUp:
     stabilizationWindowSeconds: 0
     periodSeconds: 15
-    stepsize: 1
   scaleDown:
     stabilizationWindowSeconds: 300
     periodSeconds: 45
-    stepsize: 1
-
-prometheus:
-  # FQDN: the KEDA operator runs in the keda namespace.
-  external:
-    enabled: true
-    url: prometheus-server.cms.svc.cluster.local
-    port: 9090
-    scheme: http
 
 grafana:
   enabled: true
-  nodeSelector: { "cms-af-prod": "true" }
-  tolerations:
-    - key: hub.jupyter.org/dedicated
-      operator: Equal
-      value: cms-af
-      effect: NoSchedule
+  nodeSelector: *placement
+  tolerations: *tolerations
   dashboardsConfigMaps:
     default: supersonic-grafana-default-dashboard
   datasources:

@@ -2,8 +2,7 @@
 
 Site image for the [interlink-slurm-plugin](https://github.com/interlink-hq/interlink-slurm-plugin)
 sidecar: a thin Slurm client against RCAC Slurm on Rocky Linux 8, plus the site
-Slurm client RPMs. One image serves every `apps/interlink/<cluster>/`
-Deployment.
+Slurm client RPMs. One image serves every Slurm node.
 
 ## Files
 

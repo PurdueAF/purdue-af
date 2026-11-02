@@ -6,19 +6,17 @@ ARG UPSTREAM_IMAGE=docker.io/mginfn/interlink-kubernetes-plugin:1.2.0
 
 FROM ${UPSTREAM_IMAGE}
 
-COPY docker/interlink-kubernetes-plugin/ensure-namespace.patch docker/interlink-kubernetes-plugin/wstunnel-client.patch docker/interlink-kubernetes-plugin/remote-placement.patch docker/interlink-kubernetes-plugin/remote-readiness.patch docker/interlink-kubernetes-plugin/remote-pending.patch docker/interlink-kubernetes-plugin/remote-gone.patch docker/interlink-kubernetes-plugin/remote-drain.patch /tmp/
-
-# The upstream image runs from source; the check exercises each patch's behaviour.
-RUN patch -p1 </tmp/ensure-namespace.patch && \
-    patch -p1 </tmp/wstunnel-client.patch && \
-    patch -p1 </tmp/remote-placement.patch && \
-    patch -p1 -d / </tmp/remote-readiness.patch && \
-    patch -p1 -d / </tmp/remote-pending.patch && \
-    patch -p1 -d / </tmp/remote-gone.patch && \
-    patch -p1 -d / </tmp/remote-drain.patch && \
-    rm /tmp/ensure-namespace.patch /tmp/wstunnel-client.patch /tmp/remote-placement.patch /tmp/remote-readiness.patch /tmp/remote-pending.patch /tmp/remote-gone.patch /tmp/remote-drain.patch && \
-    python -c "from kubernetes import client as k; from app.common.config import Option; from app.entities import mappers; from app.services.kubernetes_plugin_service import KubernetesPluginService as S; assert Option.OFFLOADING_ENSURE_NAMESPACE and Option.WSTUNNEL_CLIENT_IMAGE and Option.OFFLOADING_RESTART_POLICY and Option.OFFLOADING_DELETE_DELAY_SECONDS; spec = k.V1PodSpec(containers=[]); S._add_wstunnel_client_sidecar(None, spec, 'true', 'img'); assert spec.init_containers[0].restart_policy == 'Always'; a = mappers.deserialize_dict_to_k_model(k.ApiClient(), {'nodeAffinity': {'requiredDuringSchedulingIgnoredDuringExecution': {'nodeSelectorTerms': [{'matchExpressions': [{'key': 'k', 'operator': 'Gt', 'values': ['7']}]}]}}}, k.V1Affinity); assert a.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms[0].match_expressions[0].operator == 'Gt'; assert {'startup_probe', 'liveness_probe', 'readiness_probe'} <= set(__import__('interlink').Container.model_fields); import inspect; assert 'reads an empty one' in inspect.getsource(S.get_status) and 'RemotePodGone' in inspect.getsource(S.get_status); print('site patches applied')"
+# The upstream image runs from source; each patch applies on top of those before it.
+RUN --mount=type=bind,source=docker/interlink-kubernetes-plugin,target=/patches \
+    patch -p1 --fuzz=0 -d / </patches/01-ensure-namespace.patch && \
+    patch -p1 --fuzz=0 -d / </patches/02-wstunnel-client.patch && \
+    patch -p1 --fuzz=0 -d / </patches/03-remote-placement.patch && \
+    patch -p1 --fuzz=0 -d / </patches/04-remote-readiness.patch && \
+    patch -p1 --fuzz=0 -d / </patches/05-remote-pending.patch && \
+    patch -p1 --fuzz=0 -d / </patches/06-remote-gone.patch && \
+    patch -p1 --fuzz=0 -d / </patches/07-remote-drain.patch && \
+    python - </patches/verify-patches.py
 
 LABEL org.opencontainers.image.title="purdue-af-interlink-kubernetes-plugin" \
-      org.opencontainers.image.description="interLink Kubernetes plugin with an optional namespace-ensure and a wstunnel client sidecar for least-privilege remote clusters" \
+      org.opencontainers.image.description="interLink Kubernetes plugin with the Purdue site patches" \
       org.opencontainers.image.source="https://github.com/PurdueAF/purdue-af"

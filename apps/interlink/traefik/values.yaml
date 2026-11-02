@@ -15,7 +15,6 @@ podDisruptionBudget:
 # Role and RoleBinding in cms only. Without cluster-scope reads Traefik ignores
 # spec.ingressClassName and matches the kubernetes.io/ingress.class annotation.
 rbac:
-  enabled: true
   namespaced: true
 ingressClass:
   enabled: false

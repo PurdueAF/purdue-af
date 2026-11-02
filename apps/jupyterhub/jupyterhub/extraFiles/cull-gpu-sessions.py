@@ -16,7 +16,9 @@ kubespawner) link the two.
 JupyterHub gives a managed service a fresh environment (JUPYTERHUB_*, PATH,
 LANG), not the hub's, so KUBERNETES_SERVICE_HOST/PORT come from
 hub.services.gpu-culler.environment and the namespace from the mounted service
-account. Logging goes to stderr — stdout here is a block-buffered pipe.
+account. Logging goes to stderr — stdout here is a block-buffered pipe. The
+service exits once kubelet swaps a new copy of this file in, and the Hub starts
+it again on that.
 """
 
 import argparse
@@ -41,6 +43,7 @@ GPU_RESOURCES = (
 # Only pods spawned by our hub carry this label (singleuser.extraLabels).
 POD_SELECTOR = "username_unescaped"
 NAMESPACE_FILE = Path("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+SOURCE = Path(__file__)
 
 log = logging.getLogger("gpu-culler")
 
@@ -149,12 +152,16 @@ async def main(namespace: str, timeout: float, every: float) -> None:
         namespace,
         every,
     )
+    running = SOURCE.read_bytes()
     while True:
         try:
             await cull_once(namespace, timeout)
         except Exception:
             log.exception("cull pass failed")
         await asyncio.sleep(every)
+        if SOURCE.read_bytes() != running:
+            log.info("%s changed: exiting, for the Hub to start it again", SOURCE)
+            return
 
 
 if __name__ == "__main__":

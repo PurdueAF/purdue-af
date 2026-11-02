@@ -1,14 +1,12 @@
 # Triton offloaded to Slurm on Hammer through interLink; Envoy stays on AF nodes
 # and reaches Triton's ports through the node's wstunnel (apps/interlink/README.md).
 
-# Short: interLink derives each Triton pod's shadow hostname from its name.
 nameOverride: sonic-hammer
 
 serverLoadThreshold: 20
 
 # Waking queues a Slurm job; raise this together with idle_timeout in envoy-config.yaml.
 scaleFromZero:
-  enabled: true
   readyTimeoutSeconds: 900
   holdMinReplicasSeconds: 900
 
@@ -39,15 +37,11 @@ inferenceServer:
     slurm-job.vk.io/flags: "--uid=616617 -A cms --gres=gpu:1 --time=0-04:00:00"
     interlink.virtual-kubelet.io/wstunnel-timeout: "5m"
     interlink.eu/wstunnel-extra-ports: "8000:http:TCP,8001:grpc:TCP,8002:metrics:TCP"
-    # The shadow pod in cms rather than a cms-wstunnel namespace.
     interlink.eu/shadow-same-ns: "true"
   service:
-    labels:
-      scrape_metrics: "true"
     annotations:
       metallb.universe.tf/address-pool: geddes-private-pool
   modelRepository:
-    enabled: true
     storageType: cvmfs-pvc
     mountPath: /cvmfs
   readinessProbe:
@@ -62,46 +56,19 @@ inferenceServer:
       port: "8000"
 
 envoy:
-  enabled: true
-  nodeSelector: { "cms-af-prod": "true" }
-  tolerations:
-    - key: hub.jupyter.org/dedicated
-      operator: Equal
-      value: cms-af
-      effect: NoSchedule
-  loadBalancerPolicy: "ROUND_ROBIN"
-  service:
-    type: LoadBalancer
-  # No public inference ingress; clients use the private-pool LoadBalancer or the in-cluster Service.
-  ingress:
-    enabled: false
   # Hand-written Envoy config: retries, outlier ejection and a 32 MB buffer the chart cannot express.
   external_config:
     load_from_configmap: true
     configmap_name: "supersonic-interlink-envoy-config-custom"
-    configmap_key: "envoy.yaml"
 
 keda:
-  enabled: true
-  # RepositoryIndex raises this to 1; the wake path lives in envoy-config.yaml.
-  minReplicaCount: 0
   maxReplicaCount: 10
   scaleUp:
     stabilizationWindowSeconds: 120
     periodSeconds: 120
-    stepsize: 1
   scaleDown:
     stabilizationWindowSeconds: 120
     periodSeconds: 30
-    stepsize: 1
-
-prometheus:
-  # The AF Prometheus scrapes this Triton via the scrape_metrics service label.
-  external:
-    enabled: true
-    url: prometheus-server.cms.svc.cluster.local
-    port: 9090
-    scheme: http
 
 # Read through the shared SuperSONIC dashboard in the AF Grafana.
 grafana:

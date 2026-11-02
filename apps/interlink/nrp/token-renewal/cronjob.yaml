@@ -1,4 +1,4 @@
-# Daily, so that a token of 30 days outlives weeks of failed runs (AFNrpTokenRenewalFailing).
+# Daily, so that the token outlives weeks of failed runs (AFNrpTokenRenewalFailing).
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -8,7 +8,6 @@ spec:
   concurrencyPolicy: Forbid
   suspend: false
   successfulJobsHistoryLimit: 1
-  failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
       backoffLimit: 2

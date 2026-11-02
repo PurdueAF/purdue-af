@@ -1,0 +1,45 @@
+# Loaded first by every SuperSONIC release: each release's own values merge over
+# this file, and a list there replaces the list here.
+
+scaleFromZero:
+  enabled: true
+
+inferenceServer:
+  service:
+    labels:
+      # The AF Prometheus finds Triton by this label and attaches the app and release labels the dashboard expects.
+      scrape_metrics: "true"
+  modelRepository:
+    enabled: true
+
+envoy:
+  enabled: true
+  nodeSelector: { "cms-af-prod": "true" }
+  tolerations:
+    - key: hub.jupyter.org/dedicated
+      operator: Equal
+      value: cms-af
+      effect: NoSchedule
+  loadBalancerPolicy: "ROUND_ROBIN"
+  service:
+    type: LoadBalancer
+  # No public inference ingress; clients use the private-pool LoadBalancer or the in-cluster Service.
+  ingress:
+    enabled: false
+
+keda:
+  enabled: true
+  # RepositoryIndex raises this to 1, through the Envoy admission sidecar or a release's envoy-config.yaml.
+  minReplicaCount: 0
+  scaleUp:
+    stepsize: 1
+  scaleDown:
+    stepsize: 1
+
+prometheus:
+  # FQDN: the KEDA operator runs in the keda namespace.
+  external:
+    enabled: true
+    url: prometheus-server.cms.svc.cluster.local
+    port: 9090
+    scheme: http

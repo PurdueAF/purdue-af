@@ -6781,7 +6781,7 @@
           "legendFormat": "{{ user }}"
         }
       ],
-      "description": "Graphics-engine activity averaged over each cluster's GPUs. A flat zero is a cluster holding GPUs it does not use. On NRP, GPU utilization: NRP asks for 40% or more, and the gateway stops a job below it.",
+      "description": "Graphics-engine activity averaged over each cluster's GPUs. A flat zero is a cluster holding GPUs it does not use. On NRP, GPU utilization. The gateway stops a job for its idlest GPU, which this average can hide.",
       "fieldConfig": {
         "defaults": {
           "color": {

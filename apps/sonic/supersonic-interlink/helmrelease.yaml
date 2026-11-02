@@ -21,6 +21,9 @@ spec:
       retries: -1
   valuesFrom:
     - kind: ConfigMap
+      name: supersonic-shared-config
+      valuesKey: values.yaml
+    - kind: ConfigMap
       name: supersonic-interlink-config
       valuesKey: values.yaml
   postRenderers:

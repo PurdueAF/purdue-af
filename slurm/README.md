@@ -44,7 +44,11 @@ backup `*.old` / `*.new` copies, etc.
    `slurm-<version>-1.el8.x86_64.rpm` (from the cluster's login node).
 3. Create and populate the `munge-key-<name>` PVC in `cms` (out of band, never
    in git).
-4. Add `apps/interlink/<name>/`: `SLURM_CLUSTER=<name>` in the plugin env of
-   `values.yaml`, and the `munge-key-<name>` volume and its mount there.
-5. Merge to `main`; the plugin image rebuilds, since `slurm/` is one of its
+4. Add `apps/interlink/<name>/`: a `helmrelease.yaml`, and a `values.yaml` with
+   `SLURM_CLUSTER=<name>` in the plugin env and the `munge-key-<name>` volume
+   and its mount.
+5. List the release in `flux/experimental/kustomization.yaml`, with an
+   `interlink-<name>-config` generator of `shared.yaml` and `values.yaml` as
+   its neighbours have, and add its status badge to the root `README.md`.
+6. Merge to `main`; the plugin image rebuilds, since `slurm/` is one of its
    inputs.

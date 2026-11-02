@@ -17,7 +17,7 @@ spec:
     rayStartParams:
       num-cpus: "0"
     template:
-      metadata:
+      metadata: &pod-metadata
         labels:
           app: ray-train-cluster
       spec:
@@ -25,12 +25,12 @@ spec:
         automountServiceAccountToken: false
         enableServiceLinks: false
         # /home/ray, the image's working directory and Python, admits only group 100; the gateway adds the user's UID/GID.
-        securityContext:
+        securityContext: &pod-security
           runAsNonRoot: true
           supplementalGroups: [100]
-        nodeSelector:
+        nodeSelector: &node-selector
           cms-af-prod: "true"
-        tolerations:
+        tolerations: &tolerations
           - key: hub.jupyter.org/dedicated
             operator: Equal
             value: cms-af
@@ -39,7 +39,7 @@ spec:
           - name: ray-head
             # The CPU flavor, on GPU workers too: Python, Ray and CUDA come from the cluster's environment.
             image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/rayproject/ray:2.59.0-py312-cpu
-            securityContext:
+            securityContext: &container-security
               allowPrivilegeEscalation: false
               capabilities:
                 drop: ["ALL"]
@@ -57,7 +57,7 @@ spec:
               requests:
                 cpu: "4"
                 memory: 16Gi
-            volumeMounts:
+            volumeMounts: &mounts
               - name: log-volume
                 mountPath: /tmp/ray
               - name: work
@@ -74,7 +74,7 @@ spec:
                 mountPath: /cvmfs
                 readOnly: true
                 mountPropagation: HostToContainer
-        volumes:
+        volumes: &volumes
           - name: log-volume
             emptyDir: {}
           - name: work
@@ -94,29 +94,17 @@ spec:
   workerGroupSpecs:
     - groupName: gpu
       template:
-        metadata:
-          labels:
-            app: ray-train-cluster
+        metadata: *pod-metadata
         spec:
           automountServiceAccountToken: false
           enableServiceLinks: false
-          securityContext:
-            runAsNonRoot: true
-            supplementalGroups: [100]
-          nodeSelector:
-            cms-af-prod: "true"
-          tolerations:
-            - key: hub.jupyter.org/dedicated
-              operator: Equal
-              value: cms-af
-              effect: NoSchedule
+          securityContext: *pod-security
+          nodeSelector: *node-selector
+          tolerations: *tolerations
           containers:
             - name: ray-worker
               image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/rayproject/ray:2.59.0-py312-cpu
-              securityContext:
-                allowPrivilegeEscalation: false
-                capabilities:
-                  drop: ["ALL"]
+              securityContext: *container-security
               env:
                 - name: HOME
                   value: /tmp
@@ -132,36 +120,5 @@ spec:
                   cpu: "8"
                   memory: 32Gi
                   nvidia.com/gpu: 1
-              volumeMounts:
-                - name: log-volume
-                  mountPath: /tmp/ray
-                - name: work
-                  mountPath: /work
-                  mountPropagation: HostToContainer
-                - name: depot
-                  mountPath: /depot/cms
-                  mountPropagation: HostToContainer
-                - name: eos
-                  mountPath: /eos
-                  readOnly: true
-                  mountPropagation: HostToContainer
-                - name: cvmfs
-                  mountPath: /cvmfs
-                  readOnly: true
-                  mountPropagation: HostToContainer
-          volumes:
-            - name: log-volume
-              emptyDir: {}
-            - name: work
-              persistentVolumeClaim:
-                claimName: af-shared-storage
-            - name: depot
-              nfs:
-                server: datadepot.rcac.purdue.edu
-                path: /depot/cms
-            - name: eos
-              hostPath:
-                path: /eos
-            - name: cvmfs
-              persistentVolumeClaim:
-                claimName: cvmfs
+              volumeMounts: *mounts
+          volumes: *volumes

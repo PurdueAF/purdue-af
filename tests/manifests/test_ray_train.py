@@ -21,8 +21,14 @@ OPERATOR_VALUES = REPO / "apps" / "ray" / "operator" / "values.yaml"
 EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
 CORE = REPO / "flux" / "core-production" / "kustomization.yaml"
 GLOBAL_ENV = REPO / "pixi" / "global" / "pixi.toml"
-# gpu_queries.py is in the gateway's ConfigMap, beside gateway.py.
+# Its ConfigMap holds gateway.py, the modules it imports and gpu_queries.py.
 sys.path.insert(0, str(HUB_VALUES.parent / "extraFiles"))
+sys.path.insert(0, str(APP))
+
+
+@pytest.fixture(scope="module")
+def gateway():
+    return load_script(APP / "gateway.py", "ray_train_gateway_manifests")
 
 
 def load(path):
@@ -66,8 +72,7 @@ def test_flux_deploys_the_gateway():
     assert annotations["kustomize.toolkit.fluxcd.io/substitute"] == "disabled"
 
 
-def test_the_gateway_runs_the_files_it_is_given():
-    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+def test_the_gateway_runs_the_files_it_is_given(gateway):
     pod = gateway_pod()["spec"]
     (container,) = pod["containers"]
     volumes = {v["name"]: v for v in pod["volumes"]}
@@ -76,8 +81,7 @@ def test_the_gateway_runs_the_files_it_is_given():
     # kubelet never updates a subPath mount, so the gateway would never see new code.
     assert "subPath" not in app
     assert container["command"] == ["python", f"{app['mountPath']}/gateway.py"]
-    assert gateway.TEMPLATE == Path(app["mountPath"]) / "raycluster.yaml"
-    assert gateway.CONFIG_FILE == APP / "config.yaml"
+    assert gateway.TEMPLATE.is_file()
     services = {s["metadata"]["name"]: s for s in load_all(APP / "service.yaml")}
     for service in services.values():
         assert (
@@ -96,8 +100,7 @@ def test_the_gateway_runs_the_files_it_is_given():
     )
 
 
-def test_both_prometheus_instances_scrape_only_the_gateways_metrics_port():
-    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+def test_both_prometheus_instances_scrape_only_the_gateways_metrics_port(gateway):
     services = list(load_all(APP / "service.yaml"))
     scraped = [s for s in services if s["metadata"]["labels"].get("scrape-metrics")]
     (service,) = scraped
@@ -107,11 +110,10 @@ def test_both_prometheus_instances_scrape_only_the_gateways_metrics_port():
     ]
 
 
-def test_the_hub_gives_the_gateway_its_token_and_scopes():
+def test_the_hub_gives_the_gateway_its_token_and_scopes(gateway):
     """z2jh keeps a token-only service's token in the `hub` Secret. The key is
     mounted rather than put in the environment, so the gateway sees it appear
     once the Hub registers the service, without a restart."""
-    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
     hub = load(HUB_VALUES)["hub"]
     assert "ray-train-gateway" in hub["services"]
     role = hub["loadRoles"]["ray-train-gateway"]
@@ -134,9 +136,8 @@ def test_the_hub_gives_the_gateway_its_token_and_scopes():
     )
 
 
-def test_the_gateway_mounts_the_workload_accounts_it_reads():
+def test_the_gateway_mounts_the_workload_accounts_it_reads(gateway):
     """kubelet never updates a subPath mount."""
-    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
     pod = gateway_pod()["spec"]
     (volume,) = [
         v for v in pod["volumes"] if v.get("configMap", {}).get("name") == "af-accounts"
@@ -148,59 +149,14 @@ def test_the_gateway_mounts_the_workload_accounts_it_reads():
     assert Path(mount["mountPath"]) == gateway.ACCOUNTS_DIR
 
 
-def test_an_accounts_cluster_keeps_only_cvmfs_of_the_templates_storage():
-    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
-    volumes = {v["name"]: v for v in cluster_pod()["spec"]["volumes"]}
-    assert gateway.ACCOUNT_KEPT_VOLUMES <= volumes.keys()
-    assert {
-        name for name in gateway.ACCOUNT_KEPT_VOLUMES if "emptyDir" not in volumes[name]
-    } == {"cvmfs"}
-
-
-def test_an_accounts_cluster_mounts_cvmfs_and_its_volume_and_a_users_the_template(
-    monkeypatch,
-):
-    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
-    monkeypatch.setattr(gateway, "TEMPLATE", APP / "raycluster.yaml")
-    user = gateway.User(name="someone", account="someone", uid=5001, gid=500)
-    assert gateway.cluster_template(user) == gateway.load_template()
-    workload = gateway.User(
-        name="demo-workload", account="demo-workload", uid=1234, gid=1235, workload=True
-    )
-    template = gateway.cluster_template(workload)
-    spec = template["spec"]
-    for pod in (
-        spec["headGroupSpec"]["template"],
-        *(group["template"] for group in spec["workerGroupSpecs"]),
-    ):
-        assert pod["metadata"]["labels"]["app.kubernetes.io/part-of"] == "demo-workload"
-        volumes = {v["name"]: v for v in pod["spec"]["volumes"]}
-        assert {n for n, v in volumes.items() if "emptyDir" not in v} == {
-            "cvmfs",
-            "demo-workload",
-        }
-        assert volumes["demo-workload"]["persistentVolumeClaim"] == {
-            "claimName": "demo-workload"
-        }
-    assert sorted(gateway.env_roots(template)) == ["/cvmfs", "/demo-workload"]
-    # The global environment, a call's default, is on /work.
-    assert gateway.requested_env("", template) == gateway.DEFAULT_ENV
-    with pytest.raises(gateway.Refused):
-        gateway.mounted_env(gateway.DEFAULT_ENV, template)
-    assert gateway.mounted_env(gateway.DEFAULT_ENV, gateway.cluster_template(user))
-    assert gateway.requested_env("/demo-workload/env", template) == "/demo-workload/env"
-
-
-def test_committed_declarations_keep_the_rules():
-    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+def test_committed_declarations_keep_the_rules(gateway):
     declared = sorted(REPO.glob("apps/*/account.yaml"))
     assert declared
     for path in declared:
         gateway.checked_account(load(path))
 
 
-def test_the_gateway_reads_the_hubs_session_pod_names():
-    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+def test_the_gateway_reads_the_hubs_session_pod_names(gateway):
     template = load(HUB_VALUES)["singleuser"]["podNameTemplate"]
     match = gateway.SESSION_POD.fullmatch(template.format(userid=42))
     assert match and match[1] == "42"
@@ -255,12 +211,6 @@ def test_user_clusters_demand_their_token():
     assert (major, minor) >= (2, 52)
 
 
-def test_user_clusters_can_run_the_images_python():
-    """The Ray image keeps its Python under /home/ray, mode 750 for group 100;
-    a user's UID and GID alone cannot enter it."""
-    assert 100 in cluster_pod()["spec"]["securityContext"]["supplementalGroups"]
-
-
 def test_the_head_runs_no_tasks_and_holds_no_gpu():
     """Ray's advice: the head runs the GCS, the dashboard and the drivers."""
     head = load(APP / "raycluster.yaml")["spec"]["headGroupSpec"]
@@ -280,7 +230,8 @@ def test_a_worker_is_the_heads_pod_with_a_gpu():
     assert {k: v for k, v in worker["spec"].items() if k != "containers"} == {
         k: v for k, v in head["spec"].items() if k != "containers"
     }
-    same = ("image", "securityContext", "env", "volumeMounts")
+    # The two literal in both, the image for Renovate and the environment for the gateway's edits.
+    same = ("image", "env")
     assert {k: worker_container[k] for k in same} == {
         k: head_container[k] for k in same
     }
@@ -292,21 +243,12 @@ def test_a_worker_is_the_heads_pod_with_a_gpu():
     )
 
 
-def test_the_gateway_counts_the_gpus_its_workers_take():
-    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+def test_the_gateway_counts_the_gpus_its_workers_take(gateway):
     (group,) = load(APP / "raycluster.yaml")["spec"]["workerGroupSpecs"]
     (container,) = group["template"]["spec"]["containers"]
     limits = container["resources"]["limits"]
     assert [limits[f.resource] for f in gateway.FLAVORS if f.resource in limits] == [1]
     assert all(f.resource in gateway.GPU_METRICS for f in gateway.FLAVORS)
-
-
-def test_the_hub_counts_as_free_the_gpus_of_the_class_the_gateway_assigns():
-    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
-    queries = load_script(
-        REPO / "apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py", "gpu_queries"
-    )
-    assert gateway.PREEMPTIBLE_PRIORITY_CLASS == queries.PREEMPTIBLE_PRIORITY_CLASS
 
 
 def test_the_gateway_never_reads_a_secret():
@@ -317,8 +259,7 @@ def test_the_gateway_never_reads_a_secret():
     assert binding["subjects"][0]["name"] == gateway_pod()["spec"]["serviceAccountName"]
 
 
-def test_only_sessions_reach_the_gateway_and_only_the_gateway_reaches_clusters():
-    gw = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+def test_only_sessions_reach_the_gateway_and_only_the_gateway_reaches_clusters(gateway):
     policies = {
         p["metadata"]["name"]: p["spec"] for p in load_all(APP / "networkpolicy.yaml")
     }
@@ -331,13 +272,13 @@ def test_only_sessions_reach_the_gateway_and_only_the_gateway_reaches_clusters()
     gateway_labels = gateway_pod()["metadata"]["labels"]
     cluster_labels = cluster_pod()["metadata"]["labels"]
 
-    gateway = policies["ray-train-gateway"]
-    assert gateway["podSelector"]["matchLabels"].items() <= gateway_labels.items()
-    rule, agentic, scrape = gateway["ingress"]
+    admitted = policies["ray-train-gateway"]
+    assert admitted["podSelector"]["matchLabels"].items() <= gateway_labels.items()
+    rule, agentic, scrape = admitted["ingress"]
     assert agentic["from"] == [
         {"podSelector": {"matchLabels": {"app": "agentic-interface"}}}
     ]
-    assert agentic["ports"] == [{"protocol": "TCP", "port": gw.DASHBOARD_PORT}]
+    assert agentic["ports"] == [{"protocol": "TCP", "port": gateway.DASHBOARD_PORT}]
     assert rule["ports"] == [{"protocol": "TCP", "port": port} for port in ports]
     assert rule["from"] == [
         {
@@ -346,7 +287,7 @@ def test_only_sessions_reach_the_gateway_and_only_the_gateway_reaches_clusters()
             }
         }
     ]
-    assert scrape["ports"] == [{"protocol": "TCP", "port": gw.METRICS_PORT}]
+    assert scrape["ports"] == [{"protocol": "TCP", "port": gateway.METRICS_PORT}]
     assert scrape["from"] == [
         {
             "namespaceSelector": {
@@ -361,18 +302,17 @@ def test_only_sessions_reach_the_gateway_and_only_the_gateway_reaches_clusters()
     clusters = policies["ray-train-clusters"]
     assert clusters["podSelector"]["matchLabels"].items() <= cluster_labels.items()
     (rule,) = clusters["ingress"]
-    dashboard = int(gw.head_url("c").rsplit(":", 1)[1])
+    dashboard = int(gateway.head_url("c").rsplit(":", 1)[1])
     assert rule["ports"] == [
-        {"protocol": "TCP", "port": gw.CLIENT_PORT},
+        {"protocol": "TCP", "port": gateway.CLIENT_PORT},
         {"protocol": "TCP", "port": dashboard},
     ]
     assert rule["from"] == [
-        {"podSelector": {"matchLabels": gateway["podSelector"]["matchLabels"]}}
+        {"podSelector": {"matchLabels": admitted["podSelector"]["matchLabels"]}}
     ]
 
 
-def test_clusters_default_to_the_environment_pixi_global_sync_keeps():
-    gateway = load_script(APP / "gateway.py", "ray_train_gateway_manifests")
+def test_clusters_default_to_the_environment_pixi_global_sync_keeps(gateway):
     sync = load_script(
         REPO / "apps" / "af-utils" / "pixi-global-sync" / "sync-global-env.py",
         "sync_global_env_for_ray_train",

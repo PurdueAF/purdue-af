@@ -6,27 +6,25 @@ translated by the node's plugin into work on a remote system — a Slurm job, or
 a pod in a remote Kubernetes cluster — and run there; to Kubernetes it still
 looks like an ordinary pod.
 
-| Node               | Remote system                  | Plugin                       | Credential (out of band)         | Offloaded work                     | Deployed |
-| ------------------ | ------------------------------ | ---------------------------- | -------------------------------- | ---------------------------------- | -------- |
-| `interlink-hammer` | Hammer, partition `hammer-nodes` | Slurm sidecar → `sbatch`   | `munge-key-hammer` PVC           | Slurm jobs under Singularity       | yes      |
-| `interlink-nrp`    | NRP Nautilus                   | Kubernetes → remote pods     | `kubeconfig-nrp-interlink` Secret | pods in namespace `interlink-cms` | yes      |
+| Node               | Remote system                  | Plugin                       | Credential (out of band)         | Offloaded work                     |
+| ------------------ | ------------------------------ | ---------------------------- | -------------------------------- | ---------------------------------- |
+| `interlink-hammer` | Hammer, partition `hammer-nodes` | Slurm sidecar → `sbatch`   | `munge-key-hammer` PVC           | Slurm jobs under Singularity       |
+| `interlink-nrp`    | NRP Nautilus                   | Kubernetes → remote pods     | `kubeconfig-nrp-interlink` Secret | pods in namespace `interlink-cms` |
 
 Every node is three containers in one Deployment (`<nodeName>-node`) from the
 shared chart (`helmrepo.yaml`): the interLink API, the plugin that submits the
 work to the remote system, and the virtual kubelet that registers the Node
-object. Chart resources are all named `<nodeName>-*`.
+object. Chart resources are all named `<nodeName>-*`. [`values.yaml`](values.yaml)
+holds what the nodes share, including the shadow template; each release reads
+it first, then its own `values.yaml`: maps merge, a list replaces.
 
 hammer's plugin runs the site Slurm sidecar image
 ([`docker/interlink-slurm-plugin/README.md`](../../docker/interlink-slurm-plugin/README.md));
 nrp's runs the site [interlink-kubernetes-plugin](https://github.com/interlink-hq/interlink-kubernetes-plugin)
 image ([`docker/interlink-kubernetes-plugin/README.md`](../../docker/interlink-kubernetes-plugin/README.md)).
-Both are tagged with their upstream ref (`PLUGIN_REF`), pinned in each node's
-values; nrp sets the k8s image's `ensure_namespace=False` because NRP grants
-namespaced RBAC only — the offloading namespace is created out of band.
 
-A node is deployed only once its credential exists — without it the node pod
-never starts — so a new node stays commented out in
-`flux/experimental/kustomization.yaml` until its credential is created.
+A node is listed in `flux/experimental/kustomization.yaml` once its credential
+exists: without it the node pod never starts.
 
 To use a node, target it explicitly — it carries a
 `virtual-node.interlink/no-schedule` taint so nothing lands there by accident:
@@ -72,11 +70,9 @@ Nothing on either side runs privileged.
 
 On both nodes:
 
-- The shadow Ingress is served by [`traefik/`](traefik/values.yaml), not the
-  shared ingress: an nginx reload closes open connections about 240 s later,
-  and every tunnel is one long-lived connection. `geddes.rcac.purdue.edu` has
-  no wildcard DNS, so the client dials Traefik's pinned address and sends the
-  shadow's hostname as `Host`.
+- The shadow Ingress is served by [`traefik/`](traefik/values.yaml).
+  `geddes.rcac.purdue.edu` has no wildcard DNS, so the client dials Traefik's
+  pinned address and sends the shadow's hostname as `Host`.
 - A pod sets `interlink.eu/shadow-same-ns: "true"` so its shadow lands in
   `cms`; without it the virtual kubelet uses a `cms-wstunnel` namespace.
 - The shadow's hostname is built from the pod's name, truncated past 63
@@ -104,20 +100,20 @@ and populated out of band, never in this repo.
 Munge keys live in per-cluster RWX PVCs, never as Secrets.
 `munge-key-hammer` is also mounted by the AF sessions
 (`apps/jupyterhub/jupyterhub/values.yaml`).
-To add a further Slurm cluster: create its PVC, copy that cluster's key in,
-then uncomment its entry in the kustomization.
+To add a further Slurm cluster, see
+[`slurm/README.md`](../../slurm/README.md#adding-a-cluster).
 
 The NRP kubeconfig is the `kubeconfig-nrp-interlink` Secret in `cms`, minted
 by [`nrp/to-deploy-at-nrp/generate-nrp-kubeconfig.sh`](nrp/to-deploy-at-nrp/generate-nrp-kubeconfig.sh)
 against the RBAC in the same directory, applied to NRP out of band. Its token
-lasts 30 days. The daily CronJob in
-[`nrp/token-renewal`](nrp/token-renewal) mints the next one with it and writes
-it into the Secret as the key `token`, beside a `kubeconfig.yaml` whose user
-reads that file through an `exec` command; the plugin and the ray-train gateway
-read the renewed token without a restart. `AFNrpTokenRenewalFailing` fires
-after three days without a renewal. Once the token has expired, rerun the
-script, replace the Secret with its output, and renew at once, which puts the
-Secret back in the form the plugin reads:
+lasts `LIFETIME_S` in [`renew.py`](nrp/token-renewal/renew.py). The daily
+CronJob in [`nrp/token-renewal`](nrp/token-renewal) mints the next one with it
+and writes it into the Secret as the key `token`, beside a `kubeconfig.yaml`
+whose user reads that file through an `exec` command; the plugin and the
+ray-train gateway read the renewed token without a restart.
+`AFNrpTokenRenewalFailing` fires when renewals stop. Once the token has expired,
+rerun the script, replace the Secret with its output, and renew at once, which
+puts the Secret back in the form the plugin reads:
 
 ```bash
 kubectl -n cms create secret generic kubeconfig-nrp-interlink \

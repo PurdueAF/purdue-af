@@ -9,6 +9,7 @@ own derived token, never a session's.
 
 import asyncio
 import copy
+import dataclasses
 import json
 import logging
 import os
@@ -34,7 +35,15 @@ from aiohttp import (
     web,
 )
 from aiohttp.test_utils import TestServer
-from common import REFUSED_ACCOUNTS, REPO, account, load_script, mount_configmap
+from common import (
+    REFUSED_ACCOUNTS,
+    REPO,
+    account,
+    load_script,
+    mount_configmap,
+    sample,
+)
+from yarl import URL
 
 # gpu_queries.py is in the gateway's ConfigMap, beside gateway.py.
 sys.path.insert(0, str(REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles"))
@@ -75,6 +84,26 @@ PING = "/ray.rpc.RayletDriver/ClusterInfo"
 DATAPATH = "/ray.rpc.RayletDataStreamer/Datapath"
 FAILING = "/ray.rpc.RayletDriver/GetObject"
 LOGS = "/ray.rpc.RayletLogStreamer/Logstream"
+# The setting each keyword of call() and job_headers() sets.
+SETTINGS = {
+    "env_path": gw.ENV_METADATA,
+    "gpus": gw.WORKERS_METADATA,
+    "most": gw.MOST_METADATA,
+    "memory": gw.MEMORY_METADATA,
+    "cpus": gw.CPUS_METADATA,
+    "ram": gw.RAM_METADATA,
+    "per_worker": gw.PER_WORKER_METADATA,
+    "site": gw.SITE_METADATA,
+    "inputs": gw.INPUTS_METADATA,
+    "output": gw.OUTPUT_METADATA,
+}
+
+
+def stamp(seconds_ago=0):
+    """A Kubernetes timestamp."""
+    return datetime.fromtimestamp(time.time() - seconds_ago, timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
 
 
 def free_port():
@@ -116,12 +145,20 @@ def hub_app():
 JOB_SUFFIX = "-abcde"
 
 
+def selected(request, items):
+    """The items with the label of the request's labelSelector, if it has one."""
+    wanted = request.query.get("labelSelector")
+    if not wanted:
+        return items
+    key, _, value = wanted.partition("=")
+    return [i for i in items if i["metadata"]["labels"].get(key) == value]
+
+
 class FakeKube:
     def __init__(self):
         self.clusters = {}
-        # RayJobs, each with its cluster, as KubeRay creates it, and its patches
+        # RayJobs, each with its cluster, as KubeRay creates it
         self.jobs = {}
-        self.patches = []
         # RayClusters the gateway patched, once for each patch
         self.cluster_patches = []
         # Geddes batch Jobs: those that copy a job on NRP's data
@@ -132,7 +169,9 @@ class FakeKube:
         self.fail_list = False
         self.reject_create = False
         self.reject_secret = False
-        # Clusters whose deletion Kubernetes refuses
+        # Whether Kubernetes refuses to change a RayJob
+        self.reject_patch = False
+        # Clusters and RayJobs whose deletion Kubernetes refuses
         self.reject_delete = set()
         # Clusters another call is creating, absent to a GET and present to a POST:
         # name -> the environment that call asks for, or None if it deletes the cluster again.
@@ -145,8 +184,6 @@ class FakeKube:
         self.created = 0
 
     def app(self):
-        clusters = "/apis/ray.io/v1/namespaces/cms/rayclusters"
-
         def stored(body):
             self.created += 1
             name = body["metadata"]["name"]
@@ -157,6 +194,40 @@ class FakeKube:
 
         def removed(name):
             self.pods.pop(self.clusters.pop(name)["metadata"]["uid"])
+
+        def getter(store, failing=lambda: False):
+            async def get(request):
+                name = request.match_info["name"]
+                if failing():
+                    return web.json_response({}, status=500)
+                if name not in store:
+                    return web.json_response({"message": "not found"}, status=404)
+                return web.json_response(store[name])
+
+            return get
+
+        def creator(store, rejected=lambda: False):
+            async def create(request):
+                body = await request.json()
+                name = body["metadata"]["name"]
+                if rejected():
+                    return web.json_response({"message": "forbidden"}, status=403)
+                if name in store:
+                    return web.json_response({"message": "exists"}, status=409)
+                store[name] = body
+                return web.json_response(body, status=201)
+
+            return create
+
+        def lister(store):
+            async def listing(request):
+                if self.fail_list:
+                    return web.json_response({}, status=500)
+                return web.json_response(
+                    {"items": selected(request, list(store.values()))}
+                )
+
+            return listing
 
         async def create(request):
             body = await request.json()
@@ -174,11 +245,6 @@ class FakeKube:
             stored(body)
             return web.json_response(body, status=201)
 
-        async def listing(request):
-            if self.fail_list:
-                return web.json_response({}, status=500)
-            return web.json_response({"items": list(self.clusters.values())})
-
         async def get(request):
             name = request.match_info["name"]
             if self.fail_get:
@@ -190,6 +256,15 @@ class FakeKube:
                 self.linger[name] -= 1
             if name in self.racing or name not in self.clusters:
                 return web.json_response({"message": "not found"}, status=404)
+            return web.json_response(self.clusters[name])
+
+        async def patch(request):
+            assert request.content_type == "application/json-patch+json"
+            name = request.match_info["name"]
+            self.cluster_patches.append(name)
+            for op in json.loads(await request.read()):
+                _, spec, groups, index, field = op["path"].split("/")
+                self.clusters[name][spec][groups][int(index)][field] = op["value"]
             return web.json_response(self.clusters[name])
 
         async def delete(request):
@@ -207,15 +282,6 @@ class FakeKube:
                 del self.clusters[name]
             return web.json_response({})
 
-        rayjobs = "/apis/ray.io/v1/namespaces/cms/rayjobs"
-
-        def selected(request, items):
-            wanted = request.query.get("labelSelector")
-            if not wanted:
-                return items
-            key, _, value = wanted.partition("=")
-            return [i for i in items if i["metadata"]["labels"].get(key) == value]
-
         async def create_job(request):
             body = await request.json()
             name = body["metadata"]["name"]
@@ -225,9 +291,7 @@ class FakeKube:
                 return web.json_response({"message": "exists"}, status=409)
             self.created += 1
             body["metadata"]["uid"] = f"uid-{name}-{self.created}"
-            body["metadata"]["creationTimestamp"] = datetime.now(timezone.utc).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            )
+            body["metadata"]["creationTimestamp"] = stamp()
             labels = body["metadata"]["labels"]
             stored(
                 {
@@ -249,26 +313,12 @@ class FakeKube:
             self.jobs[name] = body
             return web.json_response(body, status=201)
 
-        async def get_job(request):
-            name = request.match_info["name"]
-            if self.fail_get:
-                return web.json_response({}, status=500)
-            if name not in self.jobs:
-                return web.json_response({"message": "not found"}, status=404)
-            return web.json_response(self.jobs[name])
-
-        async def list_jobs(request):
-            if self.fail_list:
-                return web.json_response({}, status=500)
-            return web.json_response(
-                {"items": selected(request, list(self.jobs.values()))}
-            )
-
         async def patch_job(request):
             name = request.match_info["name"]
             assert request.content_type == "application/merge-patch+json"
             patch = json.loads(await request.read())
-            self.patches.append((name, patch))
+            if self.reject_patch:
+                return web.json_response({"message": "invalid jobId"}, status=422)
             if name not in self.jobs:
                 return web.json_response({"message": "not found"}, status=404)
             annotations = self.jobs[name]["metadata"].setdefault("annotations", {})
@@ -278,6 +328,8 @@ class FakeKube:
 
         async def delete_job(request):
             name = request.match_info["name"]
+            if name in self.reject_delete:
+                return web.json_response({"message": "forbidden"}, status=403)
             if name not in self.jobs:
                 return web.json_response({}, status=404)
             del self.jobs[name]
@@ -285,57 +337,10 @@ class FakeKube:
                 removed(name + JOB_SUFFIX)
             return web.json_response({})
 
-        async def secret(request):
-            body = await request.json()
-            name = body["metadata"]["name"]
-            if self.reject_secret:
-                return web.json_response({"message": "forbidden"}, status=403)
-            if name in self.secrets:
-                return web.json_response({"message": "exists"}, status=409)
-            self.secrets[name] = body
-            return web.json_response(body, status=201)
-
-        async def create_configmap(request):
-            body = await request.json()
-            name = body["metadata"]["name"]
-            if name in self.configmaps:
-                return web.json_response({"message": "exists"}, status=409)
-            self.configmaps[name] = body
-            return web.json_response(body, status=201)
-
-        async def get_configmap(request):
-            name = request.match_info["name"]
-            if name not in self.configmaps:
-                return web.json_response({"message": "not found"}, status=404)
-            return web.json_response(self.configmaps[name])
-
-        async def patch(request):
-            assert request.content_type == "application/json-patch+json"
-            name = request.match_info["name"]
-            self.cluster_patches.append(name)
-            for op in json.loads(await request.read()):
-                _, spec, groups, index, field = op["path"].split("/")
-                self.clusters[name][spec][groups][int(index)][field] = op["value"]
-            return web.json_response(self.clusters[name])
-
-        app = web.Application()
-        app.router.add_patch(clusters + "/{name}", patch)
-        app.router.add_post(clusters, create)
-        app.router.add_get(clusters, listing)
-        app.router.add_get(clusters + "/{name}", get)
-        app.router.add_delete(clusters + "/{name}", delete)
-        batch = "/apis/batch/v1/namespaces/cms/jobs"
-
         async def create_batch(request):
             body = await request.json()
             self.batch[body["metadata"]["name"]] = body
             return web.json_response(body, status=201)
-
-        async def get_batch(request):
-            name = request.match_info["name"]
-            if name not in self.batch:
-                return web.json_response({"message": "not found"}, status=404)
-            return web.json_response(self.batch[name])
 
         async def patch_batch(request):
             assert request.content_type == "application/merge-patch+json"
@@ -348,19 +353,36 @@ class FakeKube:
             self.batch.pop(request.match_info["name"], None)
             return web.json_response({})
 
-        app.router.add_post(batch, create_batch)
-        app.router.add_get(batch + "/{name}", get_batch)
-        app.router.add_patch(batch + "/{name}", patch_batch)
-        app.router.add_delete(batch + "/{name}", delete_batch)
-        app.router.add_post(rayjobs, create_job)
-        app.router.add_get(rayjobs, list_jobs)
-        app.router.add_get(rayjobs + "/{name}", get_job)
-        app.router.add_patch(rayjobs + "/{name}", patch_job)
-        app.router.add_delete(rayjobs + "/{name}", delete_job)
-        app.router.add_post("/api/v1/namespaces/cms/secrets", secret)
+        clusters = "/apis/ray.io/v1/namespaces/cms/rayclusters"
+        rayjobs = "/apis/ray.io/v1/namespaces/cms/rayjobs"
+        batch = "/apis/batch/v1/namespaces/cms/jobs"
         configmaps = "/api/v1/namespaces/cms/configmaps"
-        app.router.add_post(configmaps, create_configmap)
-        app.router.add_get(configmaps + "/{name}", get_configmap)
+        app = web.Application()
+        # apps/ray-train/rbac.yaml, verb for verb: a call the Role denies fails here as on Geddes.
+        for method, path, handler in (
+            ("POST", clusters, create),
+            ("GET", clusters, lister(self.clusters)),
+            ("GET", clusters + "/{name}", get),
+            ("PATCH", clusters + "/{name}", patch),
+            ("DELETE", clusters + "/{name}", delete),
+            ("POST", rayjobs, create_job),
+            ("GET", rayjobs, lister(self.jobs)),
+            ("GET", rayjobs + "/{name}", getter(self.jobs, lambda: self.fail_get)),
+            ("PATCH", rayjobs + "/{name}", patch_job),
+            ("DELETE", rayjobs + "/{name}", delete_job),
+            ("POST", batch, create_batch),
+            ("GET", batch + "/{name}", getter(self.batch)),
+            ("PATCH", batch + "/{name}", patch_batch),
+            ("DELETE", batch + "/{name}", delete_batch),
+            (
+                "POST",
+                "/api/v1/namespaces/cms/secrets",
+                creator(self.secrets, lambda: self.reject_secret),
+            ),
+            ("POST", configmaps, creator(self.configmaps)),
+            ("GET", configmaps + "/{name}", getter(self.configmaps)),
+        ):
+            app.router.add_route(method, path, handler)
         return app
 
 
@@ -612,7 +634,6 @@ async def env(monkeypatch, tmp_path):
     monkeypatch.setattr(gw, "HUB_API", str(hub.make_url("/hub/api")))
     monkeypatch.setattr(gw, "KUBE_API", str(kube_server.make_url("")).rstrip("/"))
     monkeypatch.setattr(gw, "SERVICE_ACCOUNT", tmp_path)
-    monkeypatch.setattr(gw, "TEMPLATE", TEMPLATE)
     monkeypatch.setattr(gw, "START_TIMEOUT_S", 5)
     monkeypatch.setattr(gw, "LOG_TIMEOUT_S", 2)
     monkeypatch.setattr(gw, "START_POLL_S", 0)
@@ -656,38 +677,18 @@ async def env(monkeypatch, tmp_path):
         await server.close()
 
 
+def settings(**asked):
+    """The settings the keywords of SETTINGS name, as headers or metadata."""
+    return {SETTINGS[key]: value for key, value in asked.items() if value is not None}
+
+
 async def call(
-    env,
-    token="session-a",
-    method=PING,
-    messages=(b"ping",),
-    env_path=None,
-    client="client-1",
-    gpus=None,
-    memory=None,
-    cpus=None,
-    ram=None,
-    per_worker=None,
-    most=None,
+    env, token="session-a", method=PING, messages=(b"ping",), client="client-1", **asked
 ):
     """A Ray Client call from a session, as the stream of raw messages the gateway sees."""
-    metadata = [("client_id", client)]
-    if most is not None:
-        metadata.append((gw.MOST_METADATA, most))
-    if per_worker is not None:
-        metadata.append((gw.PER_WORKER_METADATA, per_worker))
-    if cpus is not None:
-        metadata.append((gw.CPUS_METADATA, cpus))
-    if ram is not None:
-        metadata.append((gw.RAM_METADATA, ram))
+    metadata = [("client_id", client), *settings(**asked).items()]
     if token is not None:
         metadata.append(("authorization", f"Bearer {token}"))
-    if env_path is not None:
-        metadata.append((gw.ENV_METADATA, env_path))
-    if gpus is not None:
-        metadata.append((gw.WORKERS_METADATA, gpus))
-    if memory is not None:
-        metadata.append((gw.MEMORY_METADATA, memory))
     responses = env.channel.stream_stream(method)(iter(messages), metadata=metadata)
     return [response async for response in responses]
 
@@ -698,18 +699,10 @@ async def refused(env, **kwargs):
     return e.value.code()
 
 
-def job_headers(token="session-a", env_path=None, gpus=None, memory=None, most=None):
-    headers = {}
-    if most is not None:
-        headers[gw.MOST_METADATA] = most
+def job_headers(token="session-a", **asked):
+    headers = settings(**asked)
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
-    if env_path is not None:
-        headers[gw.ENV_METADATA] = env_path
-    if gpus is not None:
-        headers[gw.WORKERS_METADATA] = gpus
-    if memory is not None:
-        headers[gw.MEMORY_METADATA] = memory
     return headers
 
 
@@ -828,9 +821,8 @@ def idle(env, *clusters):
 
 def provisioning(env, name="ray-train-user-a", age=0.0, provisioned="False"):
     """The cluster as KubeRay reports it `age` seconds in, its pods not all ready yet."""
-    created = datetime.fromtimestamp(time.time() - age, timezone.utc)
     cluster = env.kube.clusters[name]
-    cluster["metadata"]["creationTimestamp"] = created.strftime("%Y-%m-%dT%H:%M:%SZ")
+    cluster["metadata"]["creationTimestamp"] = stamp(age)
     cluster["status"] = {
         "conditions": [
             {"type": "HeadPodReady", "status": "True"},
@@ -1285,6 +1277,20 @@ def runs_as(env, name):
     return context["runAsUser"], context["runAsGroup"]
 
 
+async def refused_as_a_namesake(env, token, env_path="/cvmfs/env", job="raysubmit_1"):
+    """Neither of a gateway's ways in reaches the cluster, whether or not it knows it."""
+    for restarted in (False, True):
+        if restarted:
+            env.gateway.started.clear()
+        assert (
+            await refused(env, token=token, env_path=env_path)
+            == grpc.StatusCode.PERMISSION_DENIED
+        )
+        status, _, body = await job_call(env, path=f"/api/jobs/{job}", token=token)
+        assert status == 403
+        assert job.encode() not in body
+
+
 async def test_an_account_never_reaches_a_cluster_of_its_name_that_runs_as_a_person(
     env, namesake, monkeypatch, caplog
 ):
@@ -1294,18 +1300,7 @@ async def test_an_account_never_reaches_a_cluster_of_its_name_that_runs_as_a_per
     monkeypatch.setattr(gw, "ACCOUNTS_DIR", env.accounts)
     relayed = len(env.heads.calls)
     with caplog.at_level(logging.WARNING, logger="ray-train-gateway"):
-        for restarted in (False, True):
-            if restarted:
-                env.gateway.started.clear()
-            assert (
-                await refused(env, token=WORKLOAD_TOKEN, env_path="/cvmfs/env")
-                == grpc.StatusCode.PERMISSION_DENIED
-            )
-            status, _, body = await job_call(
-                env, path="/api/jobs/raysubmit_persons_job", token=WORKLOAD_TOKEN
-            )
-            assert status == 403
-            assert b"raysubmit_persons_job" not in body
+        await refused_as_a_namesake(env, WORKLOAD_TOKEN, job="raysubmit_persons_job")
     assert len(env.heads.calls) == relayed
     assert env.kube.created == 1
     assert runs_as(env, WORKLOAD_CLUSTER) == (7777, 777)
@@ -1321,15 +1316,7 @@ async def test_a_person_never_reaches_a_cluster_of_their_name_that_runs_as_an_ac
     ]
     monkeypatch.setattr(gw, "ACCOUNTS_DIR", env.accounts / "missing")
     relayed = len(env.heads.calls)
-    for restarted in (False, True):
-        if restarted:
-            env.gateway.started.clear()
-        assert (
-            await refused(env, token=namesake, env_path=env_path)
-            == grpc.StatusCode.PERMISSION_DENIED
-        )
-        status, _, _ = await job_call(env, path="/api/jobs/raysubmit_1", token=namesake)
-        assert status == 403
+    await refused_as_a_namesake(env, namesake, env_path)
     assert len(env.heads.calls) == relayed
     assert live(env) == {WORKLOAD_CLUSTER}
     assert runs_as(env, WORKLOAD_CLUSTER) == (1234, 1235)
@@ -1344,15 +1331,7 @@ async def test_a_refused_namesake_leaves_the_clusters_idle_clock_alone(
     idle(env, WORKLOAD_CLUSTER)
     long_ago = env.gateway.last_used[WORKLOAD_CLUSTER]
     monkeypatch.setattr(gw, "ACCOUNTS_DIR", env.accounts / "missing")
-    for restarted in (False, True):
-        if restarted:
-            env.gateway.started.clear()
-        assert (
-            await refused(env, token=namesake, env_path="/cvmfs/env")
-            == grpc.StatusCode.PERMISSION_DENIED
-        )
-        status, _, _ = await job_call(env, path="/api/jobs/raysubmit_1", token=namesake)
-        assert status == 403
+    await refused_as_a_namesake(env, namesake)
     assert env.gateway.last_used[WORKLOAD_CLUSTER] == long_ago
 
 
@@ -1417,6 +1396,19 @@ async def test_a_hub_user_whose_cluster_name_is_an_accounts_is_refused(
 def test_a_token_that_is_no_utf8_is_no_accounts():
     """aiohttp hands a header's bytes that are no UTF-8 on as surrogates."""
     assert gw.token_account("\udcff\udcfe") is None
+
+
+async def test_a_token_that_is_no_utf8_is_no_token(env):
+    url = URL(env.dashboard)
+    reader, writer = await asyncio.open_connection(url.host, url.port)
+    writer.write(
+        b"GET /api/jobs/ HTTP/1.1\r\nHost: gateway\r\n"
+        b"Authorization: Bearer \xff\xfe\r\nConnection: close\r\n\r\n"
+    )
+    await writer.drain()
+    assert (await reader.readline()).split()[1] == b"401"
+    writer.close()
+    await writer.wait_closed()
 
 
 def declare(directory, **files):
@@ -1725,18 +1717,6 @@ async def test_asking_for_up_to_as_many_workers_replaces_an_idle_cluster_of_that
     assert annotations[gw.LEAST_ANNOTATION] == "1"
 
 
-async def test_a_cluster_from_before_the_most_workers_setting_serves_a_call_for_its_workers(
-    env,
-):
-    await call(env, gpus="2")
-    del env.kube.clusters["ray-train-user-a"]["metadata"]["annotations"][
-        gw.LEAST_ANNOTATION
-    ]
-    env.gateway.started.clear()
-    await call(env, gpus="2")
-    assert env.kube.created == 1
-
-
 async def test_asking_for_other_gpus_replaces_an_idle_cluster(env):
     await call(env)
     assert await call(env, gpus="3") == [b"echo:ping"]
@@ -1923,16 +1903,6 @@ async def test_asking_for_more_memory_replaces_an_idle_cluster_of_slices(env):
     assert gpus(env) == {"gpu": (1, T4)}
 
 
-async def test_a_cluster_from_before_the_memory_setting_serves_any_call(env):
-    await call(env)
-    del env.kube.clusters["ray-train-user-a"]["metadata"]["annotations"][
-        gw.MEMORY_ANNOTATION
-    ]
-    env.gateway.started.clear()
-    await call(env)
-    assert env.kube.created == 1
-
-
 async def test_clusters_count_the_gpus_of_each_kind_just_admitted(env):
     env.prometheus.slices = 2
     await call(env, gpus="2")
@@ -2078,8 +2048,9 @@ async def test_a_job_whose_code_was_uploaded_first_takes_the_id_its_client_names
     assert json.loads(env.heads.seen[-1][4])["submission_id"] == "my-job"
 
 
-async def test_a_submission_that_is_no_json_object_is_refused(env):
-    status, _, _ = await job_call(env, "POST", "/api/jobs/", b"[1]")
+@pytest.mark.parametrize("body", [b"[1]", b"not json"])
+async def test_a_submission_that_is_no_json_object_is_refused(env, body):
+    status, _, _ = await job_call(env, "POST", "/api/jobs/", body)
     assert status == 400
     assert env.kube.jobs == {}
 
@@ -2155,21 +2126,63 @@ async def test_a_job_no_submission_came_to_is_removed(env):
     await env.gateway.reap_jobs()
     assert len(env.kube.jobs) == 1
     env.gateway.waiting.clear()
-    long_ago = datetime.fromtimestamp(
-        time.time() - 2 * gw.START_TIMEOUT_S - 1, timezone.utc
-    )
-    rayjob(env)["metadata"]["creationTimestamp"] = long_ago.strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
+    rayjob(env)["metadata"]["creationTimestamp"] = stamp(2 * gw.START_TIMEOUT_S + 1)
+    await env.gateway.reap_jobs()
+    assert env.kube.jobs == {}
+
+
+async def test_a_job_whose_upload_no_accepted_submission_follows_is_removed(env):
+    await job_call(env, "PUT", "/api/packages/gcs/_ray_pkg_1.zip", b"zip")
+    status, _, _ = await submit(env, output="/depot/cms/runs")
+    assert status == 400
+    rayjob(env)["metadata"]["creationTimestamp"] = stamp(2 * gw.START_TIMEOUT_S + 1)
+    await env.gateway.reap_jobs()
+    assert len(env.kube.jobs) == 1
+    (user,) = env.gateway.waiting
+    env.gateway.waiting[user] = dataclasses.replace(
+        env.gateway.waiting[user], since=time.monotonic() - gw.START_TIMEOUT_S - 1
     )
     await env.gateway.reap_jobs()
     assert env.kube.jobs == {}
 
 
+async def test_a_job_whose_id_kubernetes_refuses_is_removed_and_goes_to_no_head(env):
+    env.kube.reject_patch = True
+    status, reason, _ = await submit(env)
+    assert status == 503
+    assert "invalid jobId" in reason
+    assert env.kube.jobs == {}
+    assert env.heads.seen == []
+
+
+async def test_a_record_kubernetes_keeps_is_reported(env):
+    submission = await submitted(env)
+    ended(env, submission)
+    env.kube.reject_delete.add(rayjob(env)["metadata"]["name"])
+    status, reason, _ = await job_call(env, "DELETE", f"/api/jobs/{submission}")
+    assert status == 503
+    assert "HTTP 403" in reason
+    assert len(env.kube.jobs) == 1
+
+
+async def test_a_job_whose_cluster_never_came_up_is_reported_if_it_stays(env):
+    submission = await submitted(env)
+    env.kube.clusters.pop(job_cluster(env, submission))
+    env.kube.reject_delete.add(rayjob(env)["metadata"]["name"])
+    status, _, _ = await job_call(env, "POST", f"/api/jobs/{submission}/stop")
+    assert status == 503
+
+
+async def test_a_record_already_gone_counts_as_deleted(env):
+    submission = await submitted(env)
+    ended(env, submission)
+    job = env.kube.jobs.pop(rayjob(env)["metadata"]["name"])
+    answer = await env.gateway.recorded(job, "DELETE", "")
+    assert json.loads(answer.text) == {"deleted": True}
+
+
 def created_ago(env, submission, seconds):
-    then = datetime.fromtimestamp(time.time() - seconds, timezone.utc)
-    rayjob(env, submission)["metadata"]["creationTimestamp"] = then.strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
+    rayjob(env, submission)["metadata"]["creationTimestamp"] = stamp(seconds)
 
 
 async def test_a_submitted_job_kuberay_does_not_follow_yet_is_kept_while_it_runs(env):
@@ -2272,16 +2285,15 @@ async def test_paths_and_queries_reach_the_head_as_sent(env):
     )
 
 
-def ended(env, submission, at=None):
+def ended(env, submission, ago=0):
     """The job ended, its cluster gone: what KubeRay leaves the idle timeout after."""
-    stamp = (at or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ")
     kuberay_reports(
         env,
         submission,
         jobStatus="SUCCEEDED",
         jobDeploymentStatus="Complete",
         message="Job finished successfully.",
-        endTime=stamp,
+        endTime=stamp(ago),
     )
     env.kube.clusters.pop(job_cluster(env, submission))
 
@@ -2312,7 +2324,7 @@ def suspended(env, submission):
 @pytest.mark.parametrize("state", ["SUCCEEDED", "FAILED", "STOPPED"])
 async def test_an_ended_job_frees_its_gpus_and_keeps_its_head_for_its_logs(env, state):
     submission = await submitted(env, gpus="2")
-    kuberay_reports(env, submission, jobStatus=state, endTime=stamp_now())
+    kuberay_reports(env, submission, jobStatus=state, endTime=stamp())
     await env.gateway.reap_jobs()
     assert suspended(env, submission) == [True, True]
     assert job_cluster(env, submission) in live(env)
@@ -2333,14 +2345,9 @@ async def test_a_running_job_keeps_its_workers(env):
     assert env.kube.cluster_patches == []
 
 
-def stamp_now():
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
 async def test_a_jobs_record_goes_once_kept_long_enough(env):
     submission = await submitted(env)
-    long_ago = datetime.fromtimestamp(time.time() - gw.JOB_RECORD_S - 1, timezone.utc)
-    ended(env, submission, at=long_ago)
+    ended(env, submission, ago=gw.JOB_RECORD_S + 1)
     await env.gateway.reap_jobs()
     assert env.kube.jobs == {}
 
@@ -2406,12 +2413,6 @@ async def test_without_prometheus_a_job_counts_against_the_budget_once(env):
     await submitted(env, gpus="4", memory="16")
     status, _, _ = await submit(env, memory="16")
     assert status == 429
-
-
-async def test_a_submission_that_is_no_json_is_refused(env):
-    status, _, _ = await job_call(env, "POST", "/api/jobs/", b"not json")
-    assert status == 400
-    assert env.kube.jobs == {}
 
 
 async def test_a_rayjob_kubernetes_refuses_is_reported_and_frees_its_grant(env):
@@ -2484,9 +2485,8 @@ async def test_the_job_reaper_passes_over_a_job_being_deleted_and_outlives_a_bad
 ):
     first = await submitted(env)
     second = await submitted(env)
-    long_ago = datetime.fromtimestamp(time.time() - gw.JOB_RECORD_S - 1, timezone.utc)
     for submission in (first, second):
-        ended(env, submission, at=long_ago)
+        ended(env, submission, ago=gw.JOB_RECORD_S + 1)
     rayjob(env, first)["metadata"]["deletionTimestamp"] = "now"
     del rayjob(env, second)["metadata"]["creationTimestamp"]
     with caplog.at_level(logging.ERROR, logger="ray-train-gateway"):
@@ -2510,7 +2510,7 @@ async def tail(env, submission):
 async def test_an_ended_jobs_logs_are_kept_before_its_workers_go(env):
     submission = await submitted(env, gpus="2")
     env.heads.jobs[job_cluster(env)] = [running_job(submission, status="SUCCEEDED")]
-    kuberay_reports(env, submission, jobStatus="SUCCEEDED", endTime=stamp_now())
+    kuberay_reports(env, submission, jobStatus="SUCCEEDED", endTime=stamp())
     await env.gateway.reap_jobs()
     assert suspended(env, submission) == [True, True]
     job = rayjob(env)
@@ -2532,7 +2532,7 @@ async def test_only_the_end_of_long_logs_is_kept(env, monkeypatch):
     monkeypatch.setattr(gw, "LOG_BYTES", 10)
     submission = await submitted(env)
     env.heads.jobs[job_cluster(env)] = [running_job(submission, status="FAILED")]
-    kuberay_reports(env, submission, jobStatus="FAILED", endTime=stamp_now())
+    kuberay_reports(env, submission, jobStatus="FAILED", endTime=stamp())
     await env.gateway.reap_jobs()
     (configmap,) = env.kube.configmaps.values()
     first, kept = configmap["data"]["logs"].split("\n", 1)
@@ -2542,7 +2542,7 @@ async def test_only_the_end_of_long_logs_is_kept(env, monkeypatch):
 
 async def test_logs_that_could_not_be_kept_do_not_keep_the_gpus(env):
     submission = await submitted(env)
-    kuberay_reports(env, submission, jobStatus="FAILED", endTime=stamp_now())
+    kuberay_reports(env, submission, jobStatus="FAILED", endTime=stamp())
     await env.gateway.reap_jobs()
     assert suspended(env, submission) == [True]
     assert env.kube.configmaps == {}
@@ -2623,15 +2623,8 @@ class FakeNrp:
         async def listing(request):
             if self.fail_list:
                 return web.json_response({"message": "down"}, status=500)
-            key, _, value = request.query["labelSelector"].partition("=")
             return web.json_response(
-                {
-                    "items": [
-                        j
-                        for j in self.jobs.values()
-                        if j["metadata"]["labels"].get(key) == value
-                    ]
-                }
+                {"items": selected(request, list(self.jobs.values()))}
             )
 
         async def patch(request):
@@ -2699,25 +2692,15 @@ class FakeBucket:
         return newest
 
 
-def stamp(seconds_ago):
-    return datetime.fromtimestamp(time.time() - seconds_ago, timezone.utc).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
-
-
-def nrp_sample(value, **labels):
-    return {"metric": labels, "value": [0, str(value)]}
-
-
 def nrp_node(name, gpus, region="us-west", model="NVIDIA A10"):
     return (
         [
-            nrp_sample(gpus, node=name, resource="nvidia_com_gpu"),
-            nrp_sample(64, node=name, resource="cpu"),
-            nrp_sample(512 * 2**30, node=name, resource="memory"),
+            sample(gpus, node=name, resource="nvidia_com_gpu"),
+            sample(64, node=name, resource="cpu"),
+            sample(512 * 2**30, node=name, resource="memory"),
         ],
-        nrp_sample(1, node=name, label_topology_kubernetes_io_region=region),
-        nrp_sample(1, Hostname=name, modelName=model),
+        sample(1, node=name, label_topology_kubernetes_io_region=region),
+        sample(1, Hostname=name, modelName=model),
     )
 
 
@@ -2745,9 +2728,10 @@ async def nrp_env(env, monkeypatch):
         if promql.startswith("avg_over_time(DCGM_FI_DEV_GPU_UTIL"):
             busy = [v for c, v in utilization.items() if f'pod=~"{c}-' in promql]
             gpus = busy[0] if busy and isinstance(busy[0], list) else busy
-            return web.json_response(
-                {"data": {"result": [nrp_sample(b) for b in gpus]}}
-            )
+            # A GPU that has run for less than the window has no sample that far back.
+            if " offset " in promql:
+                gpus = [b for b in gpus if b not in env.young_gpus]
+            return web.json_response({"data": {"result": [sample(b) for b in gpus]}})
         return web.json_response({"data": {"result": answers[promql]}})
 
     prometheus = web.Application()
@@ -2757,7 +2741,7 @@ async def nrp_env(env, monkeypatch):
         await server.start_server()
     api = gw.nrp_jobs.NrpApi.__new__(gw.nrp_jobs.NrpApi)
     api.server = str(servers[0].make_url("")).rstrip("/")
-    api.namespace, api.token, api.http = "interlink-cms", "t", None
+    api.namespace, api.http = "interlink-cms", None
     api.token_file = Path("/nonexistent/token")
     api.tls = ssl.create_default_context()
     env.gateway.nrp, env.gateway.bucket = api, FakeBucket()
@@ -2765,6 +2749,7 @@ async def nrp_env(env, monkeypatch):
         gw, "NRP_PROMETHEUS_URL", str(servers[1].make_url("")).rstrip("/")
     )
     env.nrp, env.answers, env.utilization = fake, answers, utilization
+    env.young_gpus = set()
     yield env
     await api.close()
     for server in servers:
@@ -2776,24 +2761,18 @@ OUTPUT = "/work/users/user-a/runs"
 
 
 async def nrp_call(
-    env, method="GET", path="/api/jobs/", body=None, token="session-a", **headers
+    env, method="GET", path="/api/jobs/", body=None, site="nrp", **asked
 ):
-    async with env.session.request(
-        method,
-        env.dashboard + path,
-        data=body,
-        headers={"Authorization": f"Bearer {token}", gw.SITE_METADATA: "nrp"} | headers,
-    ) as r:
-        return r.status, r.reason, await r.read()
+    return await job_call(env, method, path, body, site=site, **asked)
 
 
-async def nrp_submit(env, body=None, **headers):
+async def nrp_submit(env, body=None, **asked):
     body = body or {"entrypoint": "python train.py"}
-    return await nrp_call(env, "POST", "/api/jobs/", json.dumps(body), **headers)
+    return await nrp_call(env, "POST", "/api/jobs/", json.dumps(body), **asked)
 
 
-async def nrp_submitted(env, **headers):
-    status, _, body = await nrp_submit(env, **headers)
+async def nrp_submitted(env, **asked):
+    status, _, body = await nrp_submit(env, **asked)
     assert status == 200, body
     return json.loads(body)["submission_id"]
 
@@ -2860,21 +2839,21 @@ async def test_a_job_on_nrp_is_a_rayjob_there_named_for_no_one(nrp_env):
 
 
 async def test_a_job_on_nrp_gets_its_workers_in_one_region_and_gpu_model(nrp_env):
-    await nrp_submitted(nrp_env, **{gw.WORKERS_METADATA: "4"})
+    await nrp_submitted(nrp_env, gpus="4")
     assert nrp_workers(nrp_job(nrp_env)) == (4, ["west-1", "west-2"])
 
 
 async def test_a_job_on_nrp_of_up_to_some_workers_takes_those_with_room(nrp_env):
-    await nrp_submitted(nrp_env, **{gw.MOST_METADATA: "9"})
+    await nrp_submitted(nrp_env, most="9")
     assert nrp_workers(nrp_job(nrp_env))[0] == 4
 
 
 async def test_a_job_on_nrp_waits_for_room_and_is_stopped_if_none_comes(nrp_env):
     env = nrp_env
     env.answers[nrp_gpus.REQUESTED] = [
-        nrp_sample(1, node="west-2", resource="nvidia_com_gpu")
+        sample(1, node="west-2", resource="nvidia_com_gpu")
     ]
-    submission = await nrp_submitted(env, **{gw.WORKERS_METADATA: "4"})
+    submission = await nrp_submitted(env, gpus="4")
     job = nrp_job(env)
     assert job["spec"]["suspend"] is True
     found = await details(env, submission)
@@ -2893,12 +2872,12 @@ async def test_a_job_on_nrp_waits_for_room_and_is_stopped_if_none_comes(nrp_env)
 async def test_a_job_on_nrp_asks_for_no_more_workers_than_one_group_holds_empty(
     nrp_env,
 ):
-    status, reason, _ = await nrp_submit(nrp_env, **{gw.WORKERS_METADATA: "5"})
+    status, reason, _ = await nrp_submit(nrp_env, gpus="5")
     assert status == 429
     assert "at most 4" in reason
     # Room taken by other pods still counts: such a job waits for it.
-    await nrp_submitted(nrp_env, **{gw.WORKERS_METADATA: "4"})
-    await nrp_submitted(nrp_env, **{gw.WORKERS_METADATA: "4"})
+    await nrp_submitted(nrp_env, gpus="4")
+    await nrp_submitted(nrp_env, gpus="4")
 
 
 async def test_a_job_on_nrp_is_refused_while_nrp_prometheus_shows_no_nodes(nrp_env):
@@ -2919,18 +2898,16 @@ async def test_a_job_on_nrp_is_refused_while_nrp_prometheus_does_not_answer(nrp_
 
 @pytest.mark.parametrize("workers", ["0", "-1", "two", "1.5", "007"])
 async def test_a_job_on_nrp_asks_for_a_whole_number_of_workers(nrp_env, workers):
-    for header in (gw.WORKERS_METADATA, gw.MOST_METADATA):
-        status, reason, _ = await nrp_submit(nrp_env, **{header: workers})
+    for setting in ("gpus", "most"):
+        status, reason, _ = await nrp_submit(nrp_env, **{setting: workers})
         assert status == 400
         assert "whole number of workers" in reason
     assert nrp_env.nrp.jobs == {}
 
 
-async def own_cluster(env, method, token="session-a", path="/af/cluster", **headers):
+async def own_cluster(env, method, token="session-a", path="/af/cluster", **asked):
     async with env.session.request(
-        method,
-        env.dashboard + path,
-        headers={"Authorization": f"Bearer {token}"} | headers,
+        method, env.dashboard + path, headers=job_headers(token, **asked)
     ) as r:
         body = await r.json() if r.status == 200 else None
         return r.status, r.reason, body
@@ -2942,9 +2919,7 @@ async def test_a_user_with_no_cluster_is_told_so_and_none_starts(env):
 
 
 async def test_a_cluster_starts_in_the_shape_asked_and_reports_it(env):
-    status, _, found = await own_cluster(
-        env, "POST", **{gw.MOST_METADATA: "2", gw.CPUS_METADATA: "4"}
-    )
+    status, _, found = await own_cluster(env, "POST", most="2", cpus="4")
     assert status == 200
     assert found["exists"] is True
     assert (found["name"], found["workers"]) == ("ray-train-user-a", 2)
@@ -2954,7 +2929,7 @@ async def test_a_cluster_starts_in_the_shape_asked_and_reports_it(env):
 
 
 async def test_a_cluster_is_not_for_nrp(env):
-    status, reason, _ = await own_cluster(env, "POST", **{gw.SITE_METADATA: "nrp"})
+    status, reason, _ = await own_cluster(env, "POST", site="nrp")
     assert status == 400
     assert "Ray Client reaches your own cluster" in reason
 
@@ -3006,7 +2981,7 @@ async def test_capacity_counts_workers_of_a_shape_at_both_sites(nrp_env, monkeyp
         {"nvidia.com/mig-1g.5gb": (3, 1), "nvidia.com/gpu": (2, 2)},
     )
     nrp_env.answers[nrp_gpus.REQUESTED] = [
-        nrp_sample(1, node="west-2", resource="nvidia_com_gpu")
+        sample(1, node="west-2", resource="nvidia_com_gpu")
     ]
     found = await nrp_env.gateway.capacity({})
     purdue, on_nrp = found["purdue"], found["nrp"]
@@ -3074,9 +3049,7 @@ async def test_the_code_a_job_on_nrp_uploads_reaches_it_through_its_s3_prefix(nr
 
 async def test_a_job_on_nrp_has_its_inputs_copied_there_and_its_outputs_back(nrp_env):
     env = nrp_env
-    submission = await nrp_submitted(
-        env, **{gw.INPUTS_METADATA: INPUTS, gw.OUTPUT_METADATA: OUTPUT}
-    )
+    submission = await nrp_submitted(env, inputs=INPUTS, output=OUTPUT)
     job = nrp_job(env)
     name = job["metadata"]["name"]
     prefix = f"s3://bucket/ray-nrp/jobs/{name}"
@@ -3123,7 +3096,7 @@ async def test_a_job_on_nrp_has_its_inputs_copied_there_and_its_outputs_back(nrp
 
 async def test_a_job_on_nrp_whose_inputs_could_not_be_copied_says_so(nrp_env):
     env = nrp_env
-    submission = await nrp_submitted(env, **{gw.INPUTS_METADATA: INPUTS})
+    submission = await nrp_submitted(env, inputs=INPUTS)
     name = nrp_job(env)["metadata"]["name"]
     copied(env, f"{name}-in", "Failed")
     await env.gateway.reap_nrp()
@@ -3133,9 +3106,7 @@ async def test_a_job_on_nrp_whose_inputs_could_not_be_copied_says_so(nrp_env):
 
 async def test_a_job_on_nrp_stopped_before_it_started_copies_nothing_back(nrp_env):
     env = nrp_env
-    submission = await nrp_submitted(
-        env, **{gw.INPUTS_METADATA: INPUTS, gw.OUTPUT_METADATA: OUTPUT}
-    )
+    submission = await nrp_submitted(env, inputs=INPUTS, output=OUTPUT)
     name = nrp_job(env)["metadata"]["name"]
     copied(env, f"{name}-in", "Failed")
     await env.gateway.reap_nrp()
@@ -3147,7 +3118,7 @@ async def test_a_job_on_nrp_stopped_before_it_started_copies_nothing_back(nrp_en
 
 async def test_a_job_on_nrp_whose_outputs_could_not_be_copied_back_says_so(nrp_env):
     env = nrp_env
-    submission = await nrp_submitted(env, **{gw.OUTPUT_METADATA: OUTPUT})
+    submission = await nrp_submitted(env, output=OUTPUT)
     job = nrp_job(env)
     name = job["metadata"]["name"]
     kept = f"ray-nrp/jobs/{name}/output/model.pt"
@@ -3167,54 +3138,39 @@ async def test_a_job_on_nrp_whose_outputs_could_not_be_copied_back_says_so(nrp_e
     assert env.gateway.bucket.objects == {} and env.nrp.jobs == {}
 
 
-@pytest.mark.parametrize("path", ["/etc/passwd", "relative/dir", "/work/../etc"])
-async def test_data_off_the_users_storage_is_refused(nrp_env, path):
-    status, reason, _ = await nrp_submit(nrp_env, **{gw.INPUTS_METADATA: path})
+@pytest.mark.parametrize(
+    "setting, path",
+    [
+        ("inputs", "/etc/passwd"),
+        ("inputs", "relative/dir"),
+        ("inputs", "/work/../etc"),
+        # The top of shared storage.
+        ("output", "/depot/cms/runs"),
+        ("output", "/work/runs"),
+        ("output", "/depot/cms/runs/"),
+    ],
+)
+async def test_data_off_the_users_storage_is_refused(nrp_env, setting, path):
+    status, reason, _ = await nrp_submit(nrp_env, **{setting: path})
     assert status == 400
-    assert gw.INPUTS_METADATA in reason
-    assert nrp_env.nrp.jobs == {}
-
-
-@pytest.mark.parametrize("path", ["/depot/cms/runs", "/work/runs", "/depot/cms/runs/"])
-async def test_an_output_at_the_top_of_shared_storage_is_refused(nrp_env, path):
-    status, reason, _ = await nrp_submit(nrp_env, **{gw.OUTPUT_METADATA: path})
-    assert status == 400
-    assert gw.OUTPUT_METADATA in reason
+    assert SETTINGS[setting] in reason
     assert nrp_env.nrp.jobs == {}
 
 
 async def test_an_output_at_the_top_of_shared_storage_is_refused_at_purdue(env):
-    async with env.session.post(
-        env.dashboard + "/api/jobs/",
-        data=json.dumps({"entrypoint": "python train.py"}),
-        headers={
-            "Authorization": "Bearer session-a",
-            gw.OUTPUT_METADATA: "/depot/cms/runs",
-        },
-    ) as r:
-        assert r.status == 400
-        assert gw.OUTPUT_METADATA in r.reason
+    status, reason, _ = await submit(env, output="/depot/cms/runs")
+    assert status == 400
+    assert gw.OUTPUT_METADATA in reason
     assert env.kube.clusters == {}
 
 
 async def test_a_job_at_purdue_finds_its_data_at_its_paths(env):
-    await submit_with(env, **{gw.INPUTS_METADATA: INPUTS, gw.OUTPUT_METADATA: OUTPUT})
+    await submitted(env, inputs=INPUTS, output=OUTPUT)
     sent = json.loads(env.heads.seen[-1][4])
     assert sent["runtime_env"]["env_vars"] == {"AF_INPUTS": INPUTS, "AF_OUTPUT": OUTPUT}
 
 
-async def submit_with(env, **headers):
-    async with env.session.post(
-        env.dashboard + "/api/jobs/",
-        data=json.dumps({"entrypoint": "python train.py"}),
-        headers={"Authorization": "Bearer session-a"} | headers,
-    ) as r:
-        assert r.status == 200, await r.text()
-
-
-@pytest.mark.parametrize(
-    "setting", [gw.ENV_METADATA, gw.CPUS_METADATA, gw.PER_WORKER_METADATA]
-)
+@pytest.mark.parametrize("setting", ["env_path", "cpus", "per_worker"])
 async def test_a_job_on_nrp_takes_no_setting_of_a_cluster_at_purdue(nrp_env, setting):
     status, reason, _ = await nrp_submit(nrp_env, **{setting: "2"})
     assert status == 400
@@ -3223,24 +3179,13 @@ async def test_a_job_on_nrp_takes_no_setting_of_a_cluster_at_purdue(nrp_env, set
 
 
 async def test_a_site_the_gateway_does_not_know_is_refused(nrp_env):
-    status, reason, _ = await nrp_call(
-        nrp_env, path="/api/version", **{gw.SITE_METADATA: "mars"}
-    )
+    status, reason, _ = await nrp_call(nrp_env, path="/api/version", site="mars")
     assert status == 400
     assert "purdue" in reason
 
 
 async def test_ray_client_does_not_reach_nrp(env):
-    with pytest.raises(grpc.aio.AioRpcError) as e:
-        stream = env.channel.stream_stream(PING)(
-            iter([b"ping"]),
-            metadata=[
-                ("authorization", "Bearer session-a"),
-                (gw.SITE_METADATA, "nrp"),
-            ],
-        )
-        [r async for r in stream]
-    assert e.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+    assert await refused(env, site="nrp") == grpc.StatusCode.INVALID_ARGUMENT
 
 
 async def test_without_nrp_a_job_for_it_is_refused(env):
@@ -3262,12 +3207,7 @@ async def test_a_job_on_nrp_is_followed_from_its_rayjob_and_its_submitter(nrp_en
     env.nrp.pods["submitter"] = (job["metadata"]["name"], ["line 1\n", "line 2\n"])
     status, _, body = await job_call(env, path=f"/api/jobs/{submission}/logs")
     assert json.loads(body) == {"logs": "line 1\nline 2\n"}
-    lines = []
-    url = f"{env.dashboard}/api/jobs/{submission}/logs/tail"
-    async with env.session.ws_connect(url, headers=job_headers()) as ws:
-        async for message in ws:
-            lines.append(message.data)
-    assert lines == ["line 1\n", "line 2\n"]
+    assert await tail(env, submission) == ["line 1\n", "line 2\n"]
 
 
 async def test_stopping_a_job_on_nrp_keeps_its_record_and_deletes_its_code(nrp_env):
@@ -3288,7 +3228,7 @@ async def test_stopping_a_job_on_nrp_keeps_its_record_and_deletes_its_code(nrp_e
 
 async def test_a_job_on_nrp_is_deleted_only_once_its_outputs_are_back(nrp_env):
     env = nrp_env
-    submission = await nrp_submitted(env, **{gw.OUTPUT_METADATA: OUTPUT})
+    submission = await nrp_submitted(env, output=OUTPUT)
     kuberay_ends(env, submission)
     await env.gateway.reap_nrp()
     status, reason, _ = await job_call(env, "DELETE", f"/api/jobs/{submission}")
@@ -3319,7 +3259,7 @@ def running_for(env, submission, seconds, cluster="c1"):
 
 async def test_a_job_on_nrp_whose_gpus_sit_idle_is_stopped_and_says_why(nrp_env):
     env = nrp_env
-    submission = await nrp_submitted(env, **{gw.OUTPUT_METADATA: OUTPUT})
+    submission = await nrp_submitted(env, output=OUTPUT)
     running_for(env, submission, gw.NRP_UTILIZATION_WINDOW_S + 60)
     env.utilization["c1"] = 12.4
     await env.gateway.reap_nrp()
@@ -3349,7 +3289,7 @@ async def test_a_job_on_nrp_with_one_idle_gpu_is_stopped_though_its_average_is_h
     nrp_env,
 ):
     env = nrp_env
-    submission = await nrp_submitted(env, **{gw.MOST_METADATA: "4"})
+    submission = await nrp_submitted(env, most="4")
     running_for(env, submission, gw.NRP_UTILIZATION_WINDOW_S + 60)
     # A hung rank: NCCL spins on the GPUs that wait, while the others do nothing.
     env.utilization["c1"] = [100.0, 100.0, 0.0, 0.0]
@@ -3374,6 +3314,16 @@ async def test_a_job_on_nrp_is_kept_unless_long_idle(nrp_env, seconds, busy):
     running_for(env, submission, seconds)
     if busy is not None:
         env.utilization["c1"] = busy
+    await env.gateway.reap_nrp()
+    assert gw.STOPPED_ANNOTATION not in nrp_job(env)["metadata"]["annotations"]
+
+
+async def test_a_job_on_nrp_is_not_judged_by_the_gpu_of_a_replaced_worker(nrp_env):
+    env = nrp_env
+    submission = await nrp_submitted(env, most="4")
+    running_for(env, submission, gw.NRP_UTILIZATION_WINDOW_S + 60)
+    env.utilization["c1"] = [85.0, 3.0]
+    env.young_gpus.add(3.0)
     await env.gateway.reap_nrp()
     assert gw.STOPPED_ANNOTATION not in nrp_job(env)["metadata"]["annotations"]
 
@@ -3546,19 +3496,51 @@ async def test_reaping_waits_out_a_failed_listing(env):
 async def test_the_reaper_outlives_its_errors(monkeypatch):
     calls = []
 
-    async def failing_reap():
-        calls.append(1)
-        raise RuntimeError("Kubernetes is down")
+    def failing(name):
+        async def reap():
+            calls.append(name)
+            raise RuntimeError("Kubernetes is down")
 
+        return reap
+
+    reapers = ("reap_idle", "reap_jobs", "reap_nrp")
     monkeypatch.setattr(gw, "REAP_EVERY_S", 0)
     reaper = asyncio.create_task(
-        gw.reap_forever(SimpleNamespace(reap_idle=failing_reap))
+        gw.reap_forever(SimpleNamespace(**{name: failing(name) for name in reapers}))
     )
-    while len(calls) < 2:
+    while len(calls) < 2 * len(reapers):
         await asyncio.sleep(0)
     reaper.cancel()
     with pytest.raises(asyncio.CancelledError):
         await reaper
+    assert calls[:6] == [*reapers, *reapers]
+
+
+@pytest.mark.parametrize("failure", [TimeoutError(), ClientConnectionError()])
+async def test_a_kubernetes_that_does_not_answer_is_reported_as_unavailable(
+    env, monkeypatch, failure
+):
+    async def kube(*_):
+        raise failure
+
+    monkeypatch.setattr(env.gateway, "kube", kube)
+    assert await refused(env) == grpc.StatusCode.UNAVAILABLE
+
+
+async def test_a_job_on_nrp_whose_code_s3_keeps_loses_its_copying_jobs(
+    nrp_env, monkeypatch
+):
+    env = nrp_env
+    await nrp_submitted(env, output=OUTPUT)
+    name = nrp_job(env)["metadata"]["name"]
+
+    async def kept(prefix):
+        raise RuntimeError("S3 kept a key")
+
+    monkeypatch.setattr(env.gateway.bucket, "delete_prefix", kept)
+    with pytest.raises(RuntimeError):
+        await env.gateway.delete_nrp(name)
+    assert env.kube.batch == {} and env.nrp.jobs == {}
 
 
 async def test_the_gateway_serves_both_ports_until_stopped(monkeypatch, tmp_path):
@@ -3596,16 +3578,22 @@ async def test_the_gateway_serves_both_ports_until_stopped(monkeypatch, tmp_path
         await serving
 
 
-async def test_the_gateway_stops_at_sigterm(monkeypatch):
-    stopped = asyncio.Event()
+@pytest.fixture
+def stopped(monkeypatch):
+    """Set once the gateway stops serving, which it does nothing else for."""
+    event = asyncio.Event()
 
     async def serve():
         try:
             await asyncio.Event().wait()
         finally:
-            stopped.set()
+            event.set()
 
     monkeypatch.setattr(gw, "serve", serve)
+    return event
+
+
+async def test_the_gateway_stops_at_sigterm(stopped):
     default = signal.getsignal(signal.SIGTERM)
     main = asyncio.create_task(gw.main())
     for _ in range(100):
@@ -3636,20 +3624,11 @@ async def test_only_new_gateway_code_ends_the_gateway(monkeypatch, tmp_path):
 
 @pytest.mark.parametrize("changing", ["CODE", "CONFIG_FILE"])
 async def test_the_gateway_stops_when_its_code_or_settings_change(
-    monkeypatch, tmp_path, changing
+    monkeypatch, tmp_path, stopped, changing
 ):
     """It exits cleanly, and kubelet restarts the container on the new file."""
-    stopped = asyncio.Event()
-
-    async def serve():
-        try:
-            await asyncio.Event().wait()
-        finally:
-            stopped.set()
-
     code = tmp_path / "gateway.py"
     code.write_text("running")
-    monkeypatch.setattr(gw, "serve", serve)
     monkeypatch.setattr(gw, changing, code)
     monkeypatch.setattr(gw, "CODE_POLL_S", 0)
     main = asyncio.create_task(gw.main())
@@ -3660,18 +3639,10 @@ async def test_the_gateway_stops_when_its_code_or_settings_change(
 
 
 async def test_the_gateway_stops_when_a_module_it_imports_changes(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, stopped
 ):
     """On a ConfigMap mount Python imports a module from the versioned directory
     behind the links, which the next swap deletes."""
-    stopped = asyncio.Event()
-
-    async def serve():
-        try:
-            await asyncio.Event().wait()
-        finally:
-            stopped.set()
-
     files = {"gateway.py": "running", "placing.py": "placing"}
     mount_configmap(tmp_path, 1, files)
     code, module = tmp_path / "gateway.py", tmp_path / "placing.py"
@@ -3680,7 +3651,6 @@ async def test_the_gateway_stops_when_a_module_it_imports_changes(
         "placing",
         types.SimpleNamespace(__file__=str(tmp_path / "..1" / "placing.py")),
     )
-    monkeypatch.setattr(gw, "serve", serve)
     monkeypatch.setattr(gw, "CODE", code)
     monkeypatch.setattr(gw, "CODE_POLL_S", 0)
     assert gw.code_files() == [code, module]
@@ -3691,11 +3661,41 @@ async def test_the_gateway_stops_when_a_module_it_imports_changes(
     assert stopped.is_set()
 
 
+def test_the_fake_kubernetes_allows_what_the_gateways_role_does():
+    """A call the Role denies then fails in these tests, not only on Geddes."""
+    role = next(
+        doc
+        for doc in yaml.safe_load_all(
+            (REPO / "apps" / "ray-train" / "rbac.yaml").read_text()
+        )
+        if doc["kind"] == "Role"
+    )
+    granted = {
+        (resource, verb)
+        for rule in role["rules"]
+        for resource in rule["resources"]
+        for verb in rule["verbs"]
+    }
+    routed = set()
+    for route in FakeKube().app().router.routes():
+        path = route.resource.canonical
+        verbs = {"POST": "create", "PATCH": "patch", "DELETE": "delete"}
+        read = "get" if path.endswith("{name}") else "list"
+        routed.add(
+            (
+                path.removesuffix("/{name}").rpartition("/")[2],
+                verbs.get(route.method, read),
+            )
+        )
+    assert routed == granted
+
+
 def test_ldap_ids_reads_the_account_at_its_dn(monkeypatch):
     searched = []
 
     class Connection:
-        def __init__(self, server, version, authentication):
+        def __init__(self, server, version, authentication, receive_timeout):
+            assert server["connect_timeout"] == receive_timeout == gw.LDAP_TIMEOUT_S
             self.entries = []
 
         def start_tls(self):
@@ -3756,6 +3756,8 @@ def test_a_user_without_a_running_session_has_no_session_pod():
         ("Basic abc", None),
         ("Bearer", None),
         ("", None),
+        ("Bearer \udcff\udcfe", None),
+        ("Bearer caf\u00e9", None),
     ],
 )
 def test_bearer_token(header, token):

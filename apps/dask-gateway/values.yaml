@@ -1,5 +1,9 @@
 gateway:
   loglevel: WARN
+  # ldap3, which the server image lacks: the init container of helmrelease.yaml installs it.
+  env:
+    - name: PYTHONPATH
+      value: /deps
   image:
     pullPolicy: IfNotPresent
   nodeSelector:
@@ -123,20 +127,12 @@ gateway:
       c.ClusterConfig.adaptive_period = 15
 
       def ldap_lookup(username):
-          # The server image has no ldap3.
-          try:
-              import ldap3
-          except ImportError:
-              import subprocess
-              import sys
-              subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "ldap3==2.9.1"])
-
           from ldap3 import BASE, Server, Connection
           url = "geddes-auth.rcac.purdue.edu"
           baseDN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
           attrs = ['uidNumber','gidNumber']
-          s = Server(host= url ,use_ssl= True, get_info= 'ALL')
-          conn = Connection(s, version = 3, authentication = "ANONYMOUS")
+          s = Server(host= url ,use_ssl= True, get_info= 'ALL', connect_timeout= 10)
+          conn = Connection(s, version = 3, authentication = "ANONYMOUS", receive_timeout= 10)
           conn.start_tls()
           conn.search(
               search_base = "uid={0},{1}".format(username, baseDN),
@@ -505,16 +501,20 @@ gateway:
                   return account_user(request, token.strip())
               if scheme != "jupyterhub":
                   raise unauthorized("jupyterhub")
-              async with aiohttp.ClientSession() as session:
-                  async with session.get(
-                      self.hub_api_url + "/user",
-                      headers={"Authorization": "token " + token},
-                  ) as resp:
-                      if resp.status in (401, 403):
-                          raise unauthorized("jupyterhub")
-                      if resp.status != 200:
-                          raise web.HTTPBadGateway(reason="JupyterHub could not verify the token")
-                      owner = await resp.json()
+              try:
+                  # Long enough for a Hub, one event loop, under load.
+                  async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+                      async with session.get(
+                          self.hub_api_url + "/user",
+                          headers={"Authorization": "token " + token},
+                      ) as resp:
+                          if resp.status in (401, 403):
+                              raise unauthorized("jupyterhub")
+                          if resp.status != 200:
+                              raise web.HTTPBadGateway(reason="JupyterHub could not verify the token")
+                          owner = await resp.json()
+              except (aiohttp.ClientError, asyncio.TimeoutError):
+                  raise web.HTTPBadGateway(reason="JupyterHub did not answer")
               if owner.get("kind") != "user":
                   raise unauthorized("jupyterhub")
               return person(models.User(owner["name"]))

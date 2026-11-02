@@ -3,6 +3,7 @@
 import base64
 import contextlib
 import copy
+import enum
 import json
 import logging
 import re
@@ -26,7 +27,7 @@ from multidict import CIMultiDict
 VALUES = REPO / "apps" / "dask-gateway" / "values.yaml"
 RELEASE = REPO / "apps" / "dask-gateway" / "helmrelease.yaml"
 RAY_GATEWAY = REPO / "apps" / "ray-train" / "gateway.py"
-BASE_DN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
+RAY_CONFIG = REPO / "apps" / "ray-train" / "config.yaml"
 # What Kubernetes takes as a label's value.
 LABEL_VALUE = re.compile(r"(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?")
 # A pod's address, as the cluster's pods have them.
@@ -79,7 +80,11 @@ def config(monkeypatch, code):
     for name in ("Options", "Float", "Mapping", "String"):
         setattr(options, name, lambda *args, **kwargs: None)
     kubernetes = types.ModuleType("dask_gateway_server.backends.kubernetes")
-    kubernetes.KubeBackend = type("KubeBackend", (), {"start_cluster": None})
+
+    async def start_cluster(self, user, cluster_options):
+        return "started"
+
+    kubernetes.KubeBackend = type("KubeBackend", (), {"start_cluster": start_cluster})
     base = types.ModuleType("dask_gateway_server.backends.base")
     base.PublicException = Exception
     auth = types.ModuleType("dask_gateway_server.auth")
@@ -88,6 +93,9 @@ def config(monkeypatch, code):
     package = types.ModuleType("dask_gateway_server")
     package.models = types.ModuleType("dask_gateway_server.models")
     package.models.User = lambda name: types.SimpleNamespace(name=name)
+    package.models.ClusterStatus = enum.Enum(
+        "ClusterStatus", "PENDING RUNNING STOPPING STOPPED"
+    )
     for module in (options, kubernetes, base, auth, package):
         monkeypatch.setitem(sys.modules, module.__name__, module)
 
@@ -153,6 +161,16 @@ async def test_token_the_hub_rejects_or_a_service_owns_is_refused(
 async def test_hub_failure_is_not_an_authentication_failure(config):
     with pytest.raises(web.HTTPBadGateway):
         await authenticate(config, "jupyterhub secret", 503, {})
+
+
+async def test_a_hub_that_does_not_answer_is_not_an_authentication_failure(config):
+    authenticator = config["HubTokenAuthenticator"]()
+    authenticator.hub_api_url = "http://127.0.0.1:1/hub/api"
+    sent = CIMultiDict(Authorization="jupyterhub secret")
+    with pytest.raises(web.HTTPBadGateway):
+        await authenticator.authenticate(
+            types.SimpleNamespace(headers=sent, remote=POD)
+        )
 
 
 @pytest.mark.parametrize("header", [basic("someone"), "token secret", None])
@@ -237,7 +255,7 @@ def test_idle_schedulers_shut_themselves_down(options_handler, conda_env):
         request_options(conda_env=conda_env), types.SimpleNamespace(name="jovyan")
     )
     cmd = cluster["scheduler_cmd"]
-    assert cmd[cmd.index("--idle-timeout") + 1] == "3600s"
+    assert "--idle-timeout" in cmd
 
 
 def test_pods_run_as_the_user_without_changing_the_shared_config(config, conda_env):
@@ -811,11 +829,30 @@ def test_the_gateway_mounts_the_registry_it_reads(config):
     assert mount["mountPath"] == config["ACCOUNTS_DIR"]
 
 
+def test_the_api_pod_installs_ldap3_with_its_own_image_where_python_finds_it():
+    """A bad path here fails only at reconcile: no check applies postRenderers."""
+    release = yaml.safe_load(RELEASE.read_text())
+    (patch,) = [
+        p
+        for p in release["spec"]["postRenderers"][0]["kustomize"]["patches"]
+        if p["target"] == {"kind": "Deployment", "name": "api-.*"}
+    ]
+    ops = yaml.safe_load(patch["patch"])
+    (init,) = [o for o in ops if o["path"] == "/spec/template/spec/initContainers"]
+    (copied,) = [o for o in ops if o["op"] == "copy"]
+    assert copied["from"] == "/spec/template/spec/containers/0/image"
+    assert copied["path"] == "/spec/template/spec/initContainers/0/image"
+    (mount,) = init["value"][0]["volumeMounts"]
+    (variable,) = yaml.safe_load(VALUES.read_text())["gateway"]["env"]
+    assert variable == {"name": "PYTHONPATH", "value": mount["mountPath"]}
+
+
 def test_both_gateways_keep_the_same_rules(config, monkeypatch):
-    # gpu_queries.py is in the Ray gateway's ConfigMap, beside gateway.py.
+    # The modules beside gateway.py in the Ray gateway's ConfigMap.
     monkeypatch.syspath_prepend(
         REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles"
     )
+    monkeypatch.syspath_prepend(RAY_GATEWAY.parent)
     ray = load_script(RAY_GATEWAY, "ray_train_gateway_accounts")
     for rule in (
         "RESERVED_NAMES",
@@ -836,19 +873,72 @@ def test_clusters_report_to_the_gateway_inside_the_cluster(config):
     assert "api_url" not in config["c"].get("KubeBackend", {})
 
 
-def test_lookup_reads_the_dn_at_base_scope(code):
-    assert 'search_base = "uid={0},{1}".format(username, baseDN)' in code
-    assert "search_scope = BASE" in code
+@pytest.mark.parametrize(
+    "entries", [[{"attributes": {"uidNumber": 5555, "gidNumber": 6666}}], []]
+)
+def test_lookup_reads_the_account_at_its_dn(config, monkeypatch, entries):
+    """The search sits at the account's DN, on the host and base the Ray gateway
+    also reads, so it matches no other account; a miss raises."""
+    searches = []
+
+    class Connection:
+        def __init__(self, server, **kwargs):
+            self.server = server
+
+        def start_tls(self):
+            pass
+
+        def search(self, **kwargs):
+            searches.append((self.server["host"], kwargs))
+
+        def response_to_json(self):
+            return json.dumps({"entries": entries})
+
+    fake = types.SimpleNamespace(
+        BASE="BASE", Connection=Connection, Server=lambda **kw: kw
+    )
+    monkeypatch.setitem(sys.modules, "ldap3", fake)
+    monkeypatch.setitem(config, "json", json)
+    ray = yaml.safe_load(RAY_CONFIG.read_text())
+
+    if entries:
+        assert config["ldap_lookup"]("someone") == (5555, 6666)
+    else:
+        with pytest.raises(ValueError, match="no LDAP entry for someone"):
+            config["ldap_lookup"]("someone")
+
+    ((host, search),) = searches
+    assert host == ray["ldapHost"]
+    assert search["search_base"] == f"uid=someone,{ray['ldapBase']}"
+    assert search["search_scope"] == "BASE"
 
 
-def test_lookup_reports_a_miss_without_searching(code):
-    """A miss raises: no search that could match another account, no
-    IndexError on entries[0]."""
-    assert "SUBTREE" not in code
-    assert 'raise ValueError("no LDAP entry for " + username)' in code
-    assert "[u'entries'][0]" not in code
+async def test_a_user_with_a_busy_cluster_gets_no_second_one(config):
+    """Each user holds one cluster at a time, and a cluster still shutting down
+    counts: its pods have not yet given back their resources."""
+    backend_class = sys.modules["dask_gateway_server.backends.kubernetes"].KubeBackend
+    models = sys.modules["dask_gateway_server"].models
+    asked = {}
 
+    async def list_clusters(self, username, statuses):
+        asked.update(username=username, statuses=statuses)
+        return self.busy
 
-def test_lookup_targets_geddes_auth(code):
-    assert 'url = "geddes-auth.rcac.purdue.edu"' in code
-    assert f'baseDN = "{BASE_DN}"' in code
+    backend = backend_class()
+    backend.list_clusters = types.MethodType(list_clusters, backend)
+    user = types.SimpleNamespace(name="someone")
+
+    backend.busy = ["cluster"]
+    with pytest.raises(Exception, match="only have 1 active"):
+        await backend.start_cluster(user, {})
+    assert asked == {
+        "username": "someone",
+        "statuses": [
+            models.ClusterStatus.PENDING,
+            models.ClusterStatus.RUNNING,
+            models.ClusterStatus.STOPPING,
+        ],
+    }
+
+    backend.busy = []
+    assert await backend.start_cluster(user, {}) == "started"

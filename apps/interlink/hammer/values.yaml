@@ -1,20 +1,8 @@
 # interLink virtual node for Slurm on Hammer; see ../README.md.
 nodeName: interlink-hammer
 
-interlink:
-  image: ghcr.io/interlink-hq/interlink/interlink:0.7.0-pre1
-  enabled: true
-  socket: unix:///var/run/interlink.sock
-  logging:
-    verboseLogging: false
-    errorsOnlyLogging: true
-
 plugin:
-  enabled: true
   image: "geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:0.6.2-pre3"
-  address: "http://0.0.0.0"
-  port: 4000
-  privileged: false
   extraVolumeMounts:
     - name: plugin-data
       mountPath: /depot/cms/purdue-af/interlink/
@@ -24,8 +12,6 @@ plugin:
       mountPath: /etc/secrets/munge
       readOnly: true
   resources:
-    # null drops the chart's CPU request and limit.
-    CPU: null
     memory:
       request: 16Gi
       limit: 16Gi
@@ -49,6 +35,7 @@ plugin:
     SbatchPath: "/opt/purdue-af/slurm-active/bin/sbatch"
     ScancelPath: "/opt/purdue-af/slurm-active/bin/scancel"
     SqueuePath: "/opt/purdue-af/slurm-active/bin/squeue"
+    SinfoPath: "/opt/purdue-af/slurm-active/bin/sinfo"
     ContainerRuntime: "singularity"
     SingularityDefaultOptions:
       - "--nv"
@@ -57,128 +44,27 @@ plugin:
     BashPath: /bin/bash
 
 virtualNode:
-  image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:0.7.0-pre1
   resources:
     CPUs: 1000
     memGiB: 4000
     pods: 300
-
-  containerResources:
-    memory:
-      request: 512Mi
-      limit: 2Gi
-
-  disableCSR: true
-
   network:
-    enableTunnel: true
-    wildcardDNS: "geddes.rcac.purdue.edu"
-    # No wildcard DNS: the client dials the ingress by a name that resolves and
-    # sends the shadow's hostname as Host. WSTUNNEL_TAG tracks the shadow image.
-    # Bare $DOWNLOAD_DIR: Flux postBuild substitutes only the braced form.
+    # Bare $VAR: Flux postBuild substitutes only the braced form. ln publishes
+    # the cached binary because, unlike mv, it never replaces one a job is running.
     wstunnelCommand: |
-      export DOWNLOAD_DIR="/depot/cms/purdue-af/interlink" WSTUNNEL_TAG=v11.1.0 && \
-      curl -L "https://github.com/erebe/wstunnel/releases/download/$WSTUNNEL_TAG/wstunnel_$(echo $WSTUNNEL_TAG | tr -d v)_linux_amd64.tar.gz" -o "$DOWNLOAD_DIR/wstunnel.tar.gz" && \
-      tar -xzvf "$DOWNLOAD_DIR/wstunnel.tar.gz" -C "$DOWNLOAD_DIR" && \
-      chmod +x "$DOWNLOAD_DIR/wstunnel" && \
-      "$DOWNLOAD_DIR/wstunnel" client --log-lvl WARN --http-upgrade-path-prefix %[1]s %[2]s -H "Host: %[3]s" ws://128.211.160.122:80 2>&1 | tee -a "$DOWNLOAD_DIR/wstunnel_client.log" &
-    # The chart's nginx template on apps/interlink/traefik and a pinned image;
-    # the server accepts only the client's reverse tunnels to the pod's ports.
-    customTemplate: |
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: {{.Name}}
-        namespace: {{.Namespace}}
-      spec:
-        replicas: 1
-        selector:
-          matchLabels:
-            app.kubernetes.io/component: {{.Name}}
-        template:
-          metadata:
-            labels:
-              app.kubernetes.io/component: {{.Name}}
-          spec:
-            nodeSelector:
-              cms-af-prod: "true"
-            tolerations:
-              - key: hub.jupyter.org/dedicated
-                operator: Equal
-                value: cms-af
-                effect: NoSchedule
-            terminationGracePeriodSeconds: 45
-            containers:
-            - name: wstunnel
-              image: ghcr.io/erebe/wstunnel:v11.1.0
-              command: ["/bin/sh", "-c"]
-              args:
-              - |
-                cat >/tmp/restrictions.yaml <<'EOF'
-                restrictions:
-                - name: reverse tunnels to the exposed ports
-                  match:
-                  - !PathPrefix ^{{.RandomPassword}}$
-                  allow:
-                  {{- range .ExposedPorts}}
-                  - !ReverseTunnel {protocol: [Tcp], port: ["{{.Port}}"]}
-                  {{- end}}
-                EOF
-                exec /home/app/wstunnel server --log-lvl WARN --restrict-config /tmp/restrictions.yaml ws://0.0.0.0:28080
-              ports:
-              - containerPort: 28080
-                name: ws
-                protocol: TCP
-              {{- range .ExposedPorts}}
-              - containerPort: {{.Port}}
-                name: {{.Name}}
-                protocol: {{.Protocol}}
-              {{- end}}
-              # Keeps the tunnel up for requests in flight when the offloaded pod is deleted.
-              lifecycle:
-                preStop:
-                  exec:
-                    command: ["sleep", "30"]
-              resources:
-                requests:
-                  cpu: 100m
-                  memory: 90Mi
-                limits:
-                  memory: 256Mi
-      ---
-      apiVersion: v1
-      kind: Service
-      metadata:
-        name: {{.Name}}
-        namespace: {{.Namespace}}
-      spec:
-        type: ClusterIP
-        selector:
-          app.kubernetes.io/component: {{.Name}}
-        ports:
-          - port: 28080
-            targetPort: 28080
-            name: ws
-      ---
-      apiVersion: networking.k8s.io/v1
-      kind: Ingress
-      metadata:
-        name: {{.Name}}
-        namespace: {{.Namespace}}
-        annotations:
-          kubernetes.io/ingress.class: interlink-tunnel
-      spec:
-        rules:
-        - host: {{.Name}}-{{.Namespace}}.{{.WildcardDNS}}
-          http:
-            paths:
-            - path: /
-              pathType: Prefix
-              backend:
-                service:
-                  name: {{.Name}}
-                  port:
-                    number: 28080
+      WSTUNNEL_TAG=v11.1.0 && \
+      WSTUNNEL_DIR="/depot/cms/purdue-af/interlink/wstunnel-cache" && \
+      WSTUNNEL="$WSTUNNEL_DIR/wstunnel-$WSTUNNEL_TAG" && \
+      { [ -x "$WSTUNNEL" ] || { \
+        mkdir -p "$WSTUNNEL_DIR" && \
+        WSTUNNEL_TMP="$(mktemp -d -p "$WSTUNNEL_DIR")" && \
+        curl -fsSL --max-time 120 "https://github.com/erebe/wstunnel/releases/download/$WSTUNNEL_TAG/wstunnel_$(echo $WSTUNNEL_TAG | tr -d v)_linux_amd64.tar.gz" -o "$WSTUNNEL_TMP/wstunnel.tar.gz" && \
+        tar -xzf "$WSTUNNEL_TMP/wstunnel.tar.gz" -C "$WSTUNNEL_TMP" wstunnel && \
+        chmod +x "$WSTUNNEL_TMP/wstunnel" && \
+        ln "$WSTUNNEL_TMP/wstunnel" "$WSTUNNEL"; \
+        rm -rf "$WSTUNNEL_TMP"; [ -x "$WSTUNNEL" ]; \
+      }; } && \
+      "$WSTUNNEL" client --log-lvl WARN --http-upgrade-path-prefix %[1]s %[2]s -H "Host: %[3]s" ws://128.211.160.122:80 2>&1 &
 
 extraVolumes:
   - name: plugin-data
@@ -191,12 +77,3 @@ extraVolumes:
   - name: munge-key
     persistentVolumeClaim:
       claimName: munge-key-hammer
-
-podScheduling:
-  nodeSelector:
-    cms-af-prod: "true"
-  tolerations:
-    - key: "hub.jupyter.org/dedicated"
-      operator: "Equal"
-      value: "cms-af"
-      effect: "NoSchedule"

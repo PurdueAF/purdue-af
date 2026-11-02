@@ -57,19 +57,13 @@ deployment:
         value: cms-af
         effect: NoSchedule
 
-# The console calls the API on its own origin, so the ingress below serves
-# both: the SPA under /v2, the flyteidl2.* services next to it. Basic auth in
-# front of everything — the API has no auth of its own, and anyone who reaches
-# it can run tasks in cms.
 console:
   replicaCount: 1
   image:
-    # What :latest resolved to on 2026-09-16; the image publishes git-sha tags only.
+    # The image publishes git-sha tags only.
     tag: 51cf2bba8935adbd47280c41f56041f23fd10600
   env:
-    # The Next.js server binds to $HOSTNAME, which Kubernetes sets to the pod
-    # name, i.e. the pod IP only. Fine for the ingress, unreachable for
-    # `kubectl port-forward`, which dials 127.0.0.1 inside the pod.
+    # Next.js binds to $HOSTNAME, the pod name by default, and `kubectl port-forward` dials 127.0.0.1.
     - name: HOSTNAME
       value: "0.0.0.0"
   resources:
@@ -94,6 +88,7 @@ ingress:
   tls:
     - hosts:
         - flyte-cms.geddes.rcac.purdue.edu
+  # Basic auth gates the console and the API, which has no auth of its own.
   commonAnnotations:
     nginx.ingress.kubernetes.io/auth-type: basic
     nginx.ingress.kubernetes.io/auth-secret: flyte-console-auth

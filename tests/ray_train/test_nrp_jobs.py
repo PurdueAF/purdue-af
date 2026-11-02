@@ -3,6 +3,7 @@
 import json
 import sys
 
+import pytest
 import yaml
 from common import REPO, load_script
 
@@ -127,12 +128,26 @@ def test_an_owner_key_names_no_one_and_tells_a_person_from_an_account():
 
 def test_the_api_takes_the_renewed_token_beside_its_kubeconfig_at_each_call(tmp_path):
     api = nrp.NrpApi.__new__(nrp.NrpApi)
-    api.token, api.token_file = "from-kubeconfig", tmp_path / "token"
-    assert api.bearer() == "from-kubeconfig"
+    api.token_file = tmp_path / "token"
+    assert api.bearer() == ""
     api.token_file.write_text("renewed\n")
     assert api.bearer() == "renewed"
     api.token_file.write_text("renewed again\n")
     assert api.bearer() == "renewed again"
+
+
+async def test_a_key_s3_keeps_ends_the_deletion_with_its_name():
+    class S3:
+        def list_objects_v2(self, **_):
+            return {"Contents": [{"Key": "prefix/kept"}]}
+
+        def delete_objects(self, **_):
+            return {"Errors": [{"Key": "prefix/kept", "Code": "AccessDenied"}]}
+
+    bucket = nrp.Bucket.__new__(nrp.Bucket)
+    bucket.name, bucket.s3 = "bucket", S3()
+    with pytest.raises(RuntimeError, match="prefix/kept"):
+        await bucket.delete_prefix("prefix")
 
 
 def test_the_api_reads_a_kubeconfig_whose_user_has_no_token_of_its_own(

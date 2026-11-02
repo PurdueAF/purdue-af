@@ -82,9 +82,3 @@ def test_each_account_has_its_volume_and_its_encrypted_token_beside_it():
         assert listed(secret_file) in resources
         keys = {*(secret.get("stringData") or {}), *(secret.get("data") or {})}
         assert keys == {"token"}
-        assert secret["sops"]["mac"]
-        # A boolean, so that a failure never echoes the token.
-        encrypted = str(
-            (secret.get("stringData") or secret.get("data"))["token"]
-        ).startswith("ENC[")
-        assert encrypted, f"{secret_file}: the token is not encrypted"

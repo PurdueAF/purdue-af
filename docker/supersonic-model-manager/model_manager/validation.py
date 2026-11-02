@@ -10,7 +10,7 @@ Triton expects::
 
 Errors block the upload; warnings are surfaced to the user but let it through,
 because some of Triton's rules depend on server flags we cannot see from here
-(notably ``--strict-model-config``).
+(notably ``--disable-auto-complete-config``).
 """
 
 import re
@@ -47,8 +47,8 @@ ARTIFACT_PLATFORMS = {
     name: platform for platform, (name, _) in PLATFORM_ARTIFACTS.items()
 }
 
-# Backends that can infer their config, so config.pbtxt is optional when the
-# server runs with --strict-model-config=false.
+# Backends that can infer their config, so config.pbtxt is optional unless the
+# server runs with --disable-auto-complete-config.
 AUTOCOMPLETE_PLATFORMS = {
     "tensorrt_plan",
     "onnxruntime_onnx",
@@ -254,8 +254,8 @@ def validate_model_dir(model_dir: Path, model_name: str) -> ValidationResult:
     if not has_config:
         if platform in AUTOCOMPLETE_PLATFORMS:
             result.warnings.append(
-                f"No config.pbtxt. Triton can autocomplete a {platform} model, but only "
-                "when the server runs with --strict-model-config=false."
+                f"No config.pbtxt. Triton can autocomplete a {platform} model, but not "
+                "on a server that runs with --disable-auto-complete-config."
             )
         elif platform:
             result.errors.append(

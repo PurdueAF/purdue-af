@@ -8,7 +8,7 @@ import pytest
 import yaml
 from aiohttp import ClientSession, web
 from aiohttp.test_utils import TestServer
-from common import REPO, load_script
+from common import REPO, load_script, sample
 
 sys.path.insert(0, str(REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles"))
 sys.path.insert(0, str(REPO / "apps" / "ray-train"))
@@ -19,11 +19,7 @@ GIB = 2**30
 WORKER = nrp.Worker(gpus=2, cpus=8, memory_gb=24)
 
 
-def sample(value, **labels):
-    return {"metric": labels, "value": [0, str(value)]}
-
-
-def node(name, gpus, cpus, memory_gb):
+def allocatable(name, gpus, cpus, memory_gb):
     return [
         sample(gpus, node=name, resource=nrp.GPU),
         sample(cpus, node=name, resource="cpu"),
@@ -34,10 +30,10 @@ def node(name, gpus, cpus, memory_gb):
 # west-1: 4 of 8 GPUs free, room for two workers; west-2: free GPUs but cordoned;
 # east-1: 2 GPUs free, too few cores for a worker; bare-1: no region label.
 ALLOCATABLE = [
-    *node("west-1", 8, 64, 512),
-    *node("west-2", 4, 64, 512),
-    *node("east-1", 4, 16, 128),
-    *node("bare-1", 2, 32, 256),
+    *allocatable("west-1", 8, 64, 512),
+    *allocatable("west-2", 4, 64, 512),
+    *allocatable("east-1", 4, 16, 128),
+    *allocatable("bare-1", 2, 32, 256),
 ]
 REQUESTED = [
     sample(4, node="west-1", resource=nrp.GPU),
@@ -67,7 +63,15 @@ def test_free_gpus_count_schedulable_nodes_and_workers_fit_their_cores_and_memor
 
 def test_the_worker_shape_is_the_nrp_templates_worker():
     template = yaml.safe_load((REPO / "apps/ray-train/rayjob-nrp.yaml").read_text())
-    assert gw.NRP_WORKER == nrp.worker_of(template) == nrp.Worker(1, 4, 16)
+    assert gw.nrp_worker() == nrp.worker_of(template) == nrp.Worker(1, 4, 16)
+
+
+def test_a_new_template_sets_the_worker_the_gateway_counts(monkeypatch, tmp_path):
+    text = (REPO / "apps/ray-train/rayjob-nrp.yaml").read_text()
+    template = tmp_path / "rayjob-nrp.yaml"
+    template.write_text(text.replace("memory: 16Gi", "memory: 20Gi"))
+    monkeypatch.setattr(gw, "NRP_TEMPLATE", template)
+    assert gw.nrp_worker().memory_gb == 20
 
 
 MODELS = [
@@ -101,7 +105,6 @@ def test_a_job_is_placed_where_one_region_and_model_has_the_most_room():
         node("d", 5, region="us-east"),
         node("e", 4, model="NVIDIA L40"),
     ]
-    assert nrp.most_in_one_group(nodes) == 6
     # Every node of that region and model: another job
     # placed from the same reading may take the room of one.
     group = [node("a", 1), node("b", 3), node("c", 2)]
@@ -144,7 +147,7 @@ async def refuse(request):
 @pytest.fixture
 async def dashboard(prometheus, monkeypatch):
     monkeypatch.setattr(gw, "NRP_PROMETHEUS_URL", prometheus.url)
-    monkeypatch.setattr(gw, "NRP_WORKER", WORKER)
+    monkeypatch.setattr(gw, "nrp_worker", lambda: WORKER)
     async with ClientSession() as http:
         server = TestServer(
             gw.dashboard_app(

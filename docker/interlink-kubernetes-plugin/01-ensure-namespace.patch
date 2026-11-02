@@ -1,5 +1,5 @@
---- a/app/common/config.py
-+++ b/app/common/config.py
+--- a/interlink-kubernetes-plugin/app/common/config.py
++++ b/interlink-kubernetes-plugin/app/common/config.py
 @@ -35,6 +35,7 @@
  
      OFFLOADING_NAMESPACE_PREFIX = ("offloading", "namespace_prefix")
@@ -8,8 +8,8 @@
      OFFLOADING_NODE_SELECTOR = ("offloading", "node_selector")
      OFFLOADING_NODE_TOLERATIONS = ("offloading", "node_tolerations")
  
---- a/app/services/kubernetes_plugin_service.py
-+++ b/app/services/kubernetes_plugin_service.py
+--- a/interlink-kubernetes-plugin/app/services/kubernetes_plugin_service.py
++++ b/interlink-kubernetes-plugin/app/services/kubernetes_plugin_service.py
 @@ -52,6 +52,7 @@
          self._offloading_params = {
              "namespace_prefix": config.get(Option.OFFLOADING_NAMESPACE_PREFIX, ""),

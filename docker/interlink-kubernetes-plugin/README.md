@@ -1,61 +1,57 @@
 # interLink Kubernetes plugin (Purdue)
 
 Site image for the [interlink-kubernetes-plugin](https://github.com/interlink-hq/interlink-kubernetes-plugin)
-sidecar: the upstream `1.2.0` image plus seven patches.
+sidecar: the upstream image plus the patches below, applied in order, each on
+top of those before it.
 
-- `ensure-namespace.patch` adds an `[offloading] ensure_namespace` option.
-  Upstream lists namespaces at cluster scope before every pod create;
-  `ensure_namespace=False` skips that check for remote clusters whose RBAC is
-  namespaced only — `apps/interlink/nrp` sets it and creates the offloading
-  namespace out of band, so a missing one fails the pod create loudly instead
-  of being auto-created.
-- `wstunnel-client.patch` adds a `[wstunnel] client_image` option. With it
-  set, a pod that carries the virtual kubelet's
-  `interlink.eu/wstunnel-client-commands` annotation gets a `wstunnel-client`
-  sidecar that runs that command, unprivileged, so the pod's ports reach its
-  shadow pod in the local cluster. Upstream runs no tunnel client, and its full
-  mesh needs privileged pods on both clusters.
-- `remote-placement.patch` places and restarts the remote pod. The
+- `01-ensure-namespace.patch` adds an `[offloading] ensure_namespace` option
+  (default on, upstream behavior). Upstream lists namespaces at cluster scope
+  before every pod create; `ensure_namespace=False` skips that check for remote
+  clusters whose RBAC is namespaced only — `apps/interlink/nrp` sets it and
+  creates the offloading namespace out of band, so a missing one fails the pod
+  create loudly instead of being auto-created.
+- `02-wstunnel-client.patch` adds a `[wstunnel] client_image` option (default
+  unset: no sidecar, upstream behavior). With it set, a pod that carries the
+  virtual kubelet's `interlink.eu/wstunnel-client-commands` annotation gets a
+  `wstunnel-client` sidecar that runs that command, unprivileged, so the pod's
+  ports reach its shadow pod in the local cluster. Upstream runs no tunnel
+  client, and its full mesh needs privileged pods on both clusters.
+- `03-remote-placement.patch` places and restarts the remote pod. The
   virtual kubelet sends the plugin no affinity, node selector or
   tolerations, so a pod's `interlink.eu/remote-affinity` annotation — a JSON
   core/v1 `Affinity` — becomes the remote pod's affinity, and the local
-  scheduler never sees it. An `[offloading] restart_policy` option overrides
-  every remote pod's restart policy.
-- `remote-readiness.patch` gives the remote pod its containers' probes and
+  scheduler never sees it. An `[offloading] restart_policy` option (default
+  unset: the pod's own policy) overrides every remote pod's restart policy.
+- `04-remote-readiness.patch` gives the remote pod its containers' probes and
   holds the local pod's Ready until the remote readiness probe passes. The
   interLink SDK the plugin is built on drops `startupProbe`, `livenessProbe`
   and `readinessProbe`, and the virtual kubelet marks every running container
-  ready, so the patch keeps the probes and reports a running, unready remote
-  container as waiting. Only the first Ready waits: the virtual kubelet never
-  sets a Running pod unready again.
-- `remote-pending.patch` reports each container of a remote pod that has no
+  ready, so the patch keeps the probes, in the installed SDK too, and reports a
+  running, unready remote container as waiting. Only the first Ready waits: the
+  virtual kubelet never sets a Running pod unready again.
+- `05-remote-pending.patch` reports each container of a remote pod that has no
   container statuses yet — one still waiting to be scheduled — as waiting.
   The virtual kubelet counts a pod's containers from that list, so an empty
   one reads as every container terminated and the pod is marked Succeeded.
-- `remote-gone.patch` reports a remote pod that failed (evicted, refused at
+- `06-remote-gone.patch` reports a remote pod that failed (evicted, refused at
   admission) or was deleted as failed. The virtual kubelet keeps the last
   status of a pod the plugin returns nothing for, and never clears Ready, so
   a Ready pod whose remote pod is gone stays in its Service. A 404 counts as
-  gone only for a pod the plugin has read before: the virtual kubelet polls
-  while the remote pod is still being created.
-- `remote-drain.patch` adds an `[offloading] delete_delay_seconds` option:
-  the plugin waits that long before deleting the remote pod, so clients stop
-  sending to it once the local pod has left its Service. The tunnel's shadow
-  pod (`apps/interlink/<cluster>/values.yaml`) outlives the wait.
+  gone only for a pod the plugin has read since it last started: the virtual
+  kubelet polls while the remote pod is still being created.
+- `07-remote-drain.patch` adds an `[offloading] delete_delay_seconds` option
+  (default 0: upstream behavior): the plugin waits that long before deleting
+  the remote pod, so clients stop sending to it once the local pod has left its
+  Service. The tunnel's shadow pod (`apps/interlink/values.yaml`) outlives the
+  wait.
 
 ## Files
 
 | Path | What it is |
 | --- | --- |
 | `PLUGIN_REF` | upstream image tag the build extends, published as the image tag |
-| `Dockerfile` | applies the patches to the source shipped in the upstream image |
-| `ensure-namespace.patch` | adds `[offloading] ensure_namespace` (default on, upstream behavior) |
-| `wstunnel-client.patch` | adds `[wstunnel] client_image` (default unset: no sidecar, upstream behavior) |
-| `remote-placement.patch` | adds `interlink.eu/remote-affinity` and `[offloading] restart_policy` (default unset: the pod's own policy) |
-| `remote-readiness.patch` | keeps the probes and reports an unready container as waiting; patches the installed interLink SDK too, so it applies from `/` |
-| `remote-pending.patch` | reports the containers of an unscheduled remote pod as waiting; applies from `/` |
-| `remote-gone.patch` | reports a failed or deleted remote pod as failed; applies from `/` |
-| `remote-drain.patch` | adds `[offloading] delete_delay_seconds` (default 0: upstream behavior); applies from `/` |
+| `Dockerfile` | applies the patches, from `/`, to the source shipped in the upstream image |
+| `verify-patches.py` | the build's check that the patches took effect |
 
 ## Bumping the plugin
 

@@ -21,4 +21,7 @@ spec:
   valuesFrom:
     - kind: ConfigMap
       name: interlink-hammer-config
+      valuesKey: shared.yaml
+    - kind: ConfigMap
+      name: interlink-hammer-config
       valuesKey: values.yaml

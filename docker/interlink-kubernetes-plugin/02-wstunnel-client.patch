@@ -1,5 +1,5 @@
---- a/app/common/config.py
-+++ b/app/common/config.py
+--- a/interlink-kubernetes-plugin/app/common/config.py
++++ b/interlink-kubernetes-plugin/app/common/config.py
 @@ -39,6 +39,8 @@
      OFFLOADING_NODE_SELECTOR = ("offloading", "node_selector")
      OFFLOADING_NODE_TOLERATIONS = ("offloading", "node_tolerations")
@@ -9,8 +9,8 @@
      TCP_TUNNEL_ENABLED = ("tcp_tunnel", "enabled")
      TCP_TUNNEL_BASTION_NAMESPACE = ("tcp_tunnel", "bastion_namespace")
      TCP_TUNNEL_BASTION_CHART_PATH = ("tcp_tunnel", "bastion_chart_path")
---- a/app/services/kubernetes_plugin_service.py
-+++ b/app/services/kubernetes_plugin_service.py
+--- a/interlink-kubernetes-plugin/app/services/kubernetes_plugin_service.py
++++ b/interlink-kubernetes-plugin/app/services/kubernetes_plugin_service.py
 @@ -27,6 +27,7 @@
  _I_RMT_PVC_KEY: Final = "interlink.io/remote-pvc"  # comma-separated list of PVC names
  _I_RMT_PVC_RETENTION_POLICY_KEY: Final = "interlink.io/pvc-retention-policy"  # "delete" or "retain"

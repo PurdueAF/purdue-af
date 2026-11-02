@@ -155,14 +155,6 @@ def open_nodes(
     return out
 
 
-def most_in_one_group(nodes: list[Node]) -> int:
-    """The most workers nodes of one region and GPU model have room for."""
-    groups: dict[tuple[str, str], int] = defaultdict(int)
-    for node in nodes:
-        groups[(node.region, node.model)] += node.workers
-    return max(groups.values(), default=0)
-
-
 def placement(nodes: list[Node], least: int) -> list[Node] | None:
     """The nodes a job's workers may run on: all of the region and GPU model with room
     for the most, so that the scheduler finds room on another
@@ -200,28 +192,26 @@ async def free_gpus(
     return free_by_region(allocatable, requested, unschedulable, regions, worker)
 
 
-async def nodes(http: ClientSession, prometheus: str, worker: Worker) -> list[Node]:
-    allocatable, requested, unschedulable, regions, models = await asyncio.gather(
+async def nodes(
+    http: ClientSession, prometheus: str, worker: Worker, empty: bool = False
+) -> list[Node]:
+    """The nodes with room for a worker now, or `empty`, with no pod on them."""
+    asked = () if empty else (REQUESTED,)
+    allocatable, unschedulable, regions, models, *requested = await asyncio.gather(
         *(
             query(http, prometheus, promql)
-            for promql in (ALLOCATABLE, REQUESTED, UNSCHEDULABLE, REGIONS, MODELS)
+            for promql in (ALLOCATABLE, UNSCHEDULABLE, REGIONS, MODELS, *asked)
         )
     )
-    return open_nodes(allocatable, requested, unschedulable, regions, models, worker)
+    held = requested[0] if requested else []
+    return open_nodes(allocatable, held, unschedulable, regions, models, worker)
 
 
 async def most_when_empty(http: ClientSession, prometheus: str, worker: Worker) -> int:
     """The most workers one job may have: those nodes of one region and GPU model
     that take pods have room for when nothing else runs on them."""
-    allocatable, unschedulable, regions, models = await asyncio.gather(
-        *(
-            query(http, prometheus, promql)
-            for promql in (ALLOCATABLE, UNSCHEDULABLE, REGIONS, MODELS)
-        )
-    )
-    return most_in_one_group(
-        open_nodes(allocatable, [], unschedulable, regions, models, worker)
-    )
+    found = placement(await nodes(http, prometheus, worker, empty=True), 0)
+    return sum(node.workers for node in found or [])
 
 
 def worker_of(template: dict[str, Any]) -> Worker:

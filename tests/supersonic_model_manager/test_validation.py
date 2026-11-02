@@ -189,7 +189,7 @@ def test_warns_when_config_missing_but_autocompletable(staged):
     result = validate_model_dir(model, "auto")
 
     assert result.ok, result.errors
-    assert any("strict-model-config" in w for w in result.warnings)
+    assert any("disable-auto-complete-config" in w for w in result.warnings)
 
 
 def test_warns_about_ignored_files_and_directories(staged, make_model):

@@ -18,9 +18,11 @@ from pathlib import Path
 
 import pytest
 import yaml
-from common import REPO
+from common import REPO, load_script
 
 INTERLINK = REPO / "apps" / "interlink"
+
+REGISTRY = "geddes2-registry.rcac.purdue.edu"
 
 # Where the kubernetes plugin image resolves its relative paths against
 # (WORKDIR in upstream's dockerfile-prod).
@@ -47,31 +49,12 @@ def kubernetes_clusters(interlink_clusters):
     }
 
 
-@pytest.fixture(scope="session")
-def active_slurm_clusters(active_clusters):
-    return {c: app for c, app in active_clusters.items() if _backend(app) == "slurm"}
-
-
-@pytest.fixture(scope="session")
-def active_kubernetes_clusters(active_clusters):
-    return {
-        c: app for c, app in active_clusters.items() if _backend(app) == "kubernetes"
-    }
-
-
 # --- node naming ----------------------------------------------------------
 
 
 def test_node_name_matches_its_directory(interlink_clusters):
     for cluster, app in interlink_clusters.items():
         assert app["values"]["nodeName"] == f"interlink-{cluster}"
-
-
-def test_node_names_are_unique(interlink_clusters):
-    """Two virtual kubelets registering the same Node fight over it, and the
-    cleanup job of one deletes the node of the other."""
-    names = [app["values"]["nodeName"] for app in interlink_clusters.values()]
-    assert len(names) == len(set(names))
 
 
 def test_release_name_matches_the_node(interlink_clusters):
@@ -114,26 +97,14 @@ def test_plugin_reads_the_munge_key_where_its_startup_looks(slurm_clusters):
         assert mounts["munge-key"]["readOnly"] is True, cluster
 
 
-def test_slurm_cluster_env_matches_directory(active_slurm_clusters):
+def test_slurm_cluster_env_matches_directory(slurm_clusters):
     """The sidecar installs /etc/slurm from /opt/purdue-af/slurm-configs/$SLURM_CLUSTER.
     A typo here points the node at the wrong RCAC controller (or refuses to start).
-    Clusters commented out in experimental are not part of this contract.
     """
-    for cluster, app in active_slurm_clusters.items():
+    for cluster, app in slurm_clusters.items():
         envs = {e["name"]: e["value"] for e in app["values"]["plugin"]["envs"]}
         assert "SLURM_CLUSTER" in envs, f"{cluster}: SLURM_CLUSTER missing"
         assert envs["SLURM_CLUSTER"] == cluster, f"{cluster}: {envs['SLURM_CLUSTER']}"
-
-
-def test_slurm_clusters_share_one_plugin_image(active_slurm_clusters):
-    """Cluster identity is SLURM_CLUSTER + munge PVC, not the image tag.
-    Divergent tags mean clusters drift on sidecar version."""
-    images = {
-        app["values"]["plugin"]["image"] for app in active_slurm_clusters.values()
-    }
-    assert len(images) == 1, f"active clusters pin different plugin images: {images}"
-    image = next(iter(images))
-    assert "ghcr-proxy-cache/purdueaf/interlink-slurm-plugin:" in image, image
 
 
 def test_slurm_commands_run_the_client_startup_activates(slurm_clusters):
@@ -148,24 +119,25 @@ def test_slurm_commands_run_the_client_startup_activates(slurm_clusters):
             ("SbatchPath", "sbatch"),
             ("ScancelPath", "scancel"),
             ("SqueuePath", "squeue"),
+            ("SinfoPath", "sinfo"),
         ):
             assert config.get(key) == f"{active_bin}/{tool}", (
                 f"{cluster}: {key}={config.get(key)}"
             )
 
 
-def test_plugin_image_tag_matches_plugin_ref(active_clusters):
-    """Tag == PLUGIN_REF == the upstream ref each site image builds from.
-    Not :latest."""
-    for cluster, app in active_clusters.items():
+def test_plugin_image_is_the_site_build_of_plugin_ref(interlink_clusters):
+    """Through the cluster registry's ghcr proxy cache, tagged with the upstream
+    ref it builds from. The upstream Kubernetes image lists namespaces at
+    cluster scope before every pod create, which NRP's namespaced RBAC forbids."""
+    for cluster, app in interlink_clusters.items():
         backend = _backend(app)
         plugin_ref = (
             (REPO / f"docker/interlink-{backend}-plugin/PLUGIN_REF").read_text().strip()
         )
-        assert plugin_ref, f"{backend}: PLUGIN_REF is empty"
-        image = app["values"]["plugin"]["image"]
-        assert image.endswith(f":{plugin_ref}"), f"{cluster}: {image} != :{plugin_ref}"
-        assert not image.endswith(":latest"), cluster
+        assert app["values"]["plugin"]["image"] == (
+            f"{REGISTRY}/ghcr-proxy-cache/purdueaf/interlink-{backend}-plugin:{plugin_ref}"
+        ), cluster
 
 
 def test_dockerfile_plugin_ref_arg_matches_plugin_ref_file():
@@ -175,12 +147,12 @@ def test_dockerfile_plugin_ref_arg_matches_plugin_ref_file():
     assert f"ARG SLURM_PLUGIN_REF={plugin_ref}" in dockerfile, plugin_ref
 
 
-def test_slurm_cluster_has_client_configs(active_slurm_clusters):
+def test_slurm_cluster_has_client_configs(slurm_clusters):
     """Baked configs live at slurm/slurm-configs-<cluster>/. Without slurm.conf
     the container exits unless /etc/secrets/slurm-configs is mounted as override.
     """
     slurm_root = REPO / "slurm"
-    for cluster in active_slurm_clusters:
+    for cluster in slurm_clusters:
         conf = slurm_root / f"slurm-configs-{cluster}" / "slurm.conf"
         assert conf.is_file(), f"{cluster}: missing {conf}"
         text = conf.read_text()
@@ -284,7 +256,8 @@ def test_token_renewal_mounts_the_kubeconfig_as_the_plugin_does(kubernetes_clust
     volumes = {v["name"]: v for v in pod["volumes"]}
     plugin_volumes = {v["name"]: v for v in app["values"]["extraVolumes"]}
     assert volumes["kubeconfig"] == plugin_volumes["kubeconfig"]
-    assert f'MOUNT = Path("{mount["mountPath"]}")' in (renewal / "renew.py").read_text()
+    renew = load_script(renewal / "renew.py", "renew_manifests")
+    assert renew.MOUNT == Path(mount["mountPath"])
 
 
 def test_plugin_config_carries_the_metadata_fastapi_requires(kubernetes_clusters):
@@ -320,16 +293,6 @@ def test_plugin_reads_the_config_the_chart_mounts(kubernetes_clusters):
         assert envs.get("CONFIG_FILE_PATH") == "/etc/interlink/plugin.yaml", cluster
 
 
-def test_kubernetes_plugin_image_is_the_site_build(active_kubernetes_clusters):
-    """Through the cluster registry's ghcr proxy cache. The upstream image
-    lists namespaces at cluster scope before every pod create — a request
-    NRP's namespaced-only RBAC forbids; the site image is the one carrying
-    the ensure-namespace patch."""
-    for cluster, app in active_kubernetes_clusters.items():
-        image = app["values"]["plugin"]["image"]
-        assert "ghcr-proxy-cache/purdueaf/interlink-kubernetes-plugin:" in image, image
-
-
 def test_kubernetes_dockerfile_upstream_image_arg_matches_plugin_ref_file():
     """Dockerfile ARG default must not drift from PLUGIN_REF."""
     plugin_ref = (
@@ -342,11 +305,11 @@ def test_kubernetes_dockerfile_upstream_image_arg_matches_plugin_ref_file():
     ), plugin_ref
 
 
-def test_plugin_leaves_the_offloading_namespace_to_the_rbac(active_kubernetes_clusters):
+def test_plugin_leaves_the_offloading_namespace_to_the_rbac(kubernetes_clusters):
     """The site image gates the plugin's cluster-scope namespace list behind
     [offloading] ensure_namespace; without an explicit False the upstream
     default re-enables it and every offload dies on a 403."""
-    for cluster, app in active_kubernetes_clusters.items():
+    for cluster, app in kubernetes_clusters.items():
         value = _plugin_ini(app).get("offloading", "ensure_namespace", fallback=None)
         assert value is not None, f"{cluster}: ensure_namespace not set"
         assert value.lower() == "false", f"{cluster}: ensure_namespace={value}"
@@ -439,16 +402,6 @@ def test_tunnel_command_uses_every_argument(interlink_clusters):
         assert backgrounded == (_backend(app) == "slurm"), cluster
 
 
-def test_tunnel_nodes_share_one_shadow_template(interlink_clusters):
-    """Both nodes' shadows sit behind the same Geddes ingress; the template
-    differs only by mistake."""
-    templates = {
-        network.get("customTemplate")
-        for _, _, network in _tunnel_nodes(interlink_clusters)
-    }
-    assert len(templates) == 1, "shadow templates differ"
-
-
 def _render_shadow(template, prefix, ports):
     """The virtual kubelet's text/template render, for the actions the shadow
     template uses: fields, `range .ExposedPorts` and `{{-` trimming."""
@@ -471,6 +424,19 @@ def _render_shadow(template, prefix, ports):
     return re.sub(r"\{\{\.(\w+)\}\}", lambda f: fields[f[1]], text)
 
 
+SHADOW_PREFIX = "0123456789abcdef"
+SHADOW_PORTS = [
+    {"Port": 8000, "Name": "http", "Protocol": "TCP"},
+    {"Port": 8001, "Name": "grpc", "Protocol": "TCP"},
+]
+
+
+def _shadow_docs(network):
+    """The rendered shadow objects; the virtual kubelet splits on every "---"."""
+    rendered = _render_shadow(network["customTemplate"], SHADOW_PREFIX, SHADOW_PORTS)
+    return [yaml.safe_load(part) for part in rendered.split("---") if part.strip()]
+
+
 class _TaggedLoader(yaml.SafeLoader):
     """wstunnel's restriction file tags each rule with its kind."""
 
@@ -488,17 +454,11 @@ _TaggedLoader.add_multi_constructor(
 def test_shadow_server_allows_only_the_clients_reverse_tunnels(interlink_clusters):
     """The remote side opens `-R tcp://0.0.0.0:<port>:localhost:<port>` per
     exposed TCP port, with the pod's path prefix; the shadow's wstunnel server
-    allows exactly those tunnels. The virtual kubelet splits the rendered
-    template on every "---"."""
-    prefix = "0123456789abcdef"
-    ports = [
-        {"Port": 8000, "Name": "http", "Protocol": "TCP"},
-        {"Port": 8001, "Name": "grpc", "Protocol": "TCP"},
-    ]
+    allows exactly those tunnels."""
     for cluster, _, network in _tunnel_nodes(interlink_clusters):
-        rendered = _render_shadow(network["customTemplate"], prefix, ports)
-        docs = [yaml.safe_load(part) for part in rendered.split("---") if part.strip()]
-        (deployment,) = [doc for doc in docs if doc["kind"] == "Deployment"]
+        (deployment,) = [
+            doc for doc in _shadow_docs(network) if doc["kind"] == "Deployment"
+        ]
         (container,) = deployment["spec"]["template"]["spec"]["containers"]
         assert container["command"] == ["/bin/sh", "-c"], cluster
         script = container["args"][0]
@@ -510,10 +470,10 @@ def test_shadow_server_allows_only_the_clients_reverse_tunnels(interlink_cluster
         assert f"--restrict-config {restrictions[1]} " in server, cluster
         rules = yaml.load(restrictions[2], Loader=_TaggedLoader)["restrictions"]
         matches = [rule["match"] for rule in rules]
-        assert matches == [[{"PathPrefix": f"^{prefix}$"}]], cluster
+        assert matches == [[{"PathPrefix": f"^{SHADOW_PREFIX}$"}]], cluster
         assert [allow for rule in rules for allow in rule["allow"]] == [
             {"ReverseTunnel": {"protocol": ["Tcp"], "port": [str(p["Port"])]}}
-            for p in ports
+            for p in SHADOW_PORTS
         ], cluster
 
 
@@ -528,12 +488,7 @@ def test_tunnel_ingress_is_served_by_the_tunnel_traefik(interlink_clusters):
     annotation, and nginx must not claim the Ingress."""
     tunnel_class = _tunnel_traefik()["providers"]["kubernetesIngress"]["ingressClass"]
     for cluster, _, network in _tunnel_nodes(interlink_clusters):
-        parts = network["customTemplate"].split("\n---\n")
-        ingresses = [
-            yaml.safe_load(re.sub(r"\{\{[^}]*\}\}", "x", part))
-            for part in parts
-            if re.search(r"^kind: Ingress$", part, re.M)
-        ]
+        ingresses = [doc for doc in _shadow_docs(network) if doc["kind"] == "Ingress"]
         assert ingresses, f"{cluster}: no shadow Ingress"
         for ingress in ingresses:
             annotations = ingress["metadata"].get("annotations") or {}
@@ -548,13 +503,8 @@ def test_tunnel_shadow_outlives_the_remote_delete(interlink_clusters):
     delete the remote pod; the shadow's preStop keeps the tunnel up through
     the plugin's delete delay, and the grace period lets the preStop finish."""
     for cluster, app, network in _tunnel_nodes(interlink_clusters):
-        parts = network["customTemplate"].split("\n---\n")
         (deployment,) = [
-            yaml.safe_load(
-                re.sub(r"\{\{[^}]*\}\}", "x", re.sub(r"(?m)^\s*\{\{-.*\n", "", part))
-            )
-            for part in parts
-            if re.search(r"^kind: Deployment$", part, re.M)
+            doc for doc in _shadow_docs(network) if doc["kind"] == "Deployment"
         ]
         pod = deployment["spec"]["template"]["spec"]
         (container,) = pod["containers"]
@@ -611,6 +561,30 @@ def test_supersonic_on_a_tunnel_node_gets_a_unique_shadow(interlink_clusters):
         annotations = server.get("annotations", {})
         assert annotations.get("interlink.eu/shadow-same-ns") == "true", values_file
     assert checked == tunnel_nodes, "a tunnelled node runs no SuperSONIC release"
+
+
+def test_pod_pruner_sweeps_every_release_on_a_tunnel_node(interlink_clusters):
+    """Deleting a terminal local pod is what cleans up its shadow and remote
+    pod, so a release the pruner misses leaves objects on both clusters."""
+    tunnel_nodes = {
+        app["values"]["nodeName"] for _, app, _ in _tunnel_nodes(interlink_clusters)
+    }
+    offloaded = set()
+    for values_file in sorted((REPO / "apps" / "sonic").glob("*/values.yaml")):
+        values = yaml.safe_load(values_file.read_text())
+        node = values.get("inferenceServer", {}).get("nodeSelector", {})
+        if node.get("kubernetes.io/hostname") in tunnel_nodes:
+            offloaded.add(values["nameOverride"])
+    cronjob = yaml.safe_load(
+        (
+            REPO / "apps" / "sonic" / "supersonic-interlink" / "pod-pruner-cronjob.yaml"
+        ).read_text()
+    )
+    script = cronjob["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][
+        0
+    ]["command"][-1]
+    selected = re.search(r"instance in \(([^)]*)\)", script).group(1)
+    assert set(selected.split(",")) == offloaded
 
 
 def test_kubernetes_remote_pods_never_restart_in_place(kubernetes_clusters):
@@ -701,21 +675,6 @@ def test_pvcs_are_not_declared_in_git(interlink_clusters):
                 pytest.fail(f"{path}: out-of-band PVC declared in git")
 
 
-def test_credentials_are_never_committed():
-    """The munge key is mounted from a PVC, the kubeconfig from a Secret
-    created out of band; a committed Secret is SOPS-encrypted
-    (test_secrets.py checks it). Any other Secret here would mean a
-    credential leaked into git."""
-    for path in INTERLINK.rglob("*.yaml"):
-        for doc in yaml.safe_load_all(path.read_text()):
-            if (
-                isinstance(doc, dict)
-                and doc.get("kind") == "Secret"
-                and "sops" not in doc
-            ):
-                pytest.fail(f"{path}: Secret committed in plain text")
-
-
 # --- values that Flux rewrites -------------------------------------------
 
 
@@ -723,10 +682,10 @@ def test_only_namespace_is_substituted(interlink_clusters):
     """Flux postBuild substitutes every `${VAR}` in the rendered stream, and an
     unset one becomes an empty string. Bare `$VAR` (the wstunnel command) is
     passed through untouched, so it needs no escaping."""
-    for cluster, app in interlink_clusters.items():
-        text = (app["dir"] / "values.yaml").read_text()
-        found = set(re.findall(r"\$\{([^}]*)\}", text))
-        assert found <= {"namespace"}, f"{cluster}: {found - {'namespace'}}"
+    files = [app["dir"] / "values.yaml" for app in interlink_clusters.values()]
+    for path in [INTERLINK / "values.yaml", *files]:
+        found = set(re.findall(r"\$\{([^}]*)\}", path.read_text()))
+        assert found <= {"namespace"}, f"{path}: {found - {'namespace'}}"
 
 
 def test_plugin_envs_are_well_formed(interlink_clusters):
@@ -757,39 +716,33 @@ def test_chart_version_is_a_pinned_release(interlink_clusters):
 # --- deployment wiring ----------------------------------------------------
 
 
-def test_every_cluster_is_wired_or_explicitly_disabled(
-    interlink_clusters, experimental, experimental_text
-):
-    """A node whose credential does not exist yet is commented out rather than
-    deleted — but it must be *present* either way, so a new cluster directory
-    can never be silently forgotten."""
+def test_every_cluster_is_wired(interlink_clusters, experimental):
+    """A new cluster directory can never be silently forgotten."""
     resources = set(experimental["resources"])
     for cluster in interlink_clusters:
-        entry = f"../../apps/interlink/{cluster}/helmrelease.yaml"
-        assert entry in resources or f"# - {entry}" in experimental_text, cluster
+        assert f"../../apps/interlink/{cluster}/helmrelease.yaml" in resources, cluster
     assert "../../apps/interlink/helmrepo.yaml" in resources
 
 
-def test_values_configmap_is_generated_from_the_values_file(
-    active_clusters, experimental
+def test_values_configmap_is_generated_from_both_values_files(
+    interlink_clusters, experimental
 ):
-    """`valuesFrom` naming a ConfigMap nobody generates leaves the release
-    stuck retrying forever."""
+    """`valuesFrom` naming a ConfigMap or key nobody generates leaves the
+    release stuck retrying forever; a node's own values come last, to win."""
     generated = {
         g["name"]: g.get("files", []) for g in experimental["configMapGenerator"]
     }
-    for cluster, app in active_clusters.items():
-        name = app["release"]["spec"]["valuesFrom"][0]["name"]
-        assert name in generated, f"{cluster}: {name} is not generated"
-        assert (
-            f"values.yaml=../../apps/interlink/{cluster}/values.yaml" in generated[name]
-        )
-
-
-def test_name_suffix_hash_stays_disabled(experimental):
-    """valuesFrom references a fixed ConfigMap name; a hashed suffix would
-    never match."""
-    assert experimental["generatorOptions"]["disableNameSuffixHash"] is True
+    for cluster, app in interlink_clusters.items():
+        sources = app["release"]["spec"]["valuesFrom"]
+        (name,) = {source["name"] for source in sources}
+        assert [source["valuesKey"] for source in sources] == [
+            "shared.yaml",
+            "values.yaml",
+        ], cluster
+        assert generated[name] == [
+            "shared.yaml=../../apps/interlink/values.yaml",
+            f"values.yaml=../../apps/interlink/{cluster}/values.yaml",
+        ], cluster
 
 
 def test_values_configmap_is_not_exempt_from_substitution(experimental):

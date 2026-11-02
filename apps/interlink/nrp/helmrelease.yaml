@@ -21,4 +21,7 @@ spec:
   valuesFrom:
     - kind: ConfigMap
       name: interlink-nrp-config
+      valuesKey: shared.yaml
+    - kind: ConfigMap
+      name: interlink-nrp-config
       valuesKey: values.yaml

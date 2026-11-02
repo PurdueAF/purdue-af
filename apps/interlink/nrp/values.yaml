@@ -1,21 +1,8 @@
 # interLink virtual node offloading pods to NRP Nautilus; see ../README.md.
 nodeName: interlink-nrp
 
-interlink:
-  image: ghcr.io/interlink-hq/interlink/interlink:0.7.0-pre1
-  enabled: true
-  socket: unix:///var/run/interlink.sock
-  logging:
-    verboseLogging: false
-    errorsOnlyLogging: true
-
 plugin:
-  enabled: true
-  # Site build (docker/interlink-kubernetes-plugin): upstream 1.2.0 plus the site patches.
   image: "geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/interlink-kubernetes-plugin:1.2.0"
-  address: "http://0.0.0.0"
-  port: 4000
-  privileged: false
   envs:
     # The chart mounts plugin.config at plugin.yaml; the plugin reads INI
     # whatever the file is called.
@@ -26,8 +13,6 @@ plugin:
       mountPath: /interlink-kubernetes-plugin/private/k8s
       readOnly: true
   resources:
-    # null drops the chart's CPU request and limit.
-    CPU: null
     memory:
       request: 512Mi
       limit: 1Gi
@@ -36,7 +21,7 @@ plugin:
     name=interlink-kubernetes-plugin
     # FastAPI asserts a non-empty version at import time; omit these and the plugin crash-loops.
     description=InterLink Kubernetes Plugin - offload pods to a remote Kubernetes cluster
-    version=1.2.0
+    version=site
     api_versions=v1
     api_docs_path=/docs
     socket_address=http://0.0.0.0
@@ -45,7 +30,6 @@ plugin:
     [log]
     level=INFO
     rich_enabled=True
-    requests_enabled=False
 
     [k8s]
     # Relative to the plugin image's workdir (/interlink-kubernetes-plugin),
@@ -54,8 +38,7 @@ plugin:
 
     [offloading]
     namespace_prefix=interlink
-    # NRP grants namespaced RBAC only; the offloading namespace is created out
-    # of band, and the plugin skips its cluster-scope namespace list.
+    # NRP grants namespaced RBAC only (docker/interlink-kubernetes-plugin/README.md).
     ensure_namespace=False
     # The virtual kubelet cannot follow an in-place restart: the local pod
     # goes Failed while the remote one restarts, holding its GPU.
@@ -63,21 +46,12 @@ plugin:
     # Envoy drops a deleted pod within seconds; Triton refuses new requests once stopping.
     delete_delay_seconds=10
 
-    [mesh]
-    init_container=True
-    startup_probe=True
-    slurm_setup_script=False
-
-    [tcp_tunnel]
-    enabled=False
-
     [wstunnel]
     # Runs the virtual kubelet's tunnel command beside each offloaded pod with
-    # exposed ports; keep in step with the shadow template's image.
+    # exposed ports; keep in step with the shadow's image in ../values.yaml.
     client_image=ghcr.io/erebe/wstunnel:v11.1.0
 
 virtualNode:
-  image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:0.7.0-pre1
   # The local scheduler's gate only; NRP places the real pod.
   resources:
     CPUs: 80
@@ -86,131 +60,14 @@ virtualNode:
     accelerators:
       - resourceType: nvidia.com/gpu
         available: "20"
-
-  containerResources:
-    memory:
-      request: 512Mi
-      limit: 2Gi
-
-  disableCSR: true
-
   # A pod with exposed ports gets a shadow pod here and a tunnel client on NRP
   # (the plugin's wstunnel-client sidecar), so Geddes reaches its ports.
   network:
-    enableTunnel: true
-    wildcardDNS: "geddes.rcac.purdue.edu"
-    # The client dials apps/interlink/traefik's pinned address and sends the
-    # shadow's hostname as Host. Runs in the foreground as the sidecar.
+    # Runs in the foreground as the sidecar.
     wstunnelCommand: 'exec /home/app/wstunnel client --log-lvl WARN --http-upgrade-path-prefix %[1]s %[2]s -H "Host: %[3]s" ws://128.211.160.122:80'
-    # The chart's nginx template on apps/interlink/traefik and a pinned image;
-    # the server accepts only the client's reverse tunnels to the pod's ports.
-    customTemplate: |
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: {{.Name}}
-        namespace: {{.Namespace}}
-      spec:
-        replicas: 1
-        selector:
-          matchLabels:
-            app.kubernetes.io/component: {{.Name}}
-        template:
-          metadata:
-            labels:
-              app.kubernetes.io/component: {{.Name}}
-          spec:
-            nodeSelector:
-              cms-af-prod: "true"
-            tolerations:
-              - key: hub.jupyter.org/dedicated
-                operator: Equal
-                value: cms-af
-                effect: NoSchedule
-            terminationGracePeriodSeconds: 45
-            containers:
-            - name: wstunnel
-              image: ghcr.io/erebe/wstunnel:v11.1.0
-              command: ["/bin/sh", "-c"]
-              args:
-              - |
-                cat >/tmp/restrictions.yaml <<'EOF'
-                restrictions:
-                - name: reverse tunnels to the exposed ports
-                  match:
-                  - !PathPrefix ^{{.RandomPassword}}$
-                  allow:
-                  {{- range .ExposedPorts}}
-                  - !ReverseTunnel {protocol: [Tcp], port: ["{{.Port}}"]}
-                  {{- end}}
-                EOF
-                exec /home/app/wstunnel server --log-lvl WARN --restrict-config /tmp/restrictions.yaml ws://0.0.0.0:28080
-              ports:
-              - containerPort: 28080
-                name: ws
-                protocol: TCP
-              {{- range .ExposedPorts}}
-              - containerPort: {{.Port}}
-                name: {{.Name}}
-                protocol: {{.Protocol}}
-              {{- end}}
-              # Keeps the tunnel up for requests in flight when the offloaded pod is deleted.
-              lifecycle:
-                preStop:
-                  exec:
-                    command: ["sleep", "30"]
-              resources:
-                requests:
-                  cpu: 100m
-                  memory: 90Mi
-                limits:
-                  memory: 256Mi
-      ---
-      apiVersion: v1
-      kind: Service
-      metadata:
-        name: {{.Name}}
-        namespace: {{.Namespace}}
-      spec:
-        type: ClusterIP
-        selector:
-          app.kubernetes.io/component: {{.Name}}
-        ports:
-          - port: 28080
-            targetPort: 28080
-            name: ws
-      ---
-      apiVersion: networking.k8s.io/v1
-      kind: Ingress
-      metadata:
-        name: {{.Name}}
-        namespace: {{.Namespace}}
-        annotations:
-          kubernetes.io/ingress.class: interlink-tunnel
-      spec:
-        rules:
-        - host: {{.Name}}-{{.Namespace}}.{{.WildcardDNS}}
-          http:
-            paths:
-            - path: /
-              pathType: Prefix
-              backend:
-                service:
-                  name: {{.Name}}
-                  port:
-                    number: 28080
 
 extraVolumes:
   - name: kubeconfig
     secret:
       secretName: kubeconfig-nrp-interlink
       defaultMode: 0400
-
-podScheduling:
-  nodeSelector:
-    cms-af-prod: "true"
-  tolerations:
-    - key: "hub.jupyter.org/dedicated"
-      operator: "Equal"
-      value: "cms-af"
-      effect: "NoSchedule"

@@ -5,12 +5,6 @@
 
 set -euo pipefail
 
-sudo_cmd=""
-if [ "$(id -u)" != "0" ]; then
-	sudo_cmd="sudo"
-	sudo -k
-fi
-
 configs_root="/opt/purdue-af/slurm-configs"
 override="/etc/secrets/slurm-configs"
 clients_root="/opt/purdue-af/slurm-clients"
@@ -61,16 +55,16 @@ if [ ! -x "${client_root}/usr/bin/sbatch" ]; then
 fi
 
 echo "Activating Slurm client ${client_ver} for cluster '${SLURM_CLUSTER}'"
-${sudo_cmd} mkdir -p "${active_bin}"
-${sudo_cmd} find "${active_bin}" -mindepth 1 -delete
+mkdir -p "${active_bin}"
+find "${active_bin}" -mindepth 1 -delete
 # Link every client tool onto PATH (sbatch, squeue, sinfo, …).
-${sudo_cmd} bash -c "for f in '${client_root}'/usr/bin/*; do
-	[ -e \"\$f\" ] || continue
-	ln -sfn \"\$f\" '${active_bin}/'
-done"
+for f in "${client_root}"/usr/bin/*; do
+	[ -e "$f" ] || continue
+	ln -sfn "$f" "${active_bin}/"
+done
 if [ -d "${client_root}/usr/lib64" ]; then
-	echo "${client_root}/usr/lib64" | ${sudo_cmd} tee /etc/ld.so.conf.d/00-slurm-client.conf >/dev/null
-	${sudo_cmd} ldconfig
+	echo "${client_root}/usr/lib64" >/etc/ld.so.conf.d/00-slurm-client.conf
+	ldconfig
 fi
 # Relocated binaries keep RPATH and PluginDir at /usr/lib64/slurm, which neither
 # ld.so.conf nor LD_LIBRARY_PATH overrides; only this link does.
@@ -80,28 +74,24 @@ if [ -e "${sys_plugin_dir}" ] && [ ! -L "${sys_plugin_dir}" ]; then
 	echo "activate ${client_ver} over it; the versions would silently mix." >&2
 	exit 1
 fi
-${sudo_cmd} ln -sfn "${client_root}/usr/lib64/slurm" "${sys_plugin_dir}"
+ln -sfn "${client_root}/usr/lib64/slurm" "${sys_plugin_dir}"
 
-${sudo_cmd} mkdir -p /etc/slurm
-${sudo_cmd} rm -rf /etc/slurm/*
-${sudo_cmd} cp -a "${src}/." /etc/slurm/
-${sudo_cmd} chown -R slurm:slurm /etc/slurm
+mkdir -p /etc/slurm
+rm -rf /etc/slurm/*
+cp -a "${src}/." /etc/slurm/
+chown -R slurm:slurm /etc/slurm
 
-${sudo_cmd} mkdir -p /etc/munge
+mkdir -p /etc/munge
 if [ ! -f /etc/secrets/munge/munge.key ]; then
 	echo "missing /etc/secrets/munge/munge.key — mount munge-key-${SLURM_CLUSTER}" >&2
 	exit 1
 fi
-${sudo_cmd} cp /etc/secrets/munge/munge.key /etc/munge/munge.key
-${sudo_cmd} chown munge:munge /etc/munge/munge.key
-${sudo_cmd} chmod 400 /etc/munge/munge.key
+cp /etc/secrets/munge/munge.key /etc/munge/munge.key
+chown munge:munge /etc/munge/munge.key
+chmod 400 /etc/munge/munge.key
 
-${sudo_cmd} bash <<'SCRIPT'
+bash <<'SCRIPT'
 # UID used by AF test pods / interactive submitters (--uid=616617).
 id -u 616617 >/dev/null 2>&1 || useradd -u 616617 -m dkondra
 su -l munge -s /usr/sbin/munged &
 SCRIPT
-
-if [[ ${sudo_cmd} ]]; then
-	sudo -k
-fi
