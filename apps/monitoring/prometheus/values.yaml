@@ -14,8 +14,6 @@ server:
   automountServiceAccountToken: true
   image:
     repository: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/prom/prometheus
-  configPath: /etc/config/prometheus.yml
-  storagePath: /prometheus
 
   global:
     # Must stay below scrape_interval, or scrapes pile up and starve the health probes.
@@ -95,17 +93,8 @@ server:
       memory: 8Gi
 
   service:
-    enabled: true
     type: LoadBalancer
     servicePort: 9090
-    annotations:
-      prometheus.io/scrape: "true"
-      prometheus.io/port: "9090"
-
-  alertmanagers:
-    - static_configs:
-        - targets:
-            - prometheus-alertmanager.cms.svc.cluster.local:9093
 
   # Retention lives in the config file; the chart turns `retention` into a deprecated flag.
   retention: ""
@@ -161,6 +150,18 @@ serverFiles:
           - source_labels: [namespace]
             regex: "(|cms)"
             action: keep
+      # Rancher's Prometheus holds the kubelet's volume stats this server cannot scrape; user homes stay out.
+      - job_name: "rancher-federate"
+        metrics_path: /federate
+        honor_labels: true
+        scrape_interval: 60s
+        params:
+          match[]:
+            - 'kubelet_volume_stats_available_bytes{namespace="cms",persistentvolumeclaim!~"claim-.*"}'
+            - 'kubelet_volume_stats_capacity_bytes{namespace="cms",persistentvolumeclaim!~"claim-.*"}'
+        static_configs:
+          - targets:
+              - rancher-monitoring-prometheus.cattle-monitoring-system.svc.cluster.local:9090
       - job_name: "slurm-metrics"
         static_configs:
           - targets:
@@ -211,7 +212,6 @@ serverFiles:
             target_label: "docker_image_tag"
           - source_labels: [__meta_kubernetes_namespace]
             target_label: "namespace"
-            replacement: "$1"
           # Not "node": af-node-monitor owns that label.
           - source_labels: [__meta_kubernetes_pod_node_name]
             target_label: "pod_node"
@@ -295,7 +295,6 @@ serverFiles:
             target_label: "user"
           - source_labels: [__meta_kubernetes_namespace]
             target_label: "namespace"
-            replacement: "$1"
           - source_labels: [__meta_kubernetes_pod_node_name]
             target_label: "node"
           - source_labels:
@@ -317,7 +316,6 @@ serverFiles:
             target_label: "pod"
           - source_labels: [__meta_kubernetes_namespace]
             target_label: "namespace"
-            replacement: "$1"
           - source_labels: [__meta_kubernetes_pod_node_name]
             target_label: "node"
           - source_labels:
@@ -697,9 +695,6 @@ serverFiles:
               description: >
                 Mount health is unknown, which is not the same as good: every
                 af_node_mount_* series is stale, so AFMountInvalid cannot fire.
-                absent() covers the exporter being gone entirely — without it
-                the comparison has no series to match and the alert that exists
-                to catch a dead exporter goes quiet when one dies.
                 Check: kubectl -n cms logs -l name=af-node-monitor
           # Probes the exporter cannot reach read as unknown, one series at a time, only after their stale window.
           - alert: AFNodeMonitorResultsUnavailable
@@ -844,8 +839,83 @@ serverFiles:
               summary: Loki is out of disk and dropping logs
               description: >
                 storage-loki-0 is full: chunk flushes fail with "no space left on
-                device" and every query 500s. Logs arriving now are lost — Alloy
-                buffers only briefly and Loki rejects samples older than 168h.
+                device" and every query 500s. Logs arriving now are lost: Alloy
+                buffers only briefly.
+          - alert: AFKubeStateMetricsDown
+            expr: up{job="kube-state-metrics"} == 0
+            for: 10m
+            labels:
+              severity: warning
+              component: observability
+            annotations:
+              summary: Facility pod and node state is not being collected
+              description: >
+                Rules and panels on kube_* series read nothing while this lasts,
+                so a quiet alert list says nothing about pods and nodes. The
+                target's state is on prometheus-server's targets page.
+          - alert: AFNodesWithoutLogShipper
+            expr: >
+              count(group by (node) (af_node_mount_result_fresh))
+              - on () kube_daemonset_status_number_ready{namespace="cms",daemonset="alloy"}
+              > 0
+            for: 15m
+            labels:
+              severity: warning
+              component: observability
+            annotations:
+              summary: Some nodes are not shipping logs
+              description: >
+                Logs of a pod that exits on such a node are lost for good, and the
+                log tools answer as if the pod were quiet. Compare the nodes in
+                kubectl -n cms get pods -o wide with the node label of
+                af_node_mount_result_fresh.
+          - alert: AFVolumeAlmostFull
+            expr: >
+              max by (persistentvolumeclaim) (
+                1 - kubelet_volume_stats_available_bytes{persistentvolumeclaim!="storage-loki-0"}
+                / kubelet_volume_stats_capacity_bytes{persistentvolumeclaim!="storage-loki-0"}
+              ) > 0.9
+            for: 30m
+            labels:
+              severity: warning
+              component: data
+            annotations:
+              summary: "Volume {{ $labels.persistentvolumeclaim }} is over 90% full"
+              description: >
+                A full volume stops whatever writes to it. Free space or grow the
+                claim in its manifest. Loki's volume has its own rules.
+          - alert: AFVolumeWillFill
+            expr: >
+              min by (persistentvolumeclaim) (
+                predict_linear(kubelet_volume_stats_available_bytes{persistentvolumeclaim!="storage-loki-0"}[3d], 7 * 86400)
+              ) < 0
+              and on (persistentvolumeclaim)
+              max by (persistentvolumeclaim) (
+                1 - kubelet_volume_stats_available_bytes{persistentvolumeclaim!="storage-loki-0"}
+                / kubelet_volume_stats_capacity_bytes{persistentvolumeclaim!="storage-loki-0"}
+              ) > 0.7
+            for: 6h
+            labels:
+              severity: warning
+              component: data
+            annotations:
+              summary: "Volume {{ $labels.persistentvolumeclaim }} is on course to fill within a week"
+              description: >
+                Three days of growth run out its free space within seven. The
+                used-space term keeps a large write to a mostly empty volume from
+                firing this.
+          - alert: AFVolumeStatsMissing
+            expr: absent(kubelet_volume_stats_capacity_bytes{persistentvolumeclaim="af-shared-storage"})
+            for: 15m
+            labels:
+              severity: warning
+              component: observability
+            annotations:
+              summary: Volume fill levels are not being collected
+              description: >
+                The volume alerts read nothing while this lasts. The
+                rancher-federate target's state is on prometheus-server's targets
+                page.
           - alert: AFLokiDown
             expr: up{job="loki"} == 0
             for: 15m
@@ -911,14 +981,8 @@ serverFiles:
                 this fires. Check for "Cannot list" in:
                 kubectl -n cms logs deploy/af-node-monitor
 alertmanager:
-  enabled: true
-  nodeSelector:
-    cms-af-prod: "true"
-  tolerations:
-    - key: "hub.jupyter.org/dedicated"
-      operator: "Equal"
-      value: "cms-af"
-      effect: "NoSchedule"
+  enabled: false
+
 kube-state-metrics:
   enabled: false
 prometheus-node-exporter:

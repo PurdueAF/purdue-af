@@ -1,0 +1,565 @@
+# validate-manifests.sh copies this next to the rules it extracts from
+# apps/monitoring/prometheus/values.yaml, so series carry Flux's ${...} values literally.
+rule_files:
+  - rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: the hub alert reads this environment's own hub
+    interval: 1m
+    input_series:
+      - series: 'up{job="jupyterhub",instance="${jupyterhub_host}"}'
+        values: 0x10
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFHubDown",alertstate="firing"}
+        eval_time: 10m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFHubDown",alertstate="firing",component="access",instance="${jupyterhub_host}",job="jupyterhub",severity="critical"}'
+            value: 1
+
+  - name: another environment's hub does not fire the hub alert
+    interval: 1m
+    input_series:
+      - series: 'up{job="jupyterhub",instance="other.example.org"}'
+        values: 0x10
+      - series: 'up{job="jupyterhub",instance="${jupyterhub_host}"}'
+        values: 1x10
+    alert_rule_test:
+      - alertname: AFHubDown
+        eval_time: 10m
+        exp_alerts: []
+
+  - name: a run of 400s at the OAuth callback with no success fires
+    interval: 1m
+    input_series:
+      - series: 'jupyterhub_request_duration_seconds_count{job="jupyterhub",instance="${jupyterhub_host}",handler="oauthenticator.oauth2.OAuthCallbackHandler",code="400"}'
+        values: 0+2x30
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFLoginCallbackFailing",alertstate="firing"}
+        eval_time: 20m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFLoginCallbackFailing",alertstate="firing",component="access",severity="critical"}'
+            value: 1
+
+  - name: one 302 in the window means the identity provider still works
+    interval: 1m
+    input_series:
+      - series: 'jupyterhub_request_duration_seconds_count{job="jupyterhub",instance="${jupyterhub_host}",handler="oauthenticator.oauth2.OAuthCallbackHandler",code="400"}'
+        values: 0+2x30
+      - series: 'jupyterhub_request_duration_seconds_count{job="jupyterhub",instance="${jupyterhub_host}",handler="oauthenticator.oauth2.OAuthCallbackHandler",code="302"}'
+        values: 0+1x30
+    alert_rule_test:
+      - alertname: AFLoginCallbackFailing
+        eval_time: 20m
+        exp_alerts: []
+
+  - name: denied users get a 403 and do not fire the login alert
+    interval: 1m
+    input_series:
+      - series: 'jupyterhub_request_duration_seconds_count{job="jupyterhub",instance="${jupyterhub_host}",handler="oauthenticator.oauth2.OAuthCallbackHandler",code="403"}'
+        values: 0+2x30
+    alert_rule_test:
+      - alertname: AFLoginCallbackFailing
+        eval_time: 20m
+        exp_alerts: []
+
+  - name: NotReady pages only for cms-af capacity
+    interval: 1m
+    input_series:
+      - series: 'kube_node_status_condition{condition="Ready",status="true",node="af-down"}'
+        values: 0x20
+      - series: 'kube_node_spec_taint{key="hub.jupyter.org/dedicated",value="cms-af",node="af-down"}'
+        values: 1x20
+      - series: 'kube_node_status_condition{condition="Ready",status="true",node="other-down"}'
+        values: 0x20
+      - series: 'kube_node_spec_taint{key="hub.jupyter.org/dedicated",value="other",node="other-down"}'
+        values: 1x20
+      - series: 'kube_node_status_condition{condition="Ready",status="true",node="af-up"}'
+        values: 1x20
+      - series: 'kube_node_spec_taint{key="hub.jupyter.org/dedicated",value="cms-af",node="af-up"}'
+        values: 1x20
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFProdNodesNotReady",alertstate="firing"}
+        eval_time: 15m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFProdNodesNotReady",alertstate="firing",component="compute",condition="Ready",node="af-down",severity="error",status="true"}'
+            value: 1
+
+  - name: a mount fails only on a fresh completed check, on the pool it belongs to
+    interval: 1m
+    input_series:
+      - series: 'af_node_mount_valid{mount_name="depot",node="failed",node_pool="prod"}'
+        values: 0x40
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="failed",node_pool="prod"}'
+        values: 1x40
+      - series: 'af_node_mount_valid{mount_name="depot",node="stale",node_pool="prod"}'
+        values: 0x40
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="stale",node_pool="prod"}'
+        values: 0x40
+      - series: 'af_node_mount_valid{mount_name="depot",node="healthy",node_pool="prod"}'
+        values: 1x40
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="healthy",node_pool="prod"}'
+        values: 1x40
+      - series: 'af_node_mount_valid{mount_name="depot",node="dev-failed",node_pool="dev"}'
+        values: 0x40
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="dev-failed",node_pool="dev"}'
+        values: 1x40
+      - series: 'af_node_mount_valid{mount_name="depot",node="dev-stale",node_pool="dev"}'
+        values: 0x40
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="dev-stale",node_pool="dev"}'
+        values: 0x40
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFMountInvalid",alertstate="firing"}
+        eval_time: 35m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFMountInvalid",alertstate="firing",component="data",mount_name="depot",node="failed",node_pool="prod",severity="warning"}'
+            value: 1
+      - expr: ALERTS{alertname="AFMountHealthUnknown",alertstate="firing"}
+        eval_time: 35m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFMountHealthUnknown",alertstate="firing",component="data",mount_name="depot",node="stale",node_pool="prod",severity="warning"}'
+            value: 1
+      - expr: ALERTS{alertname="AFMountInvalidDev",alertstate="firing"}
+        eval_time: 35m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFMountInvalidDev",alertstate="firing",component="dev",mount_name="depot",node="dev-failed",node_pool="dev",severity="warning"}'
+            value: 1
+
+  - name: half the nodes failing one fresh mount is an outage; cvmfs has its own rule
+    interval: 1m
+    input_series:
+      - series: 'af_node_mount_valid{mount_name="depot",node="n1",node_pool="prod"}'
+        values: 0x20
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="n1",node_pool="prod"}'
+        values: 1x20
+      - series: 'af_node_mount_valid{mount_name="depot",node="n2",node_pool="prod"}'
+        values: 0x20
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="n2",node_pool="prod"}'
+        values: 1x20
+      - series: 'af_node_mount_valid{mount_name="depot",node="n3",node_pool="prod"}'
+        values: 1x20
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="n3",node_pool="prod"}'
+        values: 1x20
+      # One node of three: counting failures across mounts would add it to depot's.
+      - series: 'af_node_mount_valid{mount_name="work",node="n1",node_pool="prod"}'
+        values: 0x20
+      - series: 'af_node_mount_result_fresh{mount_name="work",node="n1",node_pool="prod"}'
+        values: 1x20
+      - series: 'af_node_mount_valid{mount_name="work",node="n2",node_pool="prod"}'
+        values: 1x20
+      - series: 'af_node_mount_result_fresh{mount_name="work",node="n2",node_pool="prod"}'
+        values: 1x20
+      - series: 'af_node_mount_valid{mount_name="work",node="n3",node_pool="prod"}'
+        values: 1x20
+      - series: 'af_node_mount_result_fresh{mount_name="work",node="n3",node_pool="prod"}'
+        values: 1x20
+      # Failed long ago: the result is stale, so it is no finding.
+      - series: 'af_node_mount_valid{mount_name="home",node="n1",node_pool="prod"}'
+        values: 0x20
+      - series: 'af_node_mount_result_fresh{mount_name="home",node="n1",node_pool="prod"}'
+        values: 0x20
+      - series: 'af_node_mount_valid{mount_name="home",node="n2",node_pool="prod"}'
+        values: 1x20
+      - series: 'af_node_mount_result_fresh{mount_name="home",node="n2",node_pool="prod"}'
+        values: 1x20
+      - series: 'af_node_mount_valid{mount_name="cvmfs",node="n1",node_pool="prod"}'
+        values: 0x20
+      - series: 'af_node_mount_result_fresh{mount_name="cvmfs",node="n1",node_pool="prod"}'
+        values: 1x20
+      - series: 'af_node_mount_valid{mount_name="cvmfs",node="n2",node_pool="prod"}'
+        values: 0x20
+      - series: 'af_node_mount_result_fresh{mount_name="cvmfs",node="n2",node_pool="prod"}'
+        values: 1x20
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFMountFailingWidely",alertstate="firing"}
+        eval_time: 15m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFMountFailingWidely",alertstate="firing",component="data",mount_name="depot",severity="error"}'
+            value: 1
+
+  - name: the slow band is a rolling prod average below the timeout sentinel
+    interval: 1m
+    input_series:
+      - series: 'af_node_mount_metadata_latency_ms{mount_name="depot",node="slow",node_pool="prod"}'
+        values: 3000x40
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="slow",node_pool="prod"}'
+        values: 1x40
+      # Dips below the threshold every few minutes, so only the average holds for 5m.
+      - series: 'af_node_mount_metadata_latency_ms{mount_name="depot",node="sawtooth",node_pool="prod"}'
+        values: 5000x2 500x2 5000x2 500x2 5000x2 500x2 5000x2 500x2 5000x2 500x2 5000x2 500x2 5000x2
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="sawtooth",node_pool="prod"}'
+        values: 1x40
+      - series: 'af_node_mount_metadata_latency_ms{mount_name="depot",node="one-timeout",node_pool="prod"}'
+        values: 500x19 10000x9 500x10
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="one-timeout",node_pool="prod"}'
+        values: 1x40
+      - series: 'af_node_mount_metadata_latency_ms{mount_name="depot",node="timeouts-alone",node_pool="prod"}'
+        values: 10000x40
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="timeouts-alone",node_pool="prod"}'
+        values: 1x40
+      - series: 'af_node_mount_metadata_latency_ms{mount_name="depot",node="healthy",node_pool="prod"}'
+        values: 500x40
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="healthy",node_pool="prod"}'
+        values: 1x40
+      - series: 'af_node_mount_metadata_latency_ms{mount_name="depot",node="blip",node_pool="prod"}'
+        values: 500x19 5000x2 500x18
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="blip",node_pool="prod"}'
+        values: 1x40
+      - series: 'af_node_mount_metadata_latency_ms{mount_name="depot",node="stale",node_pool="prod"}'
+        values: 3000x40
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="stale",node_pool="prod"}'
+        values: 0x40
+      - series: 'af_node_mount_metadata_latency_ms{mount_name="depot",node="dev",node_pool="dev"}'
+        values: 3000x40
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="dev",node_pool="dev"}'
+        values: 1x40
+      - series: 'af_node_mount_metadata_latency_ms{mount_name="eos",node="eos",node_pool="prod"}'
+        values: 3000x40
+      - series: 'af_node_mount_result_fresh{mount_name="eos",node="eos",node_pool="prod"}'
+        values: 1x40
+      - series: 'af_node_mount_metadata_latency_ms{mount_name="cvmfs",node="cvmfs",node_pool="prod"}'
+        values: 3000x40
+      - series: 'af_node_mount_result_fresh{mount_name="cvmfs",node="cvmfs",node_pool="prod"}'
+        values: 1x40
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFMountSlow",alertstate="firing"}
+        eval_time: 35m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFMountSlow",alertstate="firing",component="data",mount_name="depot",node="one-timeout",node_pool="prod",severity="warning"}'
+            value: 1
+          - labels: 'ALERTS{alertname="AFMountSlow",alertstate="firing",component="data",mount_name="depot",node="sawtooth",node_pool="prod",severity="warning"}'
+            value: 1
+          - labels: 'ALERTS{alertname="AFMountSlow",alertstate="firing",component="data",mount_name="depot",node="slow",node_pool="prod",severity="warning"}'
+            value: 1
+
+  - name: eos is slow when most of an hour is, with one slow check that completed
+    interval: 1m
+    input_series:
+      - series: 'af_node_mount_metadata_latency_ms{mount_name="eos",node="slow",node_pool="prod"}'
+        values: 3000x150
+      - series: 'af_node_mount_result_fresh{mount_name="eos",node="slow",node_pool="prod"}'
+        values: 1x150
+      # Timeouts count as slow once a check has completed slowly.
+      - series: 'af_node_mount_metadata_latency_ms{mount_name="eos",node="mixed",node_pool="prod"}'
+        values: 500x99 3000x10 10000x39
+      - series: 'af_node_mount_result_fresh{mount_name="eos",node="mixed",node_pool="prod"}'
+        values: 1x150
+      # An outage of timeouts alone is AFMountInvalid's, not both.
+      - series: 'af_node_mount_metadata_latency_ms{mount_name="eos",node="timeouts-alone",node_pool="prod"}'
+        values: 10000x150
+      - series: 'af_node_mount_valid{mount_name="eos",node="timeouts-alone",node_pool="prod"}'
+        values: 0x150
+      - series: 'af_node_mount_result_fresh{mount_name="eos",node="timeouts-alone",node_pool="prod"}'
+        values: 1x150
+      - series: 'af_node_mount_metadata_latency_ms{mount_name="eos",node="quarter-slow",node_pool="prod"}'
+        values: 500x134 3000x14
+      - series: 'af_node_mount_result_fresh{mount_name="eos",node="quarter-slow",node_pool="prod"}'
+        values: 1x150
+      - series: 'af_node_mount_metadata_latency_ms{mount_name="eos",node="stale",node_pool="prod"}'
+        values: 3000x150
+      - series: 'af_node_mount_result_fresh{mount_name="eos",node="stale",node_pool="prod"}'
+        values: 0x150
+      - series: 'af_node_mount_metadata_latency_ms{mount_name="eos",node="dev",node_pool="dev"}'
+        values: 3000x150
+      - series: 'af_node_mount_result_fresh{mount_name="eos",node="dev",node_pool="dev"}'
+        values: 1x150
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFEosSlow",alertstate="firing"}
+        eval_time: 150m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFEosSlow",alertstate="firing",component="data",mount_name="eos",node="mixed",node_pool="prod",severity="warning"}'
+            value: 1
+          - labels: 'ALERTS{alertname="AFEosSlow",alertstate="firing",component="data",mount_name="eos",node="slow",node_pool="prod",severity="warning"}'
+            value: 1
+      - expr: ALERTS{alertname="AFMountInvalid",alertstate="firing"}
+        eval_time: 150m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFMountInvalid",alertstate="firing",component="data",mount_name="eos",node="timeouts-alone",node_pool="prod",severity="warning"}'
+            value: 1
+    alert_rule_test:
+      - alertname: AFMountSlow
+        eval_time: 150m
+        exp_alerts: []
+
+  - name: a node failing most of two hours of cvmfs checks fires; cold automounts do not
+    interval: 1m
+    input_series:
+      - series: 'af_node_mount_valid{mount_name="cvmfs",node="broken",node_pool="prod"}'
+        values: 1x29 0x120
+      - series: 'af_node_mount_result_fresh{mount_name="cvmfs",node="broken",node_pool="prod"}'
+        values: 1x150
+      - series: 'af_node_mount_valid{mount_name="cvmfs",node="cold-automounts",node_pool="prod"}'
+        values: 1x49 0x9 1x49 0x9 1x30
+      - series: 'af_node_mount_result_fresh{mount_name="cvmfs",node="cold-automounts",node_pool="prod"}'
+        values: 1x150
+      - series: 'af_node_mount_valid{mount_name="cvmfs",node="stale",node_pool="prod"}'
+        values: 0x150
+      - series: 'af_node_mount_result_fresh{mount_name="cvmfs",node="stale",node_pool="prod"}'
+        values: 0x150
+      - series: 'af_node_mount_valid{mount_name="cvmfs",node="dev",node_pool="dev"}'
+        values: 0x150
+      - series: 'af_node_mount_result_fresh{mount_name="cvmfs",node="dev",node_pool="dev"}'
+        values: 1x150
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFCvmfsFailing",alertstate="firing"}
+        eval_time: 150m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFCvmfsFailing",alertstate="firing",component="data",mount_name="cvmfs",node="broken",node_pool="prod",severity="warning"}'
+            value: 1
+    alert_rule_test:
+      - alertname: AFMountInvalid
+        eval_time: 150m
+        exp_alerts: []
+
+  - name: half the nodes failing cvmfs in ten minutes is cvmfs itself
+    interval: 1m
+    input_series:
+      - series: 'af_node_mount_valid{mount_name="cvmfs",node="n1",node_pool="prod"}'
+        values: 1x9 0x20
+      - series: 'af_node_mount_result_fresh{mount_name="cvmfs",node="n1",node_pool="prod"}'
+        values: 1x30
+      - series: 'af_node_mount_valid{mount_name="cvmfs",node="n2",node_pool="prod"}'
+        values: 1x9 0x20
+      - series: 'af_node_mount_result_fresh{mount_name="cvmfs",node="n2",node_pool="prod"}'
+        values: 1x30
+      - series: 'af_node_mount_valid{mount_name="cvmfs",node="n3",node_pool="prod"}'
+        values: 1x30
+      - series: 'af_node_mount_result_fresh{mount_name="cvmfs",node="n3",node_pool="prod"}'
+        values: 1x30
+      - series: 'af_node_mount_valid{mount_name="cvmfs",node="n4",node_pool="prod"}'
+        values: 1x30
+      - series: 'af_node_mount_result_fresh{mount_name="cvmfs",node="n4",node_pool="prod"}'
+        values: 1x30
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFCvmfsFailingWidely",alertstate="firing"}
+        eval_time: 25m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFCvmfsFailingWidely",alertstate="firing",component="data",severity="warning"}'
+            value: 1
+
+  - name: one node's failed cvmfs check is a cold automount, and stale results are no finding
+    interval: 1m
+    input_series:
+      - series: 'af_node_mount_valid{mount_name="cvmfs",node="n1",node_pool="prod"}'
+        values: 1x9 0x20
+      - series: 'af_node_mount_result_fresh{mount_name="cvmfs",node="n1",node_pool="prod"}'
+        values: 1x30
+      - series: 'af_node_mount_valid{mount_name="cvmfs",node="n2",node_pool="prod"}'
+        values: 1x30
+      - series: 'af_node_mount_result_fresh{mount_name="cvmfs",node="n2",node_pool="prod"}'
+        values: 1x30
+      - series: 'af_node_mount_valid{mount_name="cvmfs",node="n3",node_pool="prod"}'
+        values: 1x30
+      - series: 'af_node_mount_result_fresh{mount_name="cvmfs",node="n3",node_pool="prod"}'
+        values: 1x30
+      - series: 'af_node_mount_valid{mount_name="cvmfs",node="stale",node_pool="prod"}'
+        values: 0x30
+      - series: 'af_node_mount_result_fresh{mount_name="cvmfs",node="stale",node_pool="prod"}'
+        values: 0x30
+    alert_rule_test:
+      - alertname: AFCvmfsFailingWidely
+        eval_time: 25m
+        exp_alerts: []
+
+  - name: the Dask stall counts finished pods that still exist
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_completion_time{namespace="cms",pod="dask-worker-leftover"}'
+        values: 60x30
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFDaskControllerStalled",alertstate="firing"}
+        eval_time: 20m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFDaskControllerStalled",alertstate="firing",component="scale-out",severity="error"}'
+            value: 1
+
+  - name: deleted, recently finished and non-Dask pods are no Dask stall
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_completion_time{namespace="cms",pod="dask-worker-deleted"}'
+        values: 60x12
+      - series: 'kube_pod_completion_time{namespace="cms",pod="dask-scheduler-recent"}'
+        values: _x25 1500x15
+      - series: 'kube_pod_completion_time{namespace="cms",pod="purdue-af-1"}'
+        values: 60x40
+    alert_rule_test:
+      - alertname: AFDaskControllerStalled
+        eval_time: 34m
+        exp_alerts: []
+
+  - name: the pixi daemon heartbeat goes stale while its metrics still scrape
+    interval: 1m
+    input_series:
+      - series: 'pixi_global_sync_loop_heartbeat_timestamp_seconds{instance="wedged"}'
+        values: 0x30
+      - series: 'pixi_global_sync_loop_heartbeat_timestamp_seconds{instance="working"}'
+        values: 0+60x30
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFGlobalEnvDaemonStale",alertstate="firing"}
+        eval_time: 30m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFGlobalEnvDaemonStale",alertstate="firing",component="environment",instance="wedged",severity="warning"}'
+            value: 1
+
+  - name: delivery alerts select on kind, and a retry that recovers stays quiet
+    interval: 1m
+    input_series:
+      - series: 'af_flux_ready{kind="Kustomization",name="core"}'
+        values: 0x20
+      - series: 'af_flux_ready{kind="GitRepository",name="core"}'
+        values: 0x20
+      - series: 'af_flux_ready{kind="HelmRelease",name="core"}'
+        values: 0x20
+      - series: 'af_flux_ready{kind="HelmRelease",name="retrying"}'
+        values: 0x9 1x10
+      - series: 'af_flux_ready{kind="Kustomization",name="healthy"}'
+        values: 1x20
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFFluxRootNotReady",alertstate="firing"}
+        eval_time: 18m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFFluxRootNotReady",alertstate="firing",component="delivery",kind="GitRepository",name="core",severity="warning"}'
+            value: 1
+          - labels: 'ALERTS{alertname="AFFluxRootNotReady",alertstate="firing",component="delivery",kind="Kustomization",name="core",severity="warning"}'
+            value: 1
+      - expr: ALERTS{alertname="AFHelmReleaseNotReady",alertstate="firing"}
+        eval_time: 18m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFHelmReleaseNotReady",alertstate="firing",component="delivery",kind="HelmRelease",name="core",severity="warning"}'
+            value: 1
+    alert_rule_test:
+      - alertname: AFHelmReleaseNotReady
+        eval_time: 9m
+        exp_alerts: []
+      - alertname: AFFluxStateUnknown
+        eval_time: 18m
+        exp_alerts: []
+
+  - name: no Kustomization series means the Flux state is unknown
+    interval: 1m
+    input_series:
+      - series: 'af_flux_ready{kind="HelmRelease",name="core"}'
+        values: 1x20
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFFluxStateUnknown",alertstate="firing"}
+        eval_time: 18m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFFluxStateUnknown",alertstate="firing",component="delivery",kind="Kustomization",severity="warning"}'
+            value: 1
+
+  - name: kube-state-metrics down fires after ten minutes and clears with the target
+    interval: 1m
+    input_series:
+      - series: 'up{job="kube-state-metrics",instance="ksm:8080"}'
+        values: 1x5 0x20 1x15
+      - series: 'up{job="something-else",instance="other:8080"}'
+        values: 0x40
+    alert_rule_test:
+      - alertname: AFKubeStateMetricsDown
+        eval_time: 12m
+        exp_alerts: []
+      - alertname: AFKubeStateMetricsDown
+        eval_time: 35m
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFKubeStateMetricsDown",alertstate="firing"}
+        eval_time: 20m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFKubeStateMetricsDown",alertstate="firing",component="observability",instance="ksm:8080",job="kube-state-metrics",severity="warning"}'
+            value: 1
+
+  - name: alloy behind the node count fires, counting nodes and not their mounts
+    interval: 1m
+    input_series:
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="n1",node_pool="prod"}'
+        values: 1x60
+      - series: 'af_node_mount_result_fresh{mount_name="work",node="n1",node_pool="prod"}'
+        values: 1x60
+      - series: 'af_node_mount_result_fresh{mount_name="depot",node="n2",node_pool="prod"}'
+        values: 1x60
+      - series: 'af_node_mount_result_fresh{mount_name="work",node="n2",node_pool="prod"}'
+        values: 0x60
+      - series: 'kube_daemonset_status_number_ready{namespace="cms",daemonset="alloy"}'
+        values: 1x29 2x30
+      - series: 'kube_daemonset_status_number_ready{namespace="cms",daemonset="other"}'
+        values: 0x60
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFNodesWithoutLogShipper",alertstate="firing"}
+        eval_time: 25m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFNodesWithoutLogShipper",alertstate="firing",component="observability",severity="warning"}'
+            value: 1
+    alert_rule_test:
+      - alertname: AFNodesWithoutLogShipper
+        eval_time: 55m
+        exp_alerts: []
+
+  - name: a volume over 90% full fires, except Loki's, which has its own rules
+    interval: 1m
+    input_series:
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="cms",persistentvolumeclaim="af-shared-storage"}'
+        values: 1000x40
+      - series: 'kubelet_volume_stats_available_bytes{namespace="cms",persistentvolumeclaim="af-shared-storage"}'
+        values: 50x40
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="cms",persistentvolumeclaim="storage-loki-0"}'
+        values: 1000x40
+      - series: 'kubelet_volume_stats_available_bytes{namespace="cms",persistentvolumeclaim="storage-loki-0"}'
+        values: 50x40
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="cms",persistentvolumeclaim="half-full"}'
+        values: 1000x40
+      - series: 'kubelet_volume_stats_available_bytes{namespace="cms",persistentvolumeclaim="half-full"}'
+        values: 500x40
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFVolumeAlmostFull",alertstate="firing"}
+        eval_time: 35m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFVolumeAlmostFull",alertstate="firing",component="data",persistentvolumeclaim="af-shared-storage",severity="warning"}'
+            value: 1
+    alert_rule_test:
+      - alertname: AFVolumeStatsMissing
+        eval_time: 35m
+        exp_alerts: []
+
+  - name: without the shared volume's series the volume alerts are blind
+    interval: 1m
+    input_series:
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="cms",persistentvolumeclaim="half-full"}'
+        values: 1000x40
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFVolumeStatsMissing",alertstate="firing"}
+        eval_time: 20m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFVolumeStatsMissing",alertstate="firing",component="observability",persistentvolumeclaim="af-shared-storage",severity="warning"}'
+            value: 1
+
+  - name: only a volume over 70% with a trend to full within a week will fill
+    interval: 5m
+    input_series:
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="cms",persistentvolumeclaim="filling"}'
+        values: 1000x150
+      - series: 'kubelet_volume_stats_available_bytes{namespace="cms",persistentvolumeclaim="filling"}'
+        values: 290-1x150
+      # A large write to a mostly empty volume: the trend alone says full, 60% used says not yet.
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="cms",persistentvolumeclaim="large-write"}'
+        values: 1000x150
+      - series: 'kubelet_volume_stats_available_bytes{namespace="cms",persistentvolumeclaim="large-write"}'
+        values: 1000-10x60 400x89
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="cms",persistentvolumeclaim="flat"}'
+        values: 1000x150
+      - series: 'kubelet_volume_stats_available_bytes{namespace="cms",persistentvolumeclaim="flat"}'
+        values: 200x150
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="cms",persistentvolumeclaim="slow-growth"}'
+        values: 1000x150
+      - series: 'kubelet_volume_stats_available_bytes{namespace="cms",persistentvolumeclaim="slow-growth"}'
+        values: 290-0.1x150
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="cms",persistentvolumeclaim="storage-loki-0"}'
+        values: 1000x150
+      - series: 'kubelet_volume_stats_available_bytes{namespace="cms",persistentvolumeclaim="storage-loki-0"}'
+        values: 290-1x150
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFVolumeWillFill",alertstate="firing"}
+        eval_time: 12h
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFVolumeWillFill",alertstate="firing",component="data",persistentvolumeclaim="filling",severity="warning"}'
+            value: 1

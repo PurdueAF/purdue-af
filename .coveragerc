@@ -5,8 +5,8 @@
 [run]
 relative_files = true
 source = .
-# Measure the Python interpreters tests start, such as the stdio-silencing
-# probe; their data is combined into the report.
+# Measure the Python interpreters tests start, such as the real probe
+# children; their data is combined into the report.
 patch = subprocess
 
 [report]

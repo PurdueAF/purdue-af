@@ -25,7 +25,7 @@ def _connect() -> Any:
     return conn
 
 
-def ldap_lookup(username: str) -> tuple[Any, Any]:
+def ldap_lookup(username: str) -> tuple[int, int]:
     """UID/GID of the account at uid=<username>,<BASE_DN>."""
     conn = _connect()
     conn.search(
@@ -38,11 +38,7 @@ def ldap_lookup(username: str) -> tuple[Any, Any]:
     if not entries:
         raise RuntimeError(f"no LDAP entry for {username}")
     result = entries[0]["attributes"]
-    uid_number = result["uidNumber"]
-    gid_number = result["gidNumber"]
-    print("UID", +uid_number)
-    print("GID", +gid_number)
-    return uid_number, gid_number
+    return int(result["uidNumber"]), int(result["gidNumber"])
 
 
 async def passthrough_auth_state_hook(spawner: Any, auth_state: Any) -> None:

@@ -509,10 +509,15 @@ def test_a_request_whose_client_hangs_up_never_reaches_the_model(proxy, upstream
         time.sleep(0.01)
 
     first.join()
-    time.sleep(1.5)
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        status = proxy.gates["m"].status()
+        if status["waiting"] == 0 and status["busy"] == 0:
+            break
+        time.sleep(0.01)
 
     assert len(upstream.bodies) == 1
-    assert proxy.gates["m"].status()["waiting"] == 0
+    assert status["waiting"] == 0 and status["busy"] == 0
 
 
 def test_roles_and_their_limits_are_listed_for_the_runner(proxy):

@@ -12,7 +12,7 @@ import subprocess
 import sys
 import time
 
-from prometheus_client import Counter, Gauge, start_http_server
+from prometheus_client import Gauge, start_http_server
 
 WORK_QUOTA_KB = 104857600  # 100 GiB; monitoring threshold, not an enforced quota
 INTERVAL = 300  # seconds between passes
@@ -61,10 +61,6 @@ session_responsive = Gauge(
 session_probe_seconds = Gauge(
     "af_session_probe_seconds",
     "Time this session took to answer that listing",
-)
-session_probe_failures = Counter(
-    "af_session_probe_failures",
-    "Passes in which this session did not answer in time",
 )
 heartbeat = Gauge(
     "af_pod_monitor_last_pass_timestamp_seconds",
@@ -152,8 +148,6 @@ def probe_session(home_dir: str) -> bool:
     ok, _ = run_bounded(["ls", "-la", home_dir], PROBE_TIMEOUT_S)
     session_probe_seconds.set(time.monotonic() - start)
     session_responsive.set(1 if ok else 0)
-    if not ok:
-        session_probe_failures.inc()
     return ok
 
 
@@ -195,9 +189,9 @@ def update_metrics(dir_label: str, directory: str) -> None:
 _failing: set[str] = set()
 
 
-def update_directory(dir_label: str, directory: str) -> bool:
-    """One directory's pass. Never raises: a mount the pod cannot read is a
-    gap in that directory's metrics, not a reason to stop exporting.
+def update_directory(dir_label: str, directory: str) -> None:
+    """One directory's pass. Never raises: a mount the pod cannot read keeps
+    its last usage values with af_*_dir_ok at 0, and exporting carries on.
 
     The fault is logged when it starts and when it clears; af_*_dir_ok carries
     it in between."""
@@ -208,12 +202,11 @@ def update_directory(dir_label: str, directory: str) -> bool:
             _failing.add(dir_label)
             log.exception("could not read %s directory (%s)", dir_label, directory)
         metrics[f"{dir_label}_dir_ok"].set(0)
-        return False
+        return
     if dir_label in _failing:
         _failing.discard(dir_label)
         log.info("%s directory (%s) is readable again", dir_label, directory)
     metrics[f"{dir_label}_dir_ok"].set(1)
-    return True
 
 
 def main() -> None:
@@ -229,6 +222,8 @@ def main() -> None:
         if not probe_session(directories["home"]):
             # Reading usage means touching the mount that just failed to
             # answer; skip the pass rather than hand it to a hung syscall.
+            for dir_label in directories:
+                metrics[f"{dir_label}_dir_ok"].set(0)
             heartbeat.set(time.time())
             time.sleep(INTERVAL)
             continue

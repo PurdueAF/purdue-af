@@ -30,6 +30,7 @@ from urllib.parse import urlencode
 
 from prometheus_client import REGISTRY, Counter
 from tornado.httpclient import AsyncHTTPClient
+from traitlets.log import get_logger
 
 # JupyterHub injects `c` at exec time; the annotation is for type checkers only.
 c: Any
@@ -48,6 +49,8 @@ if _CONFIG_D not in sys.path:
 from gpu_queries import ALLOC_QUERY as _ALLOC_QUERY  # noqa: E402
 from gpu_queries import GPU_METRICS  # noqa: E402
 from gpu_queries import USED_QUERY as _USED_QUERY  # noqa: E402
+
+log = get_logger()
 
 # An optional "note" is appended to the form choice.
 GPU_FLAVORS = {
@@ -104,11 +107,11 @@ async def get_free_gpus() -> dict[str, int] | None:
             _prom_query(_ALLOC_QUERY), _prom_query(_USED_QUERY)
         )
     except Exception as exc:
-        print(f"[gpu-availability] Prometheus query failed: {exc}")
+        log.warning("[gpu-availability] Prometheus query failed: %s", exc)
         return None
     if not allocatable:
         # kube-state-metrics data missing — treat as unknown, not as zero
-        print("[gpu-availability] no allocatable GPU metrics in Prometheus")
+        log.warning("[gpu-availability] no allocatable GPU metrics in Prometheus")
         return None
     return {
         resource: max(
@@ -313,7 +316,7 @@ def release_gpu_grants_on_stop(spawner: Any) -> None:
 if isinstance(_static_profile_list, list) and _static_profile_list:
     c.KubeSpawner.profile_list = profile_list_with_gpu_counts
 else:
-    print("[gpu-availability] static profileList not found; labels stay static")
+    log.warning("[gpu-availability] static profileList not found; labels stay static")
 
 c.KubeSpawner.modify_pod_hook = refuse_gpu_spawn_if_unavailable
 c.KubeSpawner.post_stop_hook = release_gpu_grants_on_stop

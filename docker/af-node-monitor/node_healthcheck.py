@@ -1,8 +1,3 @@
-# Lazy annotations: required for the `client = None` fallback below — without
-# this, module-level annotations like `client.CoreV1Api | None` are evaluated
-# at import time and crash when kubernetes is not installed (local runs/tests).
-from __future__ import annotations
-
 import json
 import os
 import time
@@ -14,35 +9,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
 
-from prometheus_client import Counter, Gauge, start_http_server
+from kubernetes import client, config
+from kubernetes.client import ApiException
+from prometheus_client import Gauge, start_http_server
 
-try:
-    from kubernetes import client, config
-    from kubernetes.client import ApiException
-except Exception:  # pragma: no cover - optional dependency for local runs
-    client = None  # type: ignore[assignment]
-    config = None  # type: ignore[assignment]
-    ApiException = Exception  # type: ignore[assignment]
+# The mount_name label of every af_node_mount_* series; the DaemonSets own the rest of each probe.
+MOUNTS: tuple[str, ...] = ("/depot/", "/work/", "eos", "cvmfs")
 
-# mount_name -> mount_path, the two labels every af_node_mount_* series
-# carries. Everything else about a probe (check file, checksum, fio target,
-# volumes) belongs to the DaemonSet that runs it —
-# apps/monitoring/af-monitoring/daemonset-af-node-probe.yaml. Keeping one copy
-# of that config means it cannot drift; tests/manifests/test_node_probes.py
-# holds this dict and those DaemonSets to the same set of mounts.
-MOUNTS: Dict[str, str] = {
-    "/depot/": "/depot/",
-    "/work/": "/work/",
-    "eos": "eos",
-    "cvmfs": "cvmfs",
-}
-
-# Sentinels only: the value published for ping/metadata latency when a check
-# gives up. They do NOT bound anything here — the probe DaemonSets carry the
-# real timeouts. Both sides are set from the manifests and
-# tests/manifests/test_node_probes.py holds them equal, because a sentinel
-# that disagrees with the timeout it stands for charts a latency that was
-# never measured.
+# Sentinels published when a check gives up; the DaemonSets carry the real timeouts.
 PING_TIMEOUT_S = float(os.getenv("PING_TIMEOUT_S", "3"))
 METADATA_TIMEOUT_S = float(os.getenv("METADATA_TIMEOUT_S", "10"))
 
@@ -58,18 +32,17 @@ def _vlog(msg: str) -> None:
 
 
 def _elog(msg: str) -> None:
-    # Always emit errors, even when verbose logging is disabled.
     print(msg)
 
 
 RESULT_STALE_WINDOW_S = float(os.getenv("RESULT_STALE_WINDOW_S", "1800"))
 
 # A result stamped in the future is a clock-skewed node, not a fresh check.
-# Without this a skewed node can never go stale, so a dead mount there would
-# stay green forever.
 CLOCK_SKEW_TOLERANCE_S = float(os.getenv("CLOCK_SKEW_TOLERANCE_S", "300"))
 
 NODE_CACHE_TTL_S = float(os.getenv("NODE_CACHE_TTL_S", "300"))
+# urllib3 retries a timed-out GET, so one stalled list costs four of these.
+API_TIMEOUT_S = float(os.getenv("API_TIMEOUT_S", "30"))
 
 # Pulls are bounded per socket operation and per pass, so no probe can stall one.
 FETCH_TIMEOUT_S = float(os.getenv("FETCH_TIMEOUT_S", "5"))
@@ -99,96 +72,77 @@ MOUNT_SETUP_GRACE_S = float(os.getenv("MOUNT_SETUP_GRACE_S", "600"))
 MOUNT_SETUP_RESTARTS = int(os.getenv("MOUNT_SETUP_RESTARTS", "3"))
 
 
-try:
-    mount_valid = Gauge(
-        "af_node_mount_valid",
-        "Storage mount health",
-        ["mount_name", "mount_path", "node", "node_pool"],
-    )
-    mount_ping_ms = Gauge(
-        "af_node_mount_ping_ms",
-        "Storage mount ping time in milliseconds",
-        ["mount_name", "mount_path", "node", "node_pool"],
-    )
-    mount_data_rate_gbps = Gauge(
-        "af_node_mount_data_rate_gbps",
-        "Storage mount single-stream sequential direct read throughput in Gbps",
-        ["mount_name", "mount_path", "node", "node_pool"],
-    )
-    mount_metadata_latency_ms = Gauge(
-        "af_node_mount_metadata_latency_ms",
-        "Storage mount metadata latency in milliseconds (ls)",
-        ["mount_name", "mount_path", "node", "node_pool"],
-    )
+mount_valid = Gauge(
+    "af_node_mount_valid",
+    "Storage mount health",
+    ["mount_name", "node", "node_pool"],
+)
+mount_ping_ms = Gauge(
+    "af_node_mount_ping_ms",
+    "Storage mount ping time in milliseconds",
+    ["mount_name", "node", "node_pool"],
+)
+mount_data_rate_gbps = Gauge(
+    "af_node_mount_data_rate_gbps",
+    "Storage mount single-stream sequential direct read throughput in Gbps",
+    ["mount_name", "node", "node_pool"],
+)
+mount_metadata_latency_ms = Gauge(
+    "af_node_mount_metadata_latency_ms",
+    "Storage mount metadata latency in milliseconds (ls)",
+    ["mount_name", "node", "node_pool"],
+)
 
-    mount_result_fresh = Gauge(
-        "af_node_mount_result_fresh",
-        "1 when af_node_mount_valid reflects a recent completed check on a Ready "
-        "node, 0 when the node is Ready but no usable result exists (unknown). "
-        "Series are absent (null) for NotReady nodes",
-        ["mount_name", "mount_path", "node", "node_pool"],
-    )
+mount_result_fresh = Gauge(
+    "af_node_mount_result_fresh",
+    "1 when af_node_mount_valid reflects a recent completed check on a Ready "
+    "node, 0 when the node is Ready but no usable result exists (unknown). "
+    "Series are absent (null) for NotReady nodes",
+    ["mount_name", "node", "node_pool"],
+)
 
-    mount_timeout_total = Counter(
-        "af_node_mount_timeout_total",
-        "Exporter passes that found no usable result, a failed volume setup or "
-        "a timed-out check, by check_type",
-        ["mount_name", "mount_path", "node", "node_pool", "check_type"],
-    )
-    mount_last_success_ts = Gauge(
-        "af_node_mount_last_success_timestamp_seconds",
-        "Unix timestamp of last successful metrics update for mount",
-        ["mount_name", "mount_path", "node", "node_pool"],
-    )
-    mount_probe_up = Gauge(
-        "af_node_mount_probe_up",
-        "1 when the probe pod for this mount/node is Ready and answered this "
-        "pass, 0 when it is missing, not Ready or unreachable. Separates a "
-        "broken mount (valid=0) from a broken probe — both otherwise surface "
-        "only as unknown",
-        ["mount_name", "mount_path", "node", "node_pool"],
-    )
+mount_probe_up = Gauge(
+    "af_node_mount_probe_up",
+    "1 when the probe pod for this mount/node is Ready and answered this "
+    "pass, 0 when it is missing, not Ready or unreachable. Separates a "
+    "broken mount (valid=0) from a broken probe — both otherwise surface "
+    "only as unknown",
+    ["mount_name", "node", "node_pool"],
+)
 
-    monitor_last_iteration_ts = Gauge(
-        "af_node_monitor_last_iteration_timestamp_seconds",
-        "Unix timestamp of last completed metrics iteration",
-    )
-    monitor_results_available = Gauge(
-        "af_node_monitor_results_available",
-        "Fraction of Ready probe pods that answered the exporter this pass. "
-        "At 0 no mount is being checked at all, which reads as unknown, not "
-        "as failing",
-    )
+monitor_last_iteration_ts = Gauge(
+    "af_node_monitor_last_iteration_timestamp_seconds",
+    "Unix timestamp of last completed metrics iteration",
+)
+monitor_results_available = Gauge(
+    "af_node_monitor_results_available",
+    "Fraction of Ready probe pods that answered the exporter this pass. "
+    "At 0 no mount is being checked at all, which reads as unknown, not "
+    "as failing",
+)
 
-    registry_up = Gauge(
-        "af_registry_up",
-        "1 when the container registry answered its API root this pass, 0 when "
-        "it timed out, refused the connection or returned a server error",
-        ["registry"],
-    )
+registry_up = Gauge(
+    "af_registry_up",
+    "1 when the container registry answered its API root this pass, 0 when "
+    "it timed out, refused the connection or returned a server error",
+    ["registry"],
+)
 
-    flux_ready = Gauge(
-        "af_flux_ready",
-        "1 when a Flux object is Ready and not suspended, 0 when it is not. "
-        "A kind that cannot be listed has no series",
-        ["kind", "name"],
-    )
+flux_ready = Gauge(
+    "af_flux_ready",
+    "1 when a Flux object is Ready and not suspended, 0 when it is not. "
+    "A kind that cannot be listed has no series",
+    ["kind", "name"],
+)
 
-    # Held as objects, not names: a name resolved through globals() turns a
-    # typo into the KeyError that _clear_gauges swallows, and a gauge that is
-    # silently never cleared is exactly the frozen last-known-good green that
-    # clearing exists to prevent.
-    RESULT_GAUGES = (
-        mount_valid,
-        mount_ping_ms,
-        mount_data_rate_gbps,
-        mount_metadata_latency_ms,
-        mount_result_fresh,
-        mount_last_success_ts,
-    )
-    ALL_MOUNT_GAUGES = RESULT_GAUGES + (mount_probe_up,)
-except Exception as e:  # pragma: no cover - defensive
-    print(f"Error defining Prometheus metrics: {e}")
+ALL_MOUNT_GAUGES = (
+    mount_valid,
+    mount_ping_ms,
+    mount_data_rate_gbps,
+    mount_metadata_latency_ms,
+    mount_result_fresh,
+    mount_probe_up,
+)
 
 
 def _timeout_ping_ms() -> float:
@@ -203,23 +157,20 @@ def _sanitized_mount_name(name: str) -> str:
     return name.strip("/").replace("/", "_") or "root"
 
 
-_core_v1: client.CoreV1Api | None  # type: ignore[type-arg]
+_core_v1: client.CoreV1Api | None
 _custom_objects: Any = None
 _k8s_ready: bool = False
 
-# All AF-labelled nodes as (name, pool, ready). Metrics must cover NotReady
-# nodes too: otherwise last-known-good gauges freeze green while probes cannot
-# run.
+# All AF-labelled nodes as (name, pool, ready), NotReady ones included so their gauges get cleared.
 _af_nodes_cache: List[tuple[str, str, bool]] = []
 _last_node_refresh: float = 0.0
 
 
 def _init_k8s() -> None:
     global _core_v1, _custom_objects, _k8s_ready
-    if _k8s_ready or client is None or config is None:
+    if _k8s_ready:
         return
     try:
-        # Prefer in-cluster config; fall back to kubeconfig for local testing.
         try:
             config.load_incluster_config()
         except Exception:
@@ -259,9 +210,7 @@ def _refresh_node_caches() -> None:
     if _af_nodes_cache and (now - _last_node_refresh) < NODE_CACHE_TTL_S:
         return
 
-    # Both pools are monitored. The pool is recorded per node so that alerts
-    # and user-facing tools can tell them apart: a dev node failing is an
-    # operator's problem, not a facility outage.
+    # Recorded per node: a dev node failing is an operator's problem, not a facility outage.
     label_sets = [
         ("cms-af-prod=true", "prod"),
         ("cms-af-dev=true", "dev"),
@@ -269,7 +218,9 @@ def _refresh_node_caches() -> None:
     by_name: dict[str, tuple[str, bool]] = {}
     try:
         for selector, pool in label_sets:
-            resp = _core_v1.list_node(label_selector=selector)
+            resp = _core_v1.list_node(
+                label_selector=selector, _request_timeout=API_TIMEOUT_S
+            )
             for node in resp.items:
                 if not node.metadata or not node.metadata.name:
                     continue
@@ -278,10 +229,10 @@ def _refresh_node_caches() -> None:
                 # first match wins: a node labelled both is production
                 if name not in by_name:
                     by_name[name] = (pool, ready)
-    except ApiException as e:  # type: ignore[misc]
+    except ApiException as e:
         print(f"[node_healthcheck] Error listing nodes: {e}")
         return
-    except Exception as e:  # pragma: no cover - defensive
+    except Exception as e:
         print(f"[node_healthcheck] Unexpected error listing nodes: {e}")
         return
 
@@ -305,11 +256,6 @@ def _refresh_node_caches() -> None:
 
 
 def _list_af_nodes() -> List[tuple[str, str, bool]]:
-    """Return all AF-labelled nodes as (name, pool, ready).
-
-    NotReady nodes are included so their last-known-good gauges can be cleared
-    (null in Prometheus) rather than freezing green while probes cannot run.
-    """
     _refresh_node_caches()
     if not _k8s_ready or _core_v1 is None:
         return []
@@ -317,12 +263,7 @@ def _list_af_nodes() -> List[tuple[str, str, bool]]:
 
 
 def _clear_gauges(labels: dict[str, str], gauges: tuple[Any, ...]) -> None:
-    labelvalues = (
-        labels["mount_name"],
-        labels["mount_path"],
-        labels["node"],
-        labels["node_pool"],
-    )
+    labelvalues = (labels["mount_name"], labels["node"], labels["node_pool"])
     for gauge in gauges:
         try:
             gauge.remove(*labelvalues)
@@ -332,30 +273,14 @@ def _clear_gauges(labels: dict[str, str], gauges: tuple[Any, ...]) -> None:
 
 
 def _clear_mount_gauges(labels: dict[str, str]) -> None:
-    """Drop every status gauge for a mount/node so scrapes show null.
-
-    Counters are left alone — they are cumulative and do not drive green/red.
-    """
+    """Drop every status gauge for a mount/node so scrapes show null."""
     _clear_gauges(labels, ALL_MOUNT_GAUGES)
 
 
 def _clear_node_pool_gauges(node_name: str, pool: str) -> None:
-    """Drop all mount status gauges for a node under one node_pool label.
-
-    prometheus_client keeps every label set forever until remove(). When a
-    node flips between cms-af-dev and cms-af-prod (or leaves the AF set), the
-    inactive pool's series must be dropped — otherwise scrapes keep exporting
-    a frozen timeout sentinel that Grafana heatmaps can sum into a false red.
-    """
-    for m_name, m_path in MOUNTS.items():
-        _clear_mount_gauges(
-            {
-                "mount_name": m_name,
-                "mount_path": m_path,
-                "node": node_name,
-                "node_pool": pool,
-            }
-        )
+    """prometheus_client keeps a label set until remove(), so a pool a node left keeps exporting."""
+    for mount in MOUNTS:
+        _clear_mount_gauges({"mount_name": mount, "node": node_name, "node_pool": pool})
 
 
 def _publish_probe_up(labels: dict[str, str], ready: bool | None) -> None:
@@ -366,33 +291,19 @@ def _publish_probe_up(labels: dict[str, str], ready: bool | None) -> None:
     mount_probe_up.labels(**labels).set(1 if ready else 0)
 
 
-def _publish_unusable(labels: dict[str, str], check_type: str) -> None:
-    """Ready node, but no usable check — unknown (fresh=0), not a confirmed failure.
+def _publish_sentinels(labels: dict[str, str], *, fresh: bool) -> None:
+    """No usable result: the sentinels, and fresh says whether that is a verdict.
 
-    Confirmed failures set valid=0 with fresh=1 after a completed check. That is
-    what turns dashboards/alerts red; this path must not.
+    Unknown (fresh=False) must not turn dashboards or alerts red. A probe that
+    cannot mount its volume while a sibling on the node runs is a completed
+    failing check (fresh=True): only the volume differs between the two pods,
+    and a session landing here carries the same volume spec.
     """
     mount_valid.labels(**labels).set(0)
     mount_ping_ms.labels(**labels).set(_timeout_ping_ms())
     mount_metadata_latency_ms.labels(**labels).set(_timeout_metadata_ms())
     mount_data_rate_gbps.labels(**labels).set(0.0)
-    mount_result_fresh.labels(**labels).set(0)
-    mount_timeout_total.labels(check_type=check_type, **labels).inc()
-
-
-def _publish_setup_failed(labels: dict[str, str]) -> None:
-    """The probe cannot mount its volume while a sibling on the node runs.
-
-    Only the volume differs between the two pods, and a session landing here
-    carries the same volume spec, so this is a completed failing check
-    (fresh=1), not an unknown.
-    """
-    mount_valid.labels(**labels).set(0)
-    mount_ping_ms.labels(**labels).set(_timeout_ping_ms())
-    mount_metadata_latency_ms.labels(**labels).set(_timeout_metadata_ms())
-    mount_data_rate_gbps.labels(**labels).set(0.0)
-    mount_result_fresh.labels(**labels).set(1)
-    mount_timeout_total.labels(check_type="mount_setup_failed", **labels).inc()
+    mount_result_fresh.labels(**labels).set(1 if fresh else 0)
 
 
 @dataclass
@@ -466,15 +377,7 @@ def _mount_setup_failed(pod: Any, now: float) -> bool:
 
 
 def _list_probe_pods(now: float) -> Dict[tuple[str, str], Probe] | None:
-    """{(mount_key, node_key): Probe} for every probe DaemonSet pod.
-
-    The node comes from spec.nodeName: one DaemonSet template covers every
-    node, so no label can carry it.
-
-    None on an API failure — distinct from an empty map. Reporting every node
-    as having no probe because one list call was refused would paint the whole
-    fleet as unmonitored over an RBAC blip.
-    """
+    """{(mount_key, node_key): Probe} for every probe DaemonSet pod, None on an API failure."""
     _init_k8s()
     if not _k8s_ready or _core_v1 is None:
         return None
@@ -483,11 +386,12 @@ def _list_probe_pods(now: float) -> Dict[tuple[str, str], Probe] | None:
         pods = _core_v1.list_namespaced_pod(
             namespace=POD_NAMESPACE,
             label_selector="app=af-node-monitor,component=probe",
+            _request_timeout=API_TIMEOUT_S,
         )
-    except ApiException as e:  # type: ignore[misc]
+    except ApiException as e:
         _elog(f"[node_healthcheck] Error listing probe pods: {e}")
         return None
-    except Exception as e:  # pragma: no cover - defensive
+    except Exception as e:
         _elog(f"[node_healthcheck] Unexpected error listing probe pods: {e}")
         return None
 
@@ -641,20 +545,12 @@ def update_metrics() -> None:
     # A probe answering proves the node; a stuck sibling there is down to its volume.
     working_nodes = {node for _mount, node in answered}
 
-    for m_name, mount_path in MOUNTS.items():
+    for m_name in MOUNTS:
         mount_key = _sanitized_mount_name(m_name)
         for node_name, pool, ready in af_nodes:
-            labels = {
-                "mount_name": m_name,
-                "mount_path": mount_path,
-                "node": node_name,
-                "node_pool": pool,
-            }
+            labels = {"mount_name": m_name, "node": node_name, "node_pool": pool}
 
-            # NotReady: probes cannot report. Clear gauges so Prometheus/Grafana
-            # see null (gap), not last-known-good green and not a false red. Red
-            # is reserved for a completed failing check on a Ready node
-            # (fresh=1).
+            # NotReady: probes cannot report, so null, neither last-known-good green nor a false red.
             if not ready:
                 _clear_mount_gauges(labels)
                 continue
@@ -669,24 +565,14 @@ def update_metrics() -> None:
 
             if probe is not None and probe.setup_failed and node_name in working_nodes:
                 _publish_probe_up(labels, probe_up)
-                _publish_setup_failed(labels)
+                _publish_sentinels(labels, fresh=True)
                 continue
 
             data = _result_cache.get(key)
             _publish_probe_up(labels, probe_up)
 
             if not data:
-                # No result yet: expose timeout semantics for latency/throughput
-                # gauges so alerts/dashboards see an explicit failure signal.
-                if probe is None:
-                    check_type = "no_recent_result"
-                elif probe.ready:
-                    # Ready by the kubelet's check, but not reachable from here.
-                    check_type = "unreachable"
-                else:
-                    # Pending, or crashing before its first result.
-                    check_type = "job_never_started"
-                _publish_unusable(labels, check_type)
+                _publish_sentinels(labels, fresh=False)
                 continue
 
             try:
@@ -694,11 +580,9 @@ def update_metrics() -> None:
             except (TypeError, ValueError):
                 timestamp = 0.0
 
-            # A missing or future-dated timestamp cannot say whether the check
-            # is recent. Treating it as fresh would let a skewed node hold a
-            # dead mount green indefinitely.
+            # A missing or future-dated timestamp cannot say whether the check is recent.
             if timestamp <= 0 or timestamp > now + CLOCK_SKEW_TOLERANCE_S:
-                _publish_unusable(labels, "bad_timestamp")
+                _publish_sentinels(labels, fresh=False)
                 continue
 
             timeout = bool(data.get("timeout", False))
@@ -707,13 +591,10 @@ def update_metrics() -> None:
 
             if stale and ok:
                 # Last success is too old — unknown, not green.
-                _publish_unusable(labels, "stale_result")
+                _publish_sentinels(labels, fresh=False)
                 continue
 
-            # Fresh result, or a stale *failure*/timeout: keep publishing as a
-            # completed check (fresh=1). Stale EOS timeouts must stay red
-            # (AFMountInvalid), not flip to unknown and disappear from MCP.
-
+            # A stale failure stays a completed check (fresh=1): AFMountInvalid keeps firing.
             ping_ms = data.get("ping_ms")
             meta_ms = data.get("metadata_ms")
             gbps = data.get("throughput_gbps")
@@ -722,8 +603,7 @@ def update_metrics() -> None:
             mount_result_fresh.labels(**labels).set(1)
 
             if timeout:
-                # On timeout, expose worst-case latency semantics for both ping and metadata,
-                # regardless of any partial measurements in the JSON.
+                # A measured ping stands; metadata takes its sentinel even when the JSON has a reading.
                 if ping_ms is not None:
                     mount_ping_ms.labels(**labels).set(float(ping_ms))
                 else:
@@ -732,7 +612,6 @@ def update_metrics() -> None:
                 mount_metadata_latency_ms.labels(**labels).set(_timeout_metadata_ms())
 
                 mount_data_rate_gbps.labels(**labels).set(0.0)
-                mount_timeout_total.labels(check_type="job_result", **labels).inc()
             else:
                 if ping_ms is not None:
                     mount_ping_ms.labels(**labels).set(float(ping_ms))
@@ -745,13 +624,10 @@ def update_metrics() -> None:
                 elif ok:
                     # Not measured yet: absent, not a zero rate left by an earlier sentinel.
                     _clear_gauges(labels, (mount_data_rate_gbps,))
-
-                if ok:
-                    mount_last_success_ts.labels(**labels).set(timestamp)
                 else:
-                    mount_data_rate_gbps.labels(**labels).set(
-                        float(gbps) if gbps is not None else 0.0
-                    )
+                    mount_data_rate_gbps.labels(**labels).set(0.0)
+
+                if not ok:
                     if ping_ms is None:
                         mount_ping_ms.labels(**labels).set(_timeout_ping_ms())
                     if meta_ms is None:

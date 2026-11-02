@@ -2,7 +2,7 @@
 #
 # Validate everything Flux consumes, the way Flux consumes it: render each root,
 # kubeconform the result, `helm template` every HelmRelease with its resolved
-# values, and `promtool check` the rules in Helm values.
+# values, and `promtool check and test` the rules in Helm values.
 #
 # Requirements: kustomize, flux, yq (v4), kubeconform, helm, promtool
 # Run locally:  ./.github/workflows/validate-manifests.sh
@@ -316,6 +316,13 @@ for values_file in $(git grep -lE "alerting_rules|recording_rules" -- 'apps/**/v
 		fi
 	done
 done
+yq '.serverFiles["alerting_rules.yml"]' apps/monitoring/prometheus/values.yaml >"$workdir/rules.yml"
+cp tests/manifests/alerts.test.yml "$workdir/"
+echo "  promtool test tests/manifests/alerts.test.yml"
+if ! promtool test rules "$workdir/alerts.test.yml"; then
+	echo "✗ tests/manifests/alerts.test.yml failed against the alert rules" >&2
+	failed=1
+fi
 
 # --- Tripwires against silent pass-through --------------------------------
 # A count this low means the extraction broke, not that the platform shrank.

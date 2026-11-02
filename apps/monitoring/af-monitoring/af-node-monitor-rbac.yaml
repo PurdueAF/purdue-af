@@ -33,7 +33,6 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: af-node-monitor
-automountServiceAccountToken: true
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1

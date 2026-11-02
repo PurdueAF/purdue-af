@@ -5,7 +5,6 @@ probed. A mount in one and not the other would read "never reported" forever.
 """
 
 import ast
-import re
 
 import yaml
 from common import REPO
@@ -38,7 +37,7 @@ def env_of(ds):
 
 
 def exporter_mounts():
-    """node_healthcheck.MOUNTS, read without importing (no k8s client here)."""
+    """node_healthcheck.MOUNTS, parsed from source: the script is not on this suite's path."""
     tree = ast.parse(EXPORTER.read_text())
     for node in tree.body:
         if not isinstance(node, ast.AnnAssign):
@@ -175,9 +174,7 @@ def http_port():
 
 def test_the_http_port_is_the_one_the_agent_serves():
     """The exporter finds the port by its name; the agent binds its default."""
-    default = re.search(r'_get_env\("PROBE_HTTP_PORT", "(\d+)"\)', AGENT.read_text())
-    assert default, "PROBE_HTTP_PORT default not found in probe_agent.py"
-    assert http_port() == int(default.group(1))
+    assert http_port() == int(agent_default("PROBE_HTTP_PORT"))
 
 
 def probe_cmd(ds, which):
@@ -185,9 +182,16 @@ def probe_cmd(ds, which):
 
 
 def agent_default(name):
-    found = re.search(rf'_get_env\("{name}", "([^"]+)"\)', AGENT.read_text())
-    assert found, f"{name} default not found in probe_agent.py"
-    return found.group(1)
+    """Parsed from source: an imported probe_agent holds the test suite's env, not its defaults."""
+    for node in ast.walk(ast.parse(AGENT.read_text())):
+        if (
+            isinstance(node, ast.Call)
+            and getattr(node.func, "id", None) == "_get_env"
+            and len(node.args) == 2
+            and ast.literal_eval(node.args[0]) == name
+        ):
+            return ast.literal_eval(node.args[1])
+    raise AssertionError(f"{name} default not found in probe_agent.py")
 
 
 def test_liveness_and_readiness_read_the_emptydir():
@@ -359,10 +363,10 @@ def test_probes_carry_their_own_timeouts():
 
 
 def test_exporter_sentinels_match_the_probe_timeouts():
-    """af_node_mount_ping_ms reports PING_TIMEOUT_S when a check gives up. If
-    the exporter's copy drifts from the probe's real timeout, that gauge charts
-    a latency nothing ever measured — and AFMountSlow's `< 10000` guard, which
-    exists to keep timed-out probes out of that alert, stops matching."""
+    """Both latency gauges report the timeout when a check gives up. If the
+    exporter's copy drifts from the probe's real timeout, a gauge charts a
+    latency nothing ever measured, and the `< 10000` in AFMountSlow and
+    AFEosSlow, which keeps the metadata sentinel out of them, stops matching."""
     exporter = exporter_env()
     for key in ("PING_TIMEOUT_S", "METADATA_TIMEOUT_S"):
         assert exporter.get(key), f"exporter does not set {key}"

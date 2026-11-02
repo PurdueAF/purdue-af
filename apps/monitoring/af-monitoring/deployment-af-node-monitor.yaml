@@ -4,11 +4,6 @@ metadata:
   name: af-node-monitor
 spec:
   replicas: 1
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
   selector:
     matchLabels:
       name: af-node-monitor
@@ -51,6 +46,13 @@ spec:
           ports:
             - containerPort: 8000
               name: metrics
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
           volumeMounts:
             - name: scripts
               mountPath: /scripts

@@ -9,6 +9,5 @@ spec:
   selector:
     name: af-node-monitor
   ports:
-    - protocol: TCP
-      port: 8000
+    - port: 8000
       targetPort: 8000

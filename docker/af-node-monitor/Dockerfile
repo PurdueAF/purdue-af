@@ -19,7 +19,7 @@ COPY docker/af-node-monitor/xcache_probe.py ./xcache_probe.py
 # -B: a __pycache__ here would ship in the image.
 RUN fio --version \
     && xrdcp --version \
-    && AF_NODE_MONITOR_VERBOSE=1 MOUNT_NAME=smoke CHECK_FILE=smoke \
+    && MOUNT_NAME=smoke CHECK_FILE=smoke \
        python -B -c "import job_runner, node_healthcheck, xcache_probe; print('ok')"
 
 CMD ["python", "node_healthcheck.py"]

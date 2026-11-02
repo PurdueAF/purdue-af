@@ -13,6 +13,15 @@ from shared import prom_query, prom_scalar, quote_label, shared_client
 _DIRS = ("home", "work")
 
 
+def dir_reading_query(prefix: str, metric: str, selector: str) -> str:
+    """A directory's metric, empty unless the last pass read it: a failed or
+    skipped read keeps the gauge's old value and sets only af_*_dir_ok to 0."""
+    return (
+        f"af_{prefix}_dir_{metric}{{{selector}}}"
+        f" and on(pod) af_{prefix}_dir_ok{{{selector}}} == 1"
+    )
+
+
 async def _prom_scalar(
     client: httpx.AsyncClient, query: str
 ) -> tuple[Optional[float], Optional[str]]:
@@ -51,7 +60,9 @@ def register(mcp: MCPServer) -> None:
         ) -> list[tuple[Optional[float], Optional[str]]]:
             return await asyncio.gather(
                 *(
-                    _prom_scalar(client, f"af_{prefix}_dir_{metric}{{{user_selector}}}")
+                    _prom_scalar(
+                        client, dir_reading_query(prefix, metric, user_selector)
+                    )
                     for metric in ("used_kb", "size_kb", "util")
                 )
             )

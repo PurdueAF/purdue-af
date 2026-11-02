@@ -8,22 +8,6 @@ from pathlib import Path
 from typing import Any, Dict, Tuple
 
 
-def _af_node_monitor_verbose() -> bool:
-    return os.getenv("AF_NODE_MONITOR_VERBOSE", "").lower() in ("1", "true", "yes")
-
-
-# When quiet, redirect OS fds 1/2 too: replacing sys.stdout alone misses
-# inherited stdio and os.write(2, ...).
-if not _af_node_monitor_verbose():
-    _dn = os.open(os.devnull, os.O_WRONLY)
-    os.dup2(_dn, 1)
-    os.dup2(_dn, 2)
-    if _dn > 2:
-        os.close(_dn)
-    sys.stdout = open(1, "w", encoding="utf-8", closefd=False)
-    sys.stderr = open(2, "w", encoding="utf-8", closefd=False)
-
-
 def _get_env(name: str, default: str | None = None, required: bool = False) -> str:
     value = os.getenv(name, default)
     if required and not value:
@@ -50,7 +34,7 @@ NODE_NAME = os.getenv("NODE_NAME") or ""
 
 
 def _vlog(msg: str) -> None:
-    print(msg)
+    print(msg, file=sys.stderr)
 
 
 def _load_previous_result(path: Path) -> Dict[str, Any]:
@@ -60,7 +44,7 @@ def _load_previous_result(path: Path) -> Dict[str, Any]:
         with path.open("r", encoding="utf-8") as f:
             loaded: Dict[str, Any] = json.load(f)
             return loaded
-    except Exception:
+    except (OSError, ValueError):
         return {}
 
 
@@ -71,23 +55,15 @@ def _write_result_atomic(path: Path, data: Dict[str, Any]) -> None:
     tmp_path.replace(path)
 
 
-# A read on a dead NFS/CephFS mount sits in uninterruptible sleep: SIGKILL is
-# recorded but not delivered until the syscall returns, so subprocess.run()'s
-# own timeout path (kill() then an unbounded wait()) never comes back. Every
-# check here is on exactly such a mount, so waits must be bounded and the
-# child abandoned rather than reaped. Orphans reparent to the supervisor,
-# which reaps them (see probe_agent.reap_orphans).
+# A dead mount's read survives SIGKILL, so subprocess.run() would never return; probe_agent reaps the orphan.
 def _run_bounded(cmd: list[str], timeout_s: float) -> Tuple[bool, bool, str, str]:
     """Return (ok, timeout, stdout, stderr_or_reason). Never blocks past timeout_s."""
-    try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-    except Exception as e:
-        return False, False, "", str(e)
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
 
     try:
         out, err = proc.communicate(timeout=timeout_s)
@@ -96,7 +72,7 @@ def _run_bounded(cmd: list[str], timeout_s: float) -> Tuple[bool, bool, str, str
             proc.kill()
             # Bounded: a killable child dies at once, a D-state one never will.
             out, err = proc.communicate(timeout=1)
-        except Exception:
+        except (OSError, subprocess.TimeoutExpired):
             pass
         return False, True, "", "timeout"
     except Exception as e:
@@ -133,8 +109,7 @@ def _check_ping() -> Tuple[bool, bool, float | None]:
         return False, timeout, elapsed_ms
 
     if CHECKSUM:
-        # stdout of the run we just timed — re-reading the file would double
-        # the load and could hang after the timed read already succeeded.
+        # From the timed run: a second read would double the load and could hang.
         parts = out.strip().split()
         if not parts or parts[0] != CHECKSUM:
             actual = parts[0] if parts else "<missing>"
@@ -183,7 +158,6 @@ def _check_throughput(
     now = time.time()
 
     if not _fio_due(last_fio_ts, now):
-        # Too soon to run fio again; reuse previous throughput if any.
         return True, False, None, last_fio_ts
 
     cmd = [
@@ -208,13 +182,13 @@ def _check_throughput(
         data = json.loads(out)
         bw_bytes = data["jobs"][0]["read"]["bw_bytes"]
         gbps = bw_bytes * 8 / 1e9
-    except Exception:
+    except (KeyError, IndexError, TypeError, ValueError):
         return False, False, 0.0, last_fio_ts
     return True, False, gbps, now
 
 
 def main() -> None:
-    # Set by probe_agent; read here because the image smoke test imports this file.
+    # Set by probe_agent; read here because the image build imports this file.
     result_path = Path(_get_env("RESULT_PATH", required=True))
     prev_path = Path(_get_env("PREV_RESULT_PATH", required=True))
 
@@ -244,7 +218,6 @@ def main() -> None:
             f"throughput_gbps={prev.get('throughput_gbps')}, last_fio_ts={last_fio_ts}"
         )
 
-    # Responsiveness first.
     ping_ok, ping_timeout, ping_ms = _check_ping()
     meta_ok, meta_timeout, meta_ms = _check_metadata()
 
@@ -278,7 +251,6 @@ def main() -> None:
         _write_result_atomic(result_path, result)
         return
 
-    # Responsiveness ok; decide whether to run fio.
     will_run_fio = _fio_due(last_fio_ts, now)
     _vlog(
         f"[job_runner] FIO decision: ENABLE_FIO={ENABLE_FIO}, FIO_FILE={FIO_FILE}, "

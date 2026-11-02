@@ -18,7 +18,7 @@ singleBinary:
   persistence:
     enabled: true
     accessModes: ["ReadWriteOnce"]
-    # DRIFT: the live PVC is 100Gi; raise this only with singleBinary.statefulSetRecreateJob.enabled: true.
+    # DRIFT: the live PVC is 200Gi; raise this only with singleBinary.statefulSetRecreateJob.enabled: true.
     size: 50Gi
     # The chart key is storageClass; unset keeps the default class the live PVC is on.
     # The chart defaults both PVC retention policies to Delete; this is the only copy of the logs.

@@ -13,8 +13,7 @@ def pod_exporter():
 
 
 def job_runner():
-    # job_runner requires env at import and silences stdio unless verbose.
-    os.environ.setdefault("AF_NODE_MONITOR_VERBOSE", "1")
+    # job_runner requires env at import.
     os.environ.setdefault("MOUNT_NAME", "/depot/")
     os.environ.setdefault("CHECK_FILE", "/depot/validate.txt")
     import job_runner as module

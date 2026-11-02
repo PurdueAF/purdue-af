@@ -126,7 +126,7 @@ def fail(_cmd, _timeout):
 def test_update_directory_reports_success(monkeypatch):
     monkeypatch.setattr(exporter, "run_bounded", lambda cmd, timeout: (True, DF_OUTPUT))
 
-    assert exporter.update_directory("home", "/home/alice") is True
+    exporter.update_directory("home", "/home/alice")
     assert gauge_value("af_home_dir_ok") == 1
 
 
@@ -134,7 +134,7 @@ def test_update_directory_swallows_an_unreadable_mount(monkeypatch):
     """An unreadable mount is reported, never raised out of the loop."""
     monkeypatch.setattr(exporter, "run_bounded", fail)
 
-    assert exporter.update_directory("work", "/work/users/alice/") is False
+    exporter.update_directory("work", "/work/users/alice/")
     assert gauge_value("af_work_dir_ok") == 0
 
 
@@ -156,7 +156,7 @@ def test_a_failing_work_dir_leaves_home_metrics_alone(monkeypatch):
 def test_an_unreadable_home_is_flagged(monkeypatch):
     monkeypatch.setattr(exporter, "run_bounded", fail)
 
-    assert exporter.update_directory("home", "/home/alice") is False
+    exporter.update_directory("home", "/home/alice")
     assert gauge_value("af_home_dir_ok") == 0
 
 
@@ -233,7 +233,7 @@ def test_a_walk_that_fails_is_still_an_unreadable_directory(monkeypatch):
     with pytest.raises(OSError):
         exporter.read_work_usage("/work/users/alice/")
 
-    assert exporter.update_directory("work", "/work/users/alice/") is False
+    exporter.update_directory("work", "/work/users/alice/")
     assert gauge_value("af_work_dir_ok") == 0
 
 
@@ -302,12 +302,10 @@ def test_a_hung_session_is_not_waited_out(monkeypatch):
     values — a session nobody can work in, reported as healthy."""
     hung = _HungProc()
     monkeypatch.setattr(exporter.subprocess, "Popen", lambda *a, **k: hung)
-    before = gauge_value("af_session_probe_failures_total") or 0
 
     assert exporter.probe_session("/home/alice") is False
     assert hung.killed, "a child stuck on a dead mount must be abandoned"
     assert gauge_value("af_session_responsive") == 0
-    assert gauge_value("af_session_probe_failures_total") == before + 1
 
 
 def test_run_bounded_reports_a_failed_command():
@@ -417,3 +415,15 @@ def test_main_skips_usage_on_an_unresponsive_session(monkeypatch):
     updated, beats = run_main(monkeypatch, [False, True])
     assert updated == ["home", "work"]  # the second pass only
     assert all(beat > 1e9 for beat in beats)
+
+
+def test_a_skipped_pass_marks_both_directories_unread(monkeypatch):
+    """query_storage_usage trusts af_*_dir_ok, so a pass that read nothing must
+    not leave it at 1 over a frozen reading."""
+    for label in ("home", "work"):
+        exporter.metrics[f"{label}_dir_ok"].set(1)
+
+    run_main(monkeypatch, [False])
+
+    assert gauge_value("af_home_dir_ok") == 0
+    assert gauge_value("af_work_dir_ok") == 0
