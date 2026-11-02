@@ -16,21 +16,17 @@ resources:
   - ../../apps/servicex/helmrepo.yaml
   - ../../apps/servicex/servicex-anvil/helmrelease.yaml
   - ../../apps/servicex/servicex-anvil/secrets.yaml
-  # ServiceX writing its output to Purdue EOS over XRootD.
   - ../../apps/servicex/servicex-eos/gitrepo.yaml
   - ../../apps/servicex/servicex-eos/helmrelease.yaml
   - ../../apps/servicex/servicex-eos/secrets.yaml
 
-  # Chart source for the SuperSONIC releases below.
   - ../../apps/sonic/supersonic/helmrepo.yaml
   - ../../apps/sonic/supersonic/helmrelease.yaml
   - ../../apps/sonic/supersonic-af/helmrelease.yaml
   - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
-  # Sweeps the Failed Triton pods interLink leaves behind.
   - ../../apps/sonic/supersonic-interlink/pod-pruner-rbac.yaml
   - ../../apps/sonic/supersonic-interlink/pod-pruner-cronjob.yaml
   - ../../apps/sonic/supersonic-interlink-nrp/helmrelease.yaml
-  # Model repository dashboard for the supersonic-af release above.
   - ../../apps/sonic/model-manager/helmrelease.yaml
 
   - ../../apps/flyte/helmrepo.yaml
@@ -40,7 +36,6 @@ resources:
   - ../../apps/flyte/podtemplate.yaml
   - ../../apps/flyte/secret-console-auth.yaml
 
-  # Runs analyses with the JFC methodology on demand (workflows/agentic-analysis).
   - ../../apps/agentic-analysis/llm-proxy.yaml
   - ../../apps/agentic-analysis/networkpolicy.yaml
   - ../../apps/agentic-analysis/podtemplate.yaml
@@ -82,7 +77,6 @@ resources:
   - ../../apps/agentic-interface/service.yaml
   - ../../apps/agentic-interface/networkpolicy.yaml
 
-  # PurdueAF Agent: answers @mentions on CERN Mattermost.
   - ../../apps/mattermost-agent/deployment.yaml
   - ../../apps/mattermost-agent/networkpolicy.yaml
   - ../../apps/mattermost-agent/pvc.yaml
@@ -100,13 +94,15 @@ generatorOptions:
 
 configMapGenerator:
   - name: interlink-nrp-token-renewal
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: disabled
     files:
       - renew.py=../../apps/interlink/nrp/token-renewal/renew.py
 
   - name: pixi-global-sync
     options:
       annotations:
-        # python/yaml use ${...}-like strings — keep Flux substitution away
         kustomize.toolkit.fluxcd.io/substitute: disabled
     files:
       - ../../apps/af-utils/pixi-global-sync/sync-global-env.py
@@ -191,7 +187,6 @@ configMapGenerator:
   - name: mattermost-agent
     options:
       annotations:
-        # code and its prompt, not manifests — keep Flux substitution away
         kustomize.toolkit.fluxcd.io/substitute: disabled
     files:
       - ../../apps/mattermost-agent/agent.py
@@ -200,7 +195,6 @@ configMapGenerator:
   - name: mattermost-agent-docs
     options:
       annotations:
-        # pages full of ${...} — keep Flux substitution away
         kustomize.toolkit.fluxcd.io/substitute: disabled
     files:
       - ../../docs/docs/data-access.md
@@ -234,7 +228,6 @@ configMapGenerator:
   - name: agentic-analysis-llm-proxy
     options:
       annotations:
-        # code and its config, not manifests — keep Flux substitution away
         kustomize.toolkit.fluxcd.io/substitute: disabled
     files:
       - ../../apps/agentic-analysis/llm_proxy.py
@@ -243,7 +236,6 @@ configMapGenerator:
   - name: ray-train-gateway
     options:
       annotations:
-        # code and a template, not manifests — keep Flux substitution away
         kustomize.toolkit.fluxcd.io/substitute: disabled
     files:
       - ../../apps/ray-train/gateway.py
@@ -253,7 +245,6 @@ configMapGenerator:
       - ../../apps/ray-train/nrp_jobs.py
       - ../../apps/ray-train/stage.py
       - ../../apps/ray-train/rayjob-nrp.yaml
-      # how the Hub's profile form counts free GPUs
       - ../../apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py
 
   - name: krab-config
