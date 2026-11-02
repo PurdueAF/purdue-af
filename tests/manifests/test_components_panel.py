@@ -83,6 +83,12 @@ def test_geddes_registry_reads_the_probe_and_is_blank_without_it():
     assert target["datasource"]["uid"] == "prometheus"
 
 
+def test_xcache_reads_the_probe_and_is_blank_without_it():
+    target = _target(_panel("Components"), "XCache")
+    assert target["expr"] == "min(af_xcache_read_ok)"
+    assert target["datasource"]["uid"] == "prometheus"
+
+
 def test_dask_gateway_row_needs_the_controller_ready():
     """The api keeps answering while the controller is hung."""
     expr = _target(_panel("Components"), "Dask Gateway")["expr"]

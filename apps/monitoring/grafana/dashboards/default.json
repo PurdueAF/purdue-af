@@ -401,6 +401,17 @@
           "instant": false
         },
         {
+          "refId": "Q",
+          "expr": "min(af_xcache_read_ok)",
+          "legendFormat": "XCache",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
           "refId": "L",
           "expr": "((time() - max(af_node_monitor_last_iteration_timestamp_seconds)) < bool 900) or vector(0)",
           "legendFormat": "Storage checks",
@@ -456,7 +467,7 @@
           "instant": false
         }
       ],
-      "description": "Green: OK. Orange: partial, some prod nodes affected. Red: down. Evaluated on cms-af-prod nodes only; each row shows history over the selected time range. AF nodes and the four mounts are fractions of prod nodes passing. Session responsiveness is the fraction of running sessions that answered a bounded listing of their home directory in time, measured from inside each pod; it is blank for sessions started before that probe shipped. Geddes storage is the fraction of CephFS mount attempts on prod nodes that succeeded in the last 30 minutes, which is how a Ceph problem reaches a user who is trying to start work: green while every attempt succeeds, red while every attempt fails and nobody can start a session. Geddes registry is whether the Geddes container registry answers its API root, checked once a minute from one AF pod: red while it does not, when no node can pull an image it has not cached; blank while the check itself is not running.",
+      "description": "Green: OK. Orange: partial, some prod nodes affected. Red: down. Evaluated on cms-af-prod nodes only; each row shows history over the selected time range. AF nodes and the four mounts are fractions of prod nodes passing. Session responsiveness is the fraction of running sessions that answered a bounded listing of their home directory in time, measured from inside each pod; it is blank for sessions started before that probe shipped. Geddes storage is the fraction of CephFS mount attempts on prod nodes that succeeded in the last 30 minutes, which is how a Ceph problem reaches a user who is trying to start work: green while every attempt succeeds, red while every attempt fails and nobody can start a session. Geddes registry is whether the Geddes container registry answers its API root, checked once a minute from one AF pod: red while it does not, when no node can pull an image it has not cached; blank while the check itself is not running. XCache is whether the last read of one small file through XCache, with the facility's grid proxy, completed: red while it does not, which an expired proxy causes too; blank while the check is not running.",
       "fieldConfig": {
         "defaults": {
           "color": {
