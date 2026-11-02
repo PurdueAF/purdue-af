@@ -12,6 +12,9 @@ paths:
   charts: template edits never reach the cluster while values edits still
   upgrade, running new values against the old chart.
   `tests/manifests/test_inrepo_charts.py` asserts it.
+- A ConfigMap generator of code or scripts carries the annotation
+  `kustomize.toolkit.fluxcd.io/substitute: disabled`: Flux substitution would blank
+  every `${...}` in it. Values files leave it off, because they use substitution.
 - Do not add a `timeout:` to a HelmRelease. A release that hangs is waiting
   for something real; find what.
 - Every manifest and ConfigMap generator is listed in a `flux/*/kustomization.yaml`

@@ -14,7 +14,12 @@ the git ref it applies them from; and a `flux-kustomization.yaml` carrying the
 `enable-sops.sh` creates the `sops-age` Secret each root decrypts with;
 `flux-secret.yaml` is the GitHub token template the GitRepository sources
 read with. Those two and each root's `git-repository.yaml` and
-`flux-kustomization.yaml` are applied out of band.
+`flux-kustomization.yaml` are applied out of band: a merged edit to either, a new
+`postBuild` variable included, takes effect only after applying it by hand.
+
+```bash
+kubectl -n cms apply -f flux/<root>/git-repository.yaml -f flux/<root>/flux-kustomization.yaml
+```
 
 Three more things exist only on the cluster or its storage: the PV that
 production's `hub-db-dir` claim selects by label, the check files the storage

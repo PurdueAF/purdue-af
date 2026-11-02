@@ -1,10 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../apps/af-utils/af-users-graph/pvc.yaml
-  - ../../apps/af-utils/af-users-graph/deployment.yaml
-  - ../../apps/af-utils/af-users-graph/service.yaml
-
   - ../../apps/jupyterhub/af-x509-secrets/cronjob.yaml
   - ../../apps/jupyterhub/af-x509-secrets/rbac.yaml
   - ../../apps/jupyterhub/jupyterhub/helmrelease.yaml
@@ -37,10 +33,6 @@ generatorOptions:
   disableNameSuffixHash: true
 
 configMapGenerator:
-  - name: af-users-graph-nginx-config
-    files:
-      - ../../apps/af-utils/af-users-graph/nginx.conf
-
   - name: jupyterhub-config
     files:
       - values.yaml=../../apps/jupyterhub/jupyterhub/values.yaml
@@ -48,7 +40,6 @@ configMapGenerator:
   - name: af-userlist-sync-scripts
     options:
       annotations:
-        # shell scripts use ${...} freely — keep Flux substitution away
         kustomize.toolkit.fluxcd.io/substitute: disabled
     files:
       - ../../apps/jupyterhub/userlist-sync/sync-userlist.sh
@@ -59,7 +50,6 @@ configMapGenerator:
       - 01-set-user-info.py=../../apps/jupyterhub/jupyterhub/extraFiles/set-user-info.py
       - 02-gpu-availability.py=../../apps/jupyterhub/jupyterhub/extraFiles/gpu-availability.py
       - 03-session-activity.py=../../apps/jupyterhub/jupyterhub/extraFiles/session-activity.py
-      # importable module shared with the agentic interface, not a snippet
       - gpu_queries.py=../../apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py
 
   - name: jupyterhub-gpu-culler
@@ -100,9 +90,7 @@ configMapGenerator:
 
   - name: grafana-private-dashboards
     files:
-      - ../../apps/monitoring/grafana/dashboards/agentic-interface.json
       - ../../apps/monitoring/grafana/dashboards/users-overview.json
-      - ../../apps/monitoring/grafana/dashboards/pyroscope.json
 
   - name: prometheus-config
     files:

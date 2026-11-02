@@ -749,9 +749,16 @@ def test_values_configmap_is_not_exempt_from_substitution(experimental):
     """The Slurm plugin config needs `${namespace}` filled in, so these
     ConfigMaps must NOT carry the substitute:disabled annotation the script
     ConfigMaps use."""
-    for generator in experimental["configMapGenerator"]:
-        if not generator["name"].startswith("interlink-"):
-            continue
+    values = [
+        generator
+        for generator in experimental["configMapGenerator"]
+        if any(
+            source.startswith("values.yaml=../../apps/interlink/")
+            for source in generator.get("files", [])
+        )
+    ]
+    assert values
+    for generator in values:
         annotations = generator.get("options", {}).get("annotations", {})
         assert "kustomize.toolkit.fluxcd.io/substitute" not in annotations
 
