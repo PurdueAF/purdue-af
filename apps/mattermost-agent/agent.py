@@ -660,8 +660,15 @@ class Agent:
 
     def wanted(self, post: dict[str, Any], cursor: int) -> bool:
         """A new post by a person: any in a direct message, one that mentions
-        the bot elsewhere, group messages included. Posts of other bots are left out, so that two bots
-        cannot keep answering each other."""
+        the bot elsewhere, group messages included."""
+        return self.by_a_person(post, cursor) and (
+            post["channel_id"] in self.direct
+            or bool(self.mention.search(post["message"]))
+        )
+
+    def by_a_person(self, post: dict[str, Any], cursor: int) -> bool:
+        """New and written by someone. Posts of other bots are left out, so that
+        two bots cannot keep answering each other."""
         props = post.get("props") or {}
         return (
             post["create_at"] > cursor
@@ -669,11 +676,17 @@ class Agent:
             and not post["type"]
             and post["user_id"] != self.me["id"]
             and str(props.get("from_bot", "")).lower() != "true"
-            and (
-                post["channel_id"] in self.direct
-                or bool(self.mention.search(post["message"]))
-            )
         )
+
+    async def replies_to_bot(self, post: dict[str, Any], cursor: int) -> bool:
+        """A reply in a thread the bot has posted in. A reply that mentions
+        someone is for them."""
+        if not post["root_id"] or not self.by_a_person(post, cursor):
+            return False
+        if AT_NAME.search(post["message"]):
+            return False
+        thread = await self.mattermost.thread(post["id"])
+        return any(p["user_id"] == self.me["id"] for p in thread)
 
     def allowed(self, user_id: str, now: float) -> bool:
         asked = self.asked[user_id]
@@ -710,7 +723,7 @@ class Agent:
             posts = await self.mattermost.since(channel, cursor)
             for post in posts:
                 self.cursors[channel] = max(self.cursors[channel], post["update_at"])
-                if self.wanted(post, cursor):
+                if self.wanted(post, cursor) or await self.replies_to_bot(post, cursor):
                     task = asyncio.create_task(self.handle(post))
                     self.tasks.add(task)
                     task.add_done_callback(self.tasks.discard)

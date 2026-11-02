@@ -334,6 +334,76 @@ async def test_only_a_new_post_by_a_person_that_mentions_the_bot_is_wanted(
     assert not bot.wanted(unwanted, 1000)
 
 
+def conversation():
+    question = post("q", "@purdueaf-agent is the AF up?", 1500)
+    answer = post("a", "Yes.", 1600, user_id="bot", root_id="q")
+    return {"q": question, "a": answer}
+
+
+async def test_a_reply_in_the_bots_thread_is_answered_without_a_mention(make):
+    bot, server, llm, _ = await make({"content": "Also fine."})
+    await poll(bot)
+    reply = post("r", "and EOS?", root_id="q")
+    server.posts = {"r": reply}
+    server.thread = {**conversation(), "r": reply}
+    await poll(bot)
+    assert server.replies == [
+        {"channel_id": "c1", "root_id": "q", "message": "Also fine."}
+    ]
+
+
+async def test_a_reply_under_the_bots_own_post_is_answered(make):
+    bot, server, llm, _ = await make({"content": "Ok."})
+    await poll(bot)
+    root = post("n", "Notice.", 1500, user_id="bot")
+    reply = post("r", "thanks, why?", root_id="n")
+    server.posts = {"r": reply}
+    server.thread = {"n": root, "r": reply}
+    await poll(bot)
+    assert [r["root_id"] for r in server.replies] == ["n"]
+
+
+async def test_a_reply_in_a_thread_without_the_bot_is_left_alone(make):
+    bot, server, llm, _ = await make({"content": "never"})
+    await poll(bot)
+    reply = post("r", "and EOS?", root_id="q")
+    server.posts = {"r": reply}
+    server.thread = {"q": post("q", "Is the AF up?", 1500), "r": reply}
+    await poll(bot)
+    assert server.replies == []
+
+
+@pytest.mark.parametrize("text", ["@someone what do you think?", "@channel any idea?"])
+async def test_a_reply_to_someone_else_in_the_thread_is_left_alone(make, text):
+    bot, server, llm, _ = await make({"content": "never"})
+    await poll(bot)
+    reply = post("r", text, root_id="q")
+    server.posts = {"r": reply}
+    server.thread = {**conversation(), "r": reply}
+    await poll(bot)
+    assert server.replies == []
+
+
+async def test_the_bots_own_reply_does_not_answer_itself(make):
+    bot, server, llm, _ = await make({"content": "never"})
+    await poll(bot)
+    own = post("a", "Yes.", user_id="bot", root_id="q")
+    server.posts = {"a": own}
+    server.thread = conversation()
+    await poll(bot)
+    assert server.replies == []
+
+
+async def test_a_reply_that_mentions_the_bot_is_answered_once(make):
+    bot, server, llm, _ = await make({"content": "One."})
+    await poll(bot)
+    reply = post("r", "@purdueaf-agent and EOS?", root_id="q")
+    server.posts = {"r": reply}
+    server.thread = {**conversation(), "r": reply}
+    await poll(bot)
+    assert len(server.replies) == 1
+
+
 async def test_only_the_named_public_channel_and_direct_messages_are_polled(make):
     bot, *_ = await make()
     found = await bot.mattermost.channels("bot", TEAM, CHANNEL)
