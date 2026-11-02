@@ -65,13 +65,13 @@ if [ -n "${PRELOAD_PRODUCTION:-}" ]; then
 	preload_node "$PRODUCTION_IMAGE"
 fi
 
-echo "==> secrets and config (purdue: alice, bob, dkondra; cern: carol)"
+echo "==> secrets and config (purdue: alice, bob, admin-e2e; cern: carol)"
 kubectl -n "$NS" create secret generic auth-secret \
 	--from-literal=cilogon_client_id=mock-client \
 	--from-literal=cilogon_client_secret=mock-secret \
 	--dry-run=client -o yaml | kubectl apply -f -
 kubectl -n "$NS" create secret generic af-auth-purdue \
-	--from-literal=userlist=$'alice\nbob\ndkondra\n' \
+	--from-literal=userlist=$'alice\nbob\nadmin-e2e\n' \
 	--dry-run=client -o yaml | kubectl apply -f -
 kubectl -n "$NS" create secret generic af-auth-cern \
 	--from-literal=userlist=$'carol\n' \

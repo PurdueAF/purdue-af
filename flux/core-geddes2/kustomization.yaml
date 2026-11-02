@@ -43,6 +43,7 @@ configMapGenerator:
         kustomize.toolkit.fluxcd.io/substitute: disabled
     files:
       - ../../apps/jupyterhub/userlist-sync/sync-userlist.sh
+      - ../../docker/purdue-af/configs/certs/CERN-bundle.pem
 
   - name: jupyterhub-extra-config
     files:

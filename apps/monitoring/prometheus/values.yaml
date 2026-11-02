@@ -519,6 +519,23 @@ serverFiles:
                 {{ printf "%.0f" $value }} GPU spawns refused in 30 minutes despite
                 free GPUs — a spawn reservation is outliving its pod. Check the hub
                 logs for "[gpu-availability] refused".
+          # Above the gpu-culler's --timeout in apps/jupyterhub/jupyterhub/values.yaml; tests/manifests/test_gpu_culler.py holds the two together.
+          - alert: AFGpuSessionsPastIdleTimeout
+            expr: >
+              count(
+                time() - af_session_last_activity_seconds{job="jupyterhub", instance="${jupyterhub_host}"} > 25 * 3600
+                and on (pod) kube_pod_container_resource_requests{namespace="cms", resource=~"nvidia_com_(mig_.+|gpu)"} > 0
+              )
+            for: 30m
+            labels:
+              severity: warning
+              component: compute
+            annotations:
+              summary: Idle sessions are holding GPUs, so fewer are free for new sessions
+              description: >
+                Sessions holding a GPU and idle past the timeout: {{ printf "%.0f" $value }}.
+                The GPU culler is not stopping them.
+                Check: kubectl -n cms logs -l component=hub | grep gpu-culler
           - alert: AFSessionStuckPending
             expr: kube_pod_status_phase{namespace="cms",pod=~"purdue-af-.*",phase="Pending"} == 1
             for: 8m
@@ -907,10 +924,11 @@ serverFiles:
             annotations:
               summary: The facility's grid proxy is not being renewed, so ServiceX requests may fail
               description: >
-                A failed VOMS call removes the proxy Secret in the same run, and
-                any other failure lets the proxy lapse. Check: kubectl -n cms get
-                jobs, and apps/jupyterhub/af-x509-secrets/README.md for the
-                certificate behind it.
+                af-x509-secrets keeps the last proxy until it expires, and
+                ServiceX's x509-secrets removes its Secret when a VOMS call
+                fails. Check: kubectl -n cms get jobs, and
+                apps/jupyterhub/af-x509-secrets/README.md for the certificate
+                behind it.
           - alert: AFKubeStateMetricsDown
             expr: up{job="kube-state-metrics"} == 0
             for: 10m
@@ -1026,9 +1044,24 @@ serverFiles:
                 The script fails unless the copy matches the hub pod's checksum,
                 so a stale backup is a failed or missing run. Check: kubectl -n
                 cms logs job/<newest jupyterhub-database-backup job>
+          - alert: AFUserlistNotSyncing
+            expr: af:cronjob_seconds_since_success{cronjob=~"af-userlist-sync-(cern|purdue)"} > 6 * 3600
+            for: 10m
+            labels:
+              severity: warning
+              component: delivery
+            annotations:
+              summary: New accounts may be refused at login because the list of allowed users has stopped updating
+              description: >
+                A failed sync keeps the last good list, so listed users are
+                unaffected, a new account gets a 403 and a removed one keeps
+                access. af-userlist-sync-cern mounts the grid proxy, so a lost
+                proxy fires this together with AFGridProxyNotRenewed. A list that
+                shrank for real needs MIN_KEPT_PERCENT lowered for one run.
+                Check: kubectl -n cms logs job/<newest {{ $labels.cronjob }} job>
           - alert: AFCronJobStale
             expr: >
-              af:cronjob_seconds_since_success{cronjob!~"interlink-nrp-token-renewal|af-x509-secrets|x509-secrets|jupyterhub-database-backup"}
+              af:cronjob_seconds_since_success{cronjob!~"interlink-nrp-token-renewal|af-x509-secrets|x509-secrets|jupyterhub-database-backup|af-userlist-sync-(cern|purdue)"}
               > 2 * 86400
             for: 10m
             labels:

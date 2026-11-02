@@ -10,16 +10,40 @@ spec:
   failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
       template:
         spec:
           enableServiceLinks: false
-          restartPolicy: OnFailure
+          restartPolicy: Never
           nodeSelector: { "cms-af-prod": "true" }
           tolerations:
             - key: "hub.jupyter.org/dedicated"
               operator: "Equal"
               value: "cms-af"
               effect: "NoSchedule"
+          initContainers:
+            # The backups are readable by their owner alone.
+            - name: copy-latest-backup
+              image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/alpine:3.24
+              securityContext:
+                runAsUser: 616617
+              command: ["/bin/sh", "-ec"]
+              args:
+                - cp "$(ls -t /depot/cms/purdue-af/backups/jupyterhub-*.sqlite | head -n 1)" /backups/
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+              volumeMounts:
+                - name: backup
+                  mountPath: /backups
+                - name: depot
+                  mountPath: /depot/cms
+                  mountPropagation: HostToContainer
           containers:
             - name: updater
               image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/python:3.12.16-slim
@@ -40,9 +64,8 @@ spec:
                   mountPath: /data
                 - name: script
                   mountPath: /scripts
-                - name: depot
-                  mountPath: /depot/cms
-                  mountPropagation: HostToContainer
+                - name: backup
+                  mountPath: /backups
           volumes:
             - name: img-vol
               persistentVolumeClaim:
@@ -50,6 +73,8 @@ spec:
             - name: script
               configMap:
                 name: af-users-graph-script
+            - name: backup
+              emptyDir: {}
             - name: depot
               nfs:
                 server: datadepot.rcac.purdue.edu

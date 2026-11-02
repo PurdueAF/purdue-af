@@ -18,7 +18,7 @@
 //     coding-agent CLIs, ACP adapters) and workflow env vars (tool pins)
 //   - regex managers: the wstunnel pins in interLink values, the
 //     integration-challenge revision, `name:`/`tag:` image pairs in chart
-//     values, the hadolint hook image
+//     values, the hadolint hook image, the kubectl the userlist sync downloads
 {
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   extends: [
@@ -90,6 +90,14 @@
       ],
       depNameTemplate: 'ghcr.io/erebe/wstunnel',
       datasourceTemplate: 'docker',
+    },
+    {
+      // The kubectl the userlist sync downloads.
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)apps/jupyterhub/userlist-sync/sync-userlist\\.sh$/'],
+      matchStrings: ['KUBECTL_VERSION=(?<currentValue>v\\S+)'],
+      depNameTemplate: 'kubernetes/kubernetes',
+      datasourceTemplate: 'github-releases',
     },
     {
       // The IRIS-HEP integration challenge revision (tests/integration_challenge/upstream.pin).
@@ -325,9 +333,14 @@
     },
     {
       // Renovate proposes only kubectl within one minor of KUBE_VERSION, its supported skew.
+      matchPackageNames: ['kubernetes/kubernetes'],
+      allowedVersions: '/^v1\\.(28|29|30)\\.\\d+$/',
+    },
+    {
+      // This image publishes no tag within that skew, so the Jobs stay on their minor.
       matchDatasources: ['docker'],
-      matchPackageNames: ['alpine/kubectl'],
-      allowedVersions: '/^1\\.(28|29|30)\\./',
+      matchPackageNames: ['docker.io/alpine/kubectl'],
+      allowedVersions: '/^1\\.34\\.\\d+$/',
     },
     {
       // The interlink-slurm-plugin base stays on Rocky 8 with RCAC's EL8 Slurm RPMs. Relax

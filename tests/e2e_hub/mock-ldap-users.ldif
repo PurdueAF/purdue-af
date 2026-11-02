@@ -26,15 +26,15 @@ uidNumber: 20002
 gidNumber: 21002
 homeDirectory: /home/bob
 
-dn: uid=dkondra,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
+dn: uid=admin-e2e,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson
 objectClass: posixAccount
-uid: dkondra
-cn: dkondra
-sn: dkondra
+uid: admin-e2e
+cn: admin-e2e
+sn: admin-e2e
 uidNumber: 20003
 gidNumber: 21003
-homeDirectory: /home/dkondra
+homeDirectory: /home/admin-e2e
 
 dn: uid=dave,ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu
 objectClass: inetOrgPerson

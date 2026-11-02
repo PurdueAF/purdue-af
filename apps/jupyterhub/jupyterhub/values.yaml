@@ -17,9 +17,10 @@ singleuser:
       description: 'To use <a href="https://analysis-facility.physics.purdue.edu/guide-ray-train/" target="_blank">Ray</a> for multi-GPU distributed training, start the session with 0 GPUs.'
       kubespawner_override:
         image: "geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af:0.14.3"
-        node_selector: { "cms-af-prod": "true" }
+        cpu_limit: 256
+        mem_limit: "256G"
       profile_options:
-        3-interface:
+        3-interface: &interface-option
           display_name: "Interface"
           choices:
             1:
@@ -37,29 +38,24 @@ singleuser:
             1:
               display_name: "4"
               kubespawner_override:
-                cpu_limit: 256
                 cpu_guarantee: 4
             2:
               display_name: "16"
               kubespawner_override:
-                cpu_limit: 256
                 cpu_guarantee: 16
             3:
               display_name: "32"
               kubespawner_override:
-                cpu_limit: 256
                 cpu_guarantee: 32
             4:
               display_name: "64"
               kubespawner_override:
-                cpu_limit: 256
                 cpu_guarantee: 64
             5:
               display_name: "128"
               kubespawner_override:
-                cpu_limit: 256
                 cpu_guarantee: 128
-        1-gpu:
+        1-gpu: &gpu-option
           display_name: "GPUs"
           choices:
             1:
@@ -88,30 +84,26 @@ singleuser:
             1:
               display_name: "16 GB"
               kubespawner_override:
-                mem_limit: "256G"
                 mem_guarantee: "16G"
             2:
               display_name: "32 GB"
               kubespawner_override:
-                mem_limit: "256G"
                 mem_guarantee: "32G"
             3:
               display_name: "64 GB"
               kubespawner_override:
-                mem_limit: "256G"
                 mem_guarantee: "64G"
             4:
               display_name: "128 GB"
               kubespawner_override:
-                mem_limit: "256G"
                 mem_guarantee: "128G"
     - display_name: Minimal JupyterLab interface
       default: false
       description: "Should be used only for debugging - no Analysis Facility functionality."
       kubespawner_override:
         image: "geddes2-registry.rcac.purdue.edu/cms/cmsaf-base-notebook:1.1"
-        node_selector:
-          cms-af-prod: "true"
+        extra_labels:
+          docker_image_tag: minimal
         cpu_guarantee: 4
         cpu_limit: 4
         mem_guarantee: 16G
@@ -124,67 +116,33 @@ singleuser:
       kubespawner_override:
         image: "geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af:pre-release"
         image_pull_policy: Always
-        node_selector:
-          cms-af-prod: "true"
+        extra_labels:
+          docker_image_tag: pre-release
         cpu_guarantee: 8
         cpu_limit: 16
         mem_guarantee: 32G
         mem_limit: 64G
-        extra_resource_limits:
-          nvidia.com/mig-1g.5gb: 1
-        extra_containers:
-          - name: af-pod-monitor
-            image: geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-pod-monitor:latest
-            volumeMounts:
-              - name: volume-{username}
-                mountPath: /home/{username}
-              - name: work
-                mountPath: /work/
-                mountPropagation: HostToContainer
+      # These keys are not the default profile's: a spawn without a body reuses the choices saved under them.
       profile_options:
-        interface:
-          display_name: "Interface"
-          choices:
-            1:
-              display_name: "JupyterLab"
-              default: true
-              kubespawner_override:
-                default_url: "/lab"
-            2:
-              display_name: "VS Code (code-server)"
-              kubespawner_override:
-                default_url: "/vscode/?folder=/home/{username}"
-        gpu:
-          display_name: "GPUs"
-          choices:
-            1:
-              display_name: "0"
-              kubespawner_override:
-                extra_resource_limits:
-                  nvidia.com/mig-1g.5gb: 0
-            2:
-              display_name: "1 A100 GPU slice (5GB)"
-              kubespawner_override:
-                extra_resource_limits:
-                  nvidia.com/mig-1g.5gb: 1
-            3:
-              display_name: "1 full A100 GPU (40GB) - subject to availability"
-              kubespawner_override:
-                extra_resource_limits:
-                  nvidia.com/mig-7g.40gb: 1
-            4:
-              display_name: "1 NVIDIA T4 GPU (16GB)"
-              kubespawner_override:
-                extra_resource_limits:
-                  nvidia.com/gpu: 1
+        interface: *interface-option
+        gpu: *gpu-option
   extraContainers:
     - name: af-pod-monitor
       image: geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-pod-monitor:latest
+      # No CPU limit here: the namespace LimitRange's default leaves the session probe unthrottled.
+      resources:
+        requests:
+          cpu: 10m
+          memory: 64Mi
+        limits:
+          memory: 256Mi
       volumeMounts:
         - name: volume-{username}
           mountPath: /home/{username}
+          readOnly: true
         - name: work
           mountPath: /work/
+          readOnly: true
           mountPropagation: HostToContainer
   defaultUrl: "/lab"
   extraFiles:
@@ -317,9 +275,6 @@ hub:
     - name: af-auth-cern
       secret:
         secretName: af-auth-cern
-    - name: auth-secret
-      secret:
-        secretName: auth-secret
   extraVolumeMounts:
     - name: hub-extra-config
       mountPath: /usr/local/etc/jupyterhub/jupyterhub_config.d
@@ -372,7 +327,6 @@ hub:
     agentic-interface:
       url: "http://agentic-interface.${namespace}.svc.cluster.local:8888"
       oauth_no_confirm: true
-    # Keep --timeout in sync with the form notes in gpu-availability.py.
     gpu-culler:
       command:
         - python3

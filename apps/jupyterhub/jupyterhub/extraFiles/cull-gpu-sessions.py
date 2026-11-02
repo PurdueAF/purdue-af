@@ -1,24 +1,8 @@
-"""Cull sessions that hold any GPU after 24 hours of inactivity.
+"""Stop sessions that hold a GPU once they are idle for --timeout seconds.
 
-Runs as a JupyterHub *managed service* inside the hub pod (see
-hub.services.gpu-culler and hub.loadRoles.gpu-culler in values.yaml), the
-same mechanism z2jh uses for its own idle culler. The global culler stops
-any session after `cull.timeout` (14 days) of inactivity; GPU sessions of
-every flavor (A100 MIG slices, full A100s, T4s) get a much shorter leash.
-
-GPU pods are found through the Kubernetes API (the service runs with the
-hub's service account, which kubespawner already grants pod list/get).
-Idleness comes from the hub REST API — the same last_activity signal
-(proxy traffic + notebook activity reports) the global culler uses. The
-pod's hub.jupyter.org/username and /servername annotations (set by
-kubespawner) link the two.
-
-JupyterHub gives a managed service a fresh environment (JUPYTERHUB_*, PATH,
-LANG), not the hub's, so KUBERNETES_SERVICE_HOST/PORT come from
-hub.services.gpu-culler.environment and the namespace from the mounted service
-account. Logging goes to stderr — stdout here is a block-buffered pipe. The
-service exits once kubelet swaps a new copy of this file in, and the Hub starts
-it again on that.
+A JupyterHub managed service: GPU pods come from the Kubernetes API, idleness
+from the hub API, and their hub.jupyter.org annotations link the two. It exits
+once kubelet swaps in a new copy of this file, and the Hub starts it again.
 """
 
 import argparse
@@ -34,12 +18,6 @@ from urllib.parse import quote
 
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 
-# Keep in sync with GPU_FLAVORS in gpu-availability.py / singleuser profileList.
-GPU_RESOURCES = (
-    "nvidia.com/mig-1g.5gb",
-    "nvidia.com/mig-7g.40gb",
-    "nvidia.com/gpu",
-)
 # Only pods spawned by our hub carry this label (singleuser.extraLabels).
 POD_SELECTOR = "username_unescaped"
 NAMESPACE_FILE = Path("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
@@ -54,11 +32,11 @@ def default_namespace() -> str:
 
 
 def pod_holds_gpu(pod: Any) -> bool:
-    """True if any container in the pod requests at least one known GPU."""
+    """True if any container in the pod has a GPU limit above 0."""
     for container in pod.spec.containers:
         limits = (container.resources and container.resources.limits) or {}
-        for resource in GPU_RESOURCES:
-            if int(limits.get(resource, 0)) > 0:
+        for resource, amount in limits.items():
+            if resource.startswith("nvidia.com/") and int(amount) > 0:
                 return True
     return False
 
@@ -167,15 +145,15 @@ async def main(namespace: str, timeout: float, every: float) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--timeout", type=int, default=86400, help="idle seconds before culling"
+        "--timeout", type=int, required=True, help="idle seconds before culling"
     )
     parser.add_argument(
-        "--every", type=int, default=600, help="seconds between cull passes"
+        "--every", type=int, required=True, help="seconds between cull passes"
     )
     args = parser.parse_args()
     logging.basicConfig(
         level=logging.INFO,
         format="[%(name)s] %(asctime)s %(levelname)s %(message)s",
-        stream=sys.stderr,
+        stream=sys.stderr,  # stdout here is a block-buffered pipe
     )
     asyncio.run(main(default_namespace(), args.timeout, args.every))

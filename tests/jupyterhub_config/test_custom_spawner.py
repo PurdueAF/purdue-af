@@ -1,8 +1,7 @@
 """Tests for extraFiles/custom-spawner.py — CILogon auth gating and hooks."""
 
 import pytest
-import yaml
-from common import REPO
+from common import hub_values
 from hub_helpers import load_snippet
 from tornado import web
 from traitlets.config import Config
@@ -35,12 +34,11 @@ def spawner_ns(monkeypatch, tmp_path):
 PURDUE_IDP = "https://idp.purdue.edu/idp/shibboleth"
 CERN_IDP = "https://cern.ch/login"
 FNAL_IDP = "https://idp.fnal.gov/idp/shibboleth"
-VALUES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
 
 
 def make_authenticator(ns):
     """The authenticator with the idps of the production values."""
-    hub_config = yaml.safe_load(VALUES.read_text())["hub"]["config"]
+    hub_config = hub_values()["hub"]["config"]
     config = Config()
     config.PurdueCILogonOAuthenticator.idps = hub_config["PurdueCILogonOAuthenticator"][
         "idps"
@@ -173,6 +171,16 @@ async def test_admin_user_is_still_gated_by_the_userlist(spawner_ns, monkeypatch
     with pytest.raises(web.HTTPError) as err:
         await auth.get_authenticated_user(None, None)
     assert err.value.status_code == 403
+
+
+# ── refresh_user ──────────────────────────────────────────────────────────────
+
+
+async def test_refresh_user_reports_no_change(monkeypatch):
+    """A session is never re-validated against CILogon between logins."""
+    ns = load_snippet("custom-spawner.py", monkeypatch)
+    # unbound: CILogonOAuthenticator needs config the override must not consult
+    assert await ns["PurdueCILogonOAuthenticator"].refresh_user(None, object()) is True
 
 
 # ── hub config wiring ─────────────────────────────────────────────────────────

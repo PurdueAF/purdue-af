@@ -1,10 +1,4 @@
-"""Export the hub's own idea of session activity to /hub/metrics.
-
-Prometheus already scrapes /hub/metrics (the `jupyterhub` job), so a collector
-on the default registry is all this needs.
-
-It exports what JupyterHub itself calls activity, the signal the cullers act on.
-"""
+"""Export each session's JupyterHub last_activity to /hub/metrics."""
 
 import datetime
 from collections.abc import Iterator
@@ -48,8 +42,8 @@ def running_spawners() -> Any:
     return db.query(orm.Spawner).filter(orm.Spawner.server_id.isnot(None))
 
 
-def sessions() -> list[tuple[list[str], float, float]]:
-    """(labels, last activity, start time) for every running session."""
+def sessions() -> list[tuple[list[str], float]]:
+    """(labels, last activity) for every running session."""
     rows = []
     for spawner in running_spawners():
         user = spawner.user
@@ -57,12 +51,12 @@ def sessions() -> list[tuple[list[str], float, float]]:
             continue
         servername = spawner.name or ""
         started = to_timestamp(spawner.started)
+        if started is None:
+            continue
         # a session that has reported nothing yet is as active as its spawn
         last = to_timestamp(spawner.last_activity) or started
-        if last is None or started is None:
-            continue
         labels = [user.name, servername, pod_name(user.name, user.id, servername)]
-        rows.append((labels, last, started))
+        rows.append((labels, last))
     return rows
 
 
@@ -75,22 +69,15 @@ class SessionActivityCollector:
             "Unix time of the last activity JupyterHub recorded for a session",
             labels=LABELS,
         )
-        started = GaugeMetricFamily(
-            "af_session_started_seconds",
-            "Unix time a session was spawned",
-            labels=LABELS,
-        )
         try:
             rows = sessions()
         except Exception:
             # Raising here would take down every metric /hub/metrics serves.
             log.exception("[session-activity] collection failed")
             rows = []
-        for labels, last, start in rows:
+        for labels, last in rows:
             activity.add_metric(labels, last)
-            started.add_metric(labels, start)
         yield activity
-        yield started
 
 
 REGISTRY.register(SessionActivityCollector())

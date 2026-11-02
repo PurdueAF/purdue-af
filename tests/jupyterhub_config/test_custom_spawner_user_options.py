@@ -11,18 +11,14 @@ _run_apply_user_options, in the order User.spawn uses before start().
 """
 
 from types import SimpleNamespace
-from typing import Any
 
 import kubespawner.spawner
 import pytest
-import yaml
-from common import REPO
+from common import hub_values
 from hub_helpers import load_snippet
 from jupyterhub.objects import Hub
 from kubespawner import KubeSpawner
 from traitlets.config import Config
-
-VALUES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
 
 # Saved options as the hub DB holds them for users last spawned on older releases.
 STALE_SAVED_OPTIONS = [
@@ -42,18 +38,7 @@ STALE_SAVED_OPTIONS = [
 ]
 
 
-def helm_rendered(value: Any) -> Any:
-    """values.yaml as the hub reads it: Helm renders every map key as a string."""
-    if isinstance(value, dict):
-        return {str(k): helm_rendered(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [helm_rendered(v) for v in value]
-    return value
-
-
-PROFILE_LIST = helm_rendered(yaml.safe_load(VALUES.read_text()))["singleuser"][
-    "profileList"
-]
+PROFILE_LIST = hub_values()["singleuser"]["profileList"]
 DEFAULT_PROFILE = next(p for p in PROFILE_LIST if p.get("default"))
 GiB = 2**30
 DEFAULT_IMAGE = DEFAULT_PROFILE["kubespawner_override"]["image"]
@@ -165,6 +150,28 @@ async def test_current_options_pass_unchanged(monkeypatch, options):
     spawner = make_spawner(monkeypatch, options)
     await spawn_options(spawner)
     assert spawner.user_options == options
+
+
+@pytest.mark.parametrize(
+    "slug, option, choice",
+    [
+        (profile["slug"], key, choice)
+        for profile in PROFILE_LIST
+        if "slug" in profile
+        for key, option in profile.get("profile_options", {}).items()
+        if key.endswith("gpu")
+        for choice in option["choices"]
+    ],
+)
+async def test_a_gpu_choice_holds_one_flavor_at_most(monkeypatch, slug, option, choice):
+    spawner = make_spawner(monkeypatch, {"profile": slug, option: choice})
+    await spawn_options(spawner)
+    held = [
+        resource
+        for resource, amount in spawner.extra_resource_limits.items()
+        if resource.startswith("nvidia.com/") and int(amount) > 0
+    ]
+    assert len(held) <= 1
 
 
 async def test_async_profile_list_is_resolved(monkeypatch):

@@ -7,16 +7,14 @@ test are byte-identical to what runs in production.
 
 import types
 
-from common import REPO, ConfigSink
-
-EXTRA_FILES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles"
+from common import EXTRA_FILES, ConfigSink
 
 
 def load_snippet(filename, monkeypatch, extra_globals=None):
     """Exec an extraFiles snippet the way JupyterHub does; return its globals."""
-    # gpu-availability.py imports the shared gpu_queries module from the
-    # snippet directory; in the source tree that is extraFiles itself.
-    monkeypatch.setenv("JUPYTERHUB_CONFIG_D", str(EXTRA_FILES))
+    # gpu-availability.py imports gpu_queries from jupyterhub_config.d, which
+    # holds what extraFiles holds here.
+    monkeypatch.syspath_prepend(str(EXTRA_FILES))
     ns = {"c": ConfigSink()}
     if extra_globals:
         ns.update(extra_globals)
