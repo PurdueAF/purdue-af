@@ -14,6 +14,7 @@ PROBES = REPO / "apps/monitoring/af-monitoring/daemonset-af-node-probe.yaml"
 EXPORTER = REPO / "docker/af-node-monitor/node_healthcheck.py"
 AGENT = REPO / "docker/af-node-monitor/probe_agent.py"
 DEPLOYMENT = REPO / "apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml"
+XCACHE_PROBE = REPO / "apps/monitoring/af-monitoring/deployment-af-xcache-probe.yaml"
 DEPLOYMENTS = (
     REPO / "flux/experimental/kustomization.yaml",
     REPO / "flux/core-geddes2/kustomization.yaml",
@@ -300,6 +301,24 @@ def test_probes_and_the_exporter_run_the_scripts_they_watch():
             "python",
             f"{scripts['mountPath']}/{script}",
         ], name
+
+
+def test_the_xcache_probe_runs_the_script_it_watches():
+    """It lives in its own ConfigMap: the fleet's scripts stay out of its rollouts."""
+    workload, _ = yaml.safe_load_all(XCACHE_PROBE.read_text())
+    (scripts,) = [
+        m for m in container(workload)["volumeMounts"] if m["name"] == "scripts"
+    ]
+    assert "subPath" not in scripts
+    assert container(workload)["command"] == [
+        "python",
+        f"{scripts['mountPath']}/xcache_probe.py",
+    ]
+    root = yaml.safe_load((REPO / "flux/experimental/kustomization.yaml").read_text())
+    config = next(
+        g for g in root["configMapGenerator"] if g["name"] == "af-xcache-probe-config"
+    )
+    assert config["files"] == ["../../docker/af-node-monitor/xcache_probe.py"]
 
 
 # ── one dead node must not freeze every other node ────────────────────────────

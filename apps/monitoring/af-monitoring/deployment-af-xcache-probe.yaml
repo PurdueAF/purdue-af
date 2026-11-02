@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: af-xcache-probe
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: af-xcache-probe
+  template:
+    metadata:
+      labels:
+        name: af-xcache-probe
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      nodeSelector:
+        cms-af-prod: "true"
+      tolerations:
+        - key: hub.jupyter.org/dedicated
+          operator: Equal
+          value: cms-af
+          effect: NoSchedule
+      containers:
+        - name: af-xcache-probe
+          image: geddes-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/af-node-monitor:latest
+          # A node's cached :latest may predate the XRootD client.
+          imagePullPolicy: Always
+          command: ["python", "/scripts/xcache_probe.py"]
+          env:
+            # The file the /eos probe reads.
+            - name: XCACHE_PROBE_URL
+              value: root://xcache.cms.rcac.purdue.edu//store/user/dkondrat/test.root
+            - name: XRD_CONNECTIONRETRY
+              value: "1"
+            - name: X509_USER_PROXY
+              value: /etc/grid-security-ro/x509up
+            - name: X509_CERT_DIR
+              value: /cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
+          ports:
+            - containerPort: 8000
+              name: metrics
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: cvmfs
+              mountPath: /cvmfs
+              mountPropagation: HostToContainer
+              readOnly: true
+            - name: x509-proxy
+              mountPath: /etc/grid-security-ro
+              readOnly: true
+      volumes:
+        - name: scripts
+          configMap:
+            name: af-xcache-probe-config
+        - name: cvmfs
+          persistentVolumeClaim:
+            claimName: cvmfs
+        - name: x509-proxy
+          secret:
+            secretName: af-x509-proxy
+            defaultMode: 292
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: af-xcache-probe
+  labels:
+    scrape-metrics: "true"
+spec:
+  selector:
+    name: af-xcache-probe
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000

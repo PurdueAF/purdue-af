@@ -671,6 +671,19 @@ serverFiles:
                 one node at a time; this many at once is CVMFS itself, its
                 proxies or the network, and sessions and Dask workers anywhere
                 may fail to read /cvmfs.
+          - alert: AFXCacheReadFailing
+            expr: af_xcache_read_ok == 0
+            for: 15m
+            labels:
+              severity: error
+              component: data
+            annotations:
+              summary: Reads through XCache are failing
+              description: >
+                The probe could not read its file through XCache with the
+                facility's grid proxy. Jobs reading a root://xcache prefix stall
+                or fail; direct EOS and AAA reads do not depend on it. An expired
+                proxy fails the read too. Check: kubectl -n cms logs deploy/af-xcache-probe
           - alert: AFNodeMonitorStale
             expr: >
               absent(af_node_monitor_last_iteration_timestamp_seconds)
