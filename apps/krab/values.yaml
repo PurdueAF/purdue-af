@@ -12,7 +12,7 @@ celery:
     nodeSelector:
       node/type: null
       cms-af-prod: "true"
-    tolerations:
+    tolerations: &af-tolerations
       - key: hub.jupyter.org/dedicated
         operator: Equal
         value: cms-af
@@ -60,13 +60,9 @@ postgres:
   storage:
     requestedSize: 10Gi
     className: ${singlenode_storage_class}
-  nodeSelector:
+  nodeSelector: &af-nodes
     cms-af-prod: "true"
-  tolerations:
-    - key: hub.jupyter.org/dedicated
-      operator: Equal
-      value: cms-af
-      effect: NoSchedule
+  tolerations: *af-tolerations
 
 rabbitmq:
   image:
@@ -75,13 +71,8 @@ rabbitmq:
   initImage:
     registry: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache
     repository: library/busybox
-  nodeSelector:
-    cms-af-prod: "true"
-  tolerations:
-    - key: hub.jupyter.org/dedicated
-      operator: Equal
-      value: cms-af
-      effect: NoSchedule
+  nodeSelector: *af-nodes
+  tolerations: *af-tolerations
 
 dagster:
   busybox:
@@ -90,23 +81,13 @@ dagster:
   dagsterWebserver:
     labels:
       mount-eos: "false"
-    nodeSelector:
-      cms-af-prod: "true"
-    tolerations:
-      - key: hub.jupyter.org/dedicated
-        operator: Equal
-        value: cms-af
-        effect: NoSchedule
+    nodeSelector: *af-nodes
+    tolerations: *af-tolerations
   dagsterDaemon:
     labels:
       mount-eos: "false"
-    nodeSelector:
-      cms-af-prod: "true"
-    tolerations:
-      - key: hub.jupyter.org/dedicated
-        operator: Equal
-        value: cms-af
-        effect: NoSchedule
+    nodeSelector: *af-nodes
+    tolerations: *af-tolerations
   postgresql:
     image:
       registry: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache
@@ -154,10 +135,5 @@ dagster:
             memory: 256Mi
           limits:
             memory: 1Gi
-        nodeSelector:
-          cms-af-prod: "true"
-        tolerations:
-          - key: hub.jupyter.org/dedicated
-            operator: Equal
-            value: cms-af
-            effect: NoSchedule
+        nodeSelector: *af-nodes
+        tolerations: *af-tolerations

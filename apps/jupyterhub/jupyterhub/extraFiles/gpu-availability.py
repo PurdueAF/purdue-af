@@ -28,6 +28,7 @@ import time
 from typing import Any
 from urllib.parse import urlencode
 
+from kubernetes_asyncio.client.models import V1EnvVar
 from prometheus_client import REGISTRY, Counter
 from tornado.httpclient import AsyncHTTPClient
 from traitlets.log import get_logger
@@ -70,20 +71,12 @@ GPU_FLAVORS = {
 }
 
 
-def _counter(name: str, documentation: str, labelnames: list[str]) -> Any:
-    """Counter tolerating a re-exec of this snippet (each test loads it afresh
-    against the process-wide prometheus_client registry)."""
-    try:
-        return Counter(name, documentation, labelnames)
-    except ValueError:
-        return REGISTRY._names_to_collectors[name]
-
-
 # reason="reserved": a GPU looked free but an admission within GRANT_TTL took it.
-GPU_SPAWN_REFUSED = _counter(
+GPU_SPAWN_REFUSED = Counter(
     "purdue_af_hub_gpu_spawn_refused_total",
     "GPU spawns refused by the availability gate",
     ["resource", "reason"],
+    registry=REGISTRY,
 )
 
 
@@ -234,10 +227,6 @@ def hide_gpus_from_pod(pod: Any) -> Any:
     injection for the allocated device works exactly as it does for the
     0.12.x image), and the fix applies to any image the hub spawns.
     """
-    try:
-        from kubernetes_asyncio.client.models import V1EnvVar
-    except ImportError:  # unit tests exercise plain namespaces
-        from types import SimpleNamespace as V1EnvVar
     for container in pod.spec.containers:
         env = getattr(container, "env", None) or []
         if any(getattr(e, "name", None) == "NVIDIA_VISIBLE_DEVICES" for e in env):

@@ -17,12 +17,12 @@ Example of the `eos-connect` command output:
 ------------------------ Connecting to CERN EOS ------------------------
 
  > Kerberos ticket not found.
- > Symlink /home/dkondra/eos-cern doesn't exist yet.
 
  > Let's start with initializing the Kerberos ticket.
  > What is your CERN username? Enter below:
  > dkondrat
 Password for dkondrat@CERN.CH:
+ > Symlink /home/dkondra/eos-cern doesn't exist yet.
  > Creating symlink /home/dkondra/eos-cern that points to /eos/cern/home-d/dkondrat/
 
  > The directory 'eos-cern' should appear in the file browser in a few seconds.

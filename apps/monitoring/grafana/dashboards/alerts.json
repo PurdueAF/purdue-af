@@ -228,6 +228,73 @@
       },
       "title": "Rancher alerts in cms",
       "type": "alertlist"
+    },
+    {
+      "type": "table",
+      "title": "CronJobs: time since last success",
+      "description": "Every CronJob in cms, with its schedule so an age can be read against it. A CronJob that never succeeded counts from its creation.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 13,
+        "w": 24,
+        "x": 0,
+        "y": 29
+      },
+      "id": 12,
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "af:cronjob_seconds_since_success * on (cronjob) group_left (schedule) max by (cronjob, schedule) (kube_cronjob_info{namespace=\"cms\"})",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "namespace": true
+            },
+            "indexByName": {
+              "cronjob": 0,
+              "schedule": 1,
+              "Value": 2
+            },
+            "renameByName": {
+              "cronjob": "CronJob",
+              "schedule": "Schedule",
+              "Value": "Since last success"
+            }
+          }
+        }
+      ],
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Since last success",
+            "desc": true
+          }
+        ]
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "inspect": false
+          },
+          "unit": "dtdurations"
+        }
+      }
     }
   ],
   "preload": false,

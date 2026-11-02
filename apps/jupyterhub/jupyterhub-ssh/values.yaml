@@ -1,76 +1,24 @@
 hubUrl: https://cms.geddes.rcac.purdue.edu
 
-hostKey: ""
-
 ssh:
-  enabled: true
-  replicaCount: 1
-
   config:
     JupyterHubSSH:
       # Quieter than the chart default; upstream only toggles DEBUG vs INFO.
       debug: false
-      host_key_path: /etc/jupyterhub-ssh/config/hostKey
 
   image:
     repository: quay.io/jupyterhub-ssh/ssh
     tag: "0.0.1-0.dev.git.149.he5107a4"
-    pullPolicy: ""
 
   service:
     type: LoadBalancer
-    port: 22
 
-  podLabels:
-    hub.jupyter.org/network-access-hub: "true"
-    hub.jupyter.org/network-access-proxy-http: "true"
-  podAnnotations: {}
-  serviceLabels: {}
-  serviceAnnotations: {}
-
-  resources: {}
-  imagePullSecrets: []
   nodeSelector: { "cms-af-prod": "true" }
   tolerations:
     - key: "hub.jupyter.org/dedicated"
       operator: "Equal"
       value: "cms-af"
       effect: "NoSchedule"
-  affinity: {}
-  networkPolicy: {}
 
 sftp:
-  enabled: true
-  replicaCount: 1
-
-  pvc:
-    enabled: true
-    name: "af-shared-storage"
-
-  image:
-    repository: quay.io/jupyterhub-ssh/sftp
-    tag: "0.0.1-0.dev.git.142.h402a3d6"
-    pullPolicy: ""
-
-  service:
-    type: LoadBalancer
-    port: 22
-
-  podLabels:
-    hub.jupyter.org/network-access-hub: "true"
-    hub.jupyter.org/network-access-proxy-http: "true"
-  podAnnotations: {}
-  serviceLabels: {}
-  serviceAnnotations: {}
-
-  resources: {}
-  imagePullSecrets: []
-  nodeSelector: { "cms-af-prod": "true" }
-  tolerations:
-    - key: "hub.jupyter.org/dedicated"
-      operator: "Equal"
-      value: "cms-af"
-      effect: "NoSchedule"
-  networkPolicy: {}
-
-global: {}
+  enabled: false

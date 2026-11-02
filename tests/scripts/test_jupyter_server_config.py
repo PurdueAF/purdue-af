@@ -127,12 +127,6 @@ class TestWebSocketPingUnitsPatch:
         proto = self._wrapped_protocol(monkeypatch, fake_tornado, None)
         assert proto.params is None
 
-    def test_config_loads_without_tornado(self, monkeypatch):
-        # Simulate tornado being absent: import raises, patch is skipped.
-        monkeypatch.setitem(sys.modules, "tornado.websocket", None)
-        ns, c = load_jupyter_config(monkeypatch)
-        assert c["ServerApp"]["ip"] == "0.0.0.0"
-
 
 class TestJupyterAIDefaultPersona:
     """Who answers when the user just types, without picking anyone."""
@@ -250,3 +244,42 @@ class TestJupyterAIServerNameAgreement:
             "/services/agentic-interface/mcp"
         )
         assert "svc.cluster.local:8888/services/agentic-interface/mcp" in hook
+
+
+class TestProfiling:
+    """The session's jupyter-server sends its profiles to Pyroscope."""
+
+    SERVER = {"PYROSCOPE_SERVER": "http://pyroscope:4040", "PYROSCOPE_APP": "af"}
+
+    @pytest.fixture
+    def configured(self, monkeypatch):
+        calls = []
+        module = types.ModuleType("pyroscope")
+
+        # pyroscope-io 1.4's configure refuses a keyword it does not name.
+        def configure(
+            *, application_name, server_address, sample_rate, oncpu, gil_only, tags
+        ):
+            calls.append((application_name, server_address, sample_rate, tags))
+
+        module.configure = configure
+        monkeypatch.setitem(sys.modules, "pyroscope", module)
+        return calls
+
+    def test_started_with_the_session_tags(self, configured, monkeypatch):
+        monkeypatch.setenv("NB_USER", "alice")
+        load_jupyter_config(monkeypatch, env=self.SERVER)
+        tags = {"component": "jupyter-server", "user": "alice"}
+        assert configured == [("af", "http://pyroscope:4040", 100, tags)]
+
+    def test_nothing_starts_without_a_server(self, configured, monkeypatch):
+        load_jupyter_config(monkeypatch)
+        assert configured == []
+
+    def test_a_refusal_keeps_the_config_and_reports_it(self, monkeypatch, capsys):
+        module = types.ModuleType("pyroscope")
+        module.configure = lambda **options: 1 / 0
+        monkeypatch.setitem(sys.modules, "pyroscope", module)
+        _, c = load_jupyter_config(monkeypatch, env=self.SERVER)
+        assert c["ServerApp"]["ip"] == "0.0.0.0"
+        assert "ZeroDivisionError" in capsys.readouterr().err

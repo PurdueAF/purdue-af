@@ -11,14 +11,11 @@ import tomllib
 from pathlib import Path
 
 import pytest
-import yaml
-from common import REPO, load_all, load_script
+from common import CORE, EXPERIMENTAL, REPO, generator, load_all, load_script, load_yaml
 
 APP = REPO / "apps" / "ray-train"
 HUB_VALUES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
 OPERATOR_VALUES = REPO / "apps" / "ray" / "operator" / "values.yaml"
-EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
-CORE = REPO / "flux" / "core-production" / "kustomization.yaml"
 GLOBAL_ENV = REPO / "pixi" / "global" / "pixi.toml"
 
 
@@ -27,30 +24,25 @@ def gateway():
     return load_script(APP / "gateway.py", "ray_train_gateway_manifests")
 
 
-def load(path):
-    return yaml.safe_load(path.read_text())
-
-
 def by_kind(path, kind):
     (doc,) = [d for d in load_all(path) if d["kind"] == kind]
     return doc
 
 
 def gateway_pod():
-    return load(APP / "deployment.yaml")["spec"]["template"]
+    return load_yaml(APP / "deployment.yaml")["spec"]["template"]
 
 
 def cluster_pod():
-    return load(APP / "raycluster.yaml")["spec"]["headGroupSpec"]["template"]
+    return load_yaml(APP / "raycluster.yaml")["spec"]["headGroupSpec"]["template"]
 
 
 def test_flux_deploys_the_gateway():
-    kustomization = load(EXPERIMENTAL)
+    kustomization = load_yaml(EXPERIMENTAL)
     for name in ("rbac", "deployment", "service", "networkpolicy"):
         assert f"../../apps/ray-train/{name}.yaml" in kustomization["resources"]
-    generators = {g["name"]: g for g in kustomization["configMapGenerator"]}
-    generator = generators["ray-train-gateway"]
-    assert generator["files"] == [
+    config = generator(kustomization, "ray-train-gateway")
+    assert config["files"] == [
         "../../apps/ray-train/gateway.py",
         "../../apps/ray-train/config.yaml",
         "../../apps/ray-train/raycluster.yaml",
@@ -60,7 +52,7 @@ def test_flux_deploys_the_gateway():
         "../../apps/ray-train/rayjob-nrp.yaml",
         "../../apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py",
     ]
-    annotations = generator["options"]["annotations"]
+    annotations = config["options"]["annotations"]
     assert annotations["kustomize.toolkit.fluxcd.io/substitute"] == "disabled"
 
 
@@ -106,7 +98,7 @@ def test_the_hub_gives_the_gateway_its_token_and_scopes(gateway):
     """z2jh keeps a token-only service's token in the `hub` Secret. The key is
     mounted rather than put in the environment, so the gateway sees it appear
     once the Hub registers the service, without a restart."""
-    hub = load(HUB_VALUES)["hub"]
+    hub = load_yaml(HUB_VALUES)["hub"]
     assert "ray-train-gateway" in hub["services"]
     role = hub["loadRoles"]["ray-train-gateway"]
     assert role["services"] == ["ray-train-gateway"]
@@ -145,27 +137,26 @@ def test_committed_declarations_keep_the_rules(gateway):
     declared = sorted(REPO.glob("apps/*/account.yaml"))
     assert declared
     for path in declared:
-        gateway.checked_account(load(path))
+        gateway.checked_account(load_yaml(path))
 
 
 def test_the_gateway_reads_the_hubs_session_pod_names(gateway):
-    template = load(HUB_VALUES)["singleuser"]["podNameTemplate"]
+    template = load_yaml(HUB_VALUES)["singleuser"]["podNameTemplate"]
     match = gateway.SESSION_POD.fullmatch(template.format(userid=42))
     assert match and match[1] == "42"
 
 
 def test_the_hub_points_sessions_at_the_gateway():
-    generators = {g["name"]: g for g in load(CORE)["configMapGenerator"]}
     assert (
         "04-ray-train.py=../../apps/jupyterhub/jupyterhub/extraFiles/ray-train.py"
-        in generators["jupyterhub-extra-config"]["files"]
+        in generator(load_yaml(CORE), "jupyterhub-extra-config")["files"]
     )
 
 
 def test_user_clusters_hold_no_kubernetes_credentials():
     """User code runs in every pod of a cluster. KubeRay's autoscaler Role
     would let it read every pod in the namespace and patch every RayCluster."""
-    spec = load(APP / "raycluster.yaml")["spec"]
+    spec = load_yaml(APP / "raycluster.yaml")["spec"]
     assert not spec.get("enableInTreeAutoscaling")
     (group,) = spec["workerGroupSpecs"]
     for template in (spec["headGroupSpec"]["template"], group["template"]):
@@ -175,7 +166,7 @@ def test_user_clusters_hold_no_kubernetes_credentials():
 
 def test_user_code_gains_no_privileges():
     """The image's sudo, like any setuid binary, is no way up for user code."""
-    spec = load(APP / "raycluster.yaml")["spec"]
+    spec = load_yaml(APP / "raycluster.yaml")["spec"]
     (group,) = spec["workerGroupSpecs"]
     for template in (spec["headGroupSpec"]["template"], group["template"]):
         assert template["spec"]["securityContext"]["runAsNonRoot"] is True
@@ -189,14 +180,16 @@ def test_user_code_gains_no_privileges():
 def test_a_clusters_pods_reach_each_other_and_no_one_elses():
     """KubeRay writes each cluster a NetworkPolicy admitting its own pods;
     the operator does so only with the feature gate on."""
-    spec = load(APP / "raycluster.yaml")["spec"]
+    spec = load_yaml(APP / "raycluster.yaml")["spec"]
     assert spec["networkPolicy"] == {"mode": "DenyAllIngress"}
-    gates = {g["name"]: g["enabled"] for g in load(OPERATOR_VALUES)["featureGates"]}
+    gates = {
+        g["name"]: g["enabled"] for g in load_yaml(OPERATOR_VALUES)["featureGates"]
+    }
     assert gates["RayClusterNetworkPolicy"] is True
 
 
 def test_user_clusters_demand_their_token():
-    spec = load(APP / "raycluster.yaml")["spec"]
+    spec = load_yaml(APP / "raycluster.yaml")["spec"]
     assert spec["authOptions"]["mode"] == "token"
     # KubeRay refuses token authentication below Ray 2.52.
     major, minor = (int(p) for p in spec["rayVersion"].split(".")[:2])
@@ -205,7 +198,7 @@ def test_user_clusters_demand_their_token():
 
 def test_the_head_runs_no_tasks_and_holds_no_gpu():
     """Ray's advice: the head runs the GCS, the dashboard and the drivers."""
-    head = load(APP / "raycluster.yaml")["spec"]["headGroupSpec"]
+    head = load_yaml(APP / "raycluster.yaml")["spec"]["headGroupSpec"]
     assert head["rayStartParams"]["num-cpus"] == "0"
     (container,) = head["template"]["spec"]["containers"]
     for amounts in container["resources"].values():
@@ -213,7 +206,7 @@ def test_the_head_runs_no_tasks_and_holds_no_gpu():
 
 
 def test_a_worker_is_the_heads_pod_with_a_gpu():
-    spec = load(APP / "raycluster.yaml")["spec"]
+    spec = load_yaml(APP / "raycluster.yaml")["spec"]
     (group,) = spec["workerGroupSpecs"]
     head, worker = spec["headGroupSpec"]["template"], group["template"]
     (head_container,) = head["spec"]["containers"]
@@ -236,7 +229,7 @@ def test_a_worker_is_the_heads_pod_with_a_gpu():
 
 
 def test_the_gateway_counts_the_gpus_its_workers_take(gateway):
-    (group,) = load(APP / "raycluster.yaml")["spec"]["workerGroupSpecs"]
+    (group,) = load_yaml(APP / "raycluster.yaml")["spec"]["workerGroupSpecs"]
     (container,) = group["template"]["spec"]["containers"]
     limits = container["resources"]["limits"]
     assert [limits[f.resource] for f in gateway.FLAVORS if f.resource in limits] == [1]
@@ -315,6 +308,6 @@ def test_clusters_default_to_the_environment_pixi_global_sync_keeps(gateway):
 def test_the_global_environment_has_a_ray_a_cluster_can_run():
     """The oldest Ray the cluster template declares, which KubeRay probes for."""
     dependencies = tomllib.loads(GLOBAL_ENV.read_text())["dependencies"]
-    declared = load(APP / "raycluster.yaml")["spec"]["rayVersion"]
+    declared = load_yaml(APP / "raycluster.yaml")["spec"]["rayVersion"]
     assert dependencies["ray-default"] == ">=" + ".".join(declared.split(".")[:2])
     assert "ray-train" in dependencies

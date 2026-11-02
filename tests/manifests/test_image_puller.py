@@ -2,26 +2,21 @@
 on demand, on the nodes those pods land on."""
 
 import pytest
-import yaml
-from common import REPO
+from common import REPO, load_yaml
 
 HUB_VALUES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
 RAY_CLUSTER = REPO / "apps" / "ray-train" / "raycluster.yaml"
 DASK_VALUES = REPO / "apps" / "dask-gateway" / "values.yaml"
 
 
-def load(path):
-    return yaml.safe_load(path.read_text())
-
-
 def ray_clusters():
-    pod = load(RAY_CLUSTER)["spec"]["headGroupSpec"]["template"]["spec"]
+    pod = load_yaml(RAY_CLUSTER)["spec"]["headGroupSpec"]["template"]["spec"]
     (container,) = pod["containers"]
     return container["image"], [pod["nodeSelector"]]
 
 
 def dask_clusters():
-    backend = load(DASK_VALUES)["gateway"]["backend"]
+    backend = load_yaml(DASK_VALUES)["gateway"]["backend"]
     image = f"{backend['image']['name']}:{backend['image']['tag']}"
     roles = ("scheduler", "worker")
     return image, [backend[role]["extraPodConfig"]["nodeSelector"] for role in roles]
@@ -32,7 +27,7 @@ def dask_clusters():
 )
 def test_the_puller_holds_the_image_where_its_pods_run(entry, pods):
     """The puller runs where sessions do, and these pods land on some of those nodes."""
-    values = load(HUB_VALUES)
+    values = load_yaml(HUB_VALUES)
     puller = values["prePuller"]
     assert puller["continuous"]["enabled"]
     pulled = puller["extraImages"][entry]

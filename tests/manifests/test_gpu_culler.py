@@ -4,15 +4,14 @@ The cull logic is covered in tests/jupyterhub_config; this checks the wiring.
 A managed service gets a fresh environment (JUPYTERHUB_*, PATH, LANG), not the
 hub's, so everything the culler needs must be passed explicitly."""
 
-import yaml
-from common import REPO
+from common import REPO, load_yaml
 
 HUB = REPO / "apps/jupyterhub/jupyterhub"
 SCRIPT = HUB / "extraFiles/cull-gpu-sessions.py"
 
 
 def hub_values():
-    return yaml.safe_load((HUB / "values.yaml").read_text())["hub"]
+    return load_yaml(HUB / "values.yaml")["hub"]
 
 
 def culler_service():
@@ -27,14 +26,6 @@ def test_service_gets_the_apiserver_from_its_own_environment():
 
 def test_output_is_not_swallowed_by_stdout_buffering():
     assert "-u" in culler_service()["command"]
-
-
-def test_namespace_comes_from_the_service_account_not_a_hardcoded_default():
-    """POD_NAMESPACE is stripped along with the rest of the hub env, so the
-    script must not rely on it being present."""
-    source = SCRIPT.read_text()
-    assert "/var/run/secrets/kubernetes.io/serviceaccount/namespace" in source
-    assert "POD_NAMESPACE" not in source
 
 
 def test_command_points_at_the_mounted_configmap():

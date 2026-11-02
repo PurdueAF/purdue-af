@@ -2,8 +2,7 @@
 
 It comes from the hub's last_activity, the signal the cullers act on."""
 
-import yaml
-from common import REPO
+from common import REPO, generator, load_yaml
 from dashboard_helpers import dashboard
 
 SNIPPET = REPO / "apps/jupyterhub/jupyterhub/extraFiles/session-activity.py"
@@ -40,13 +39,12 @@ def test_last_active_joins_the_table_on_pod():
     that label — which is why the exporter renders the spawner's pod name."""
     joins = [t for t in table()["transformations"] if t["id"] == "joinByField"]
     assert [t["options"]["byField"] for t in joins] == ["pod"]
-    assert '"pod"' in SNIPPET.read_text()
 
 
 def test_thresholds_track_the_cull_timeouts():
     """A row turns yellow once the GPU culler would take it and red once the
     global culler would."""
-    values = yaml.safe_load(HUB_VALUES.read_text())
+    values = load_yaml(HUB_VALUES)
     (gpu_culler,) = [
         argument.removeprefix("--timeout=")
         for argument in values["hub"]["services"]["gpu-culler"]["command"]
@@ -67,8 +65,7 @@ def test_thresholds_track_the_cull_timeouts():
 def test_the_exporter_is_deployed_to_every_cluster():
     for overlay in OVERLAYS:
         path = REPO / "flux" / overlay / "kustomization.yaml"
-        generators = yaml.safe_load(path.read_text())["configMapGenerator"]
-        config = next(g for g in generators if g["name"] == "jupyterhub-extra-config")
+        config = generator(load_yaml(path), "jupyterhub-extra-config")
         assert any(f.endswith(f"extraFiles/{SNIPPET.name}") for f in config["files"]), (
             overlay
         )

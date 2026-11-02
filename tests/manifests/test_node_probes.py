@@ -6,8 +6,7 @@ probed. A mount in one and not the other would read "never reported" forever.
 
 import ast
 
-import yaml
-from common import REPO, load_all
+from common import EXPERIMENTAL, REPO, generator, load_all, load_yaml
 
 PROBES = REPO / "apps/monitoring/af-monitoring/daemonset-af-node-probe.yaml"
 EXPORTER = REPO / "docker/af-node-monitor/node_healthcheck.py"
@@ -15,7 +14,7 @@ AGENT = REPO / "docker/af-node-monitor/probe_agent.py"
 DEPLOYMENT = REPO / "apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml"
 XCACHE_PROBE = REPO / "apps/monitoring/af-monitoring/deployment-af-xcache-probe.yaml"
 DEPLOYMENTS = (
-    REPO / "flux/experimental/kustomization.yaml",
+    EXPERIMENTAL,
     REPO / "flux/core-geddes2/kustomization.yaml",
 )
 
@@ -114,7 +113,7 @@ def test_probes_and_the_exporter_mount_no_claim_of_their_own():
             if "persistentVolumeClaim" in v
         }
         assert claims <= {monitored.get(mount)}, name
-    exporter = yaml.safe_load(DEPLOYMENT.read_text())["spec"]["template"]["spec"]
+    exporter = load_yaml(DEPLOYMENT)["spec"]["template"]["spec"]
     assert not any("persistentVolumeClaim" in v for v in exporter["volumes"])
 
 
@@ -275,7 +274,7 @@ def test_fio_is_configured_wherever_it_is_enabled():
 
 def test_both_overlays_deploy_the_probes():
     for path in DEPLOYMENTS:
-        resources = yaml.safe_load(path.read_text())["resources"]
+        resources = load_yaml(path)["resources"]
         assert any("daemonset-af-node-probe.yaml" in r for r in resources), path
 
 
@@ -283,8 +282,7 @@ def test_both_overlays_ship_every_script_the_probes_run():
     """probe_agent execs job_runner out of the same ConfigMap; shipping only
     the exporter leaves the DaemonSets crashlooping on a missing file."""
     for path in DEPLOYMENTS:
-        generators = yaml.safe_load(path.read_text())["configMapGenerator"]
-        config = next(g for g in generators if g["name"] == "af-node-monitor-config")
+        config = generator(load_yaml(path), "af-node-monitor-config")
         files = " ".join(config["files"])
         for script in ("node_healthcheck.py", "probe_agent.py", "job_runner.py"):
             assert script in files, (path, script)
@@ -292,7 +290,7 @@ def test_both_overlays_ship_every_script_the_probes_run():
 
 def test_probes_and_the_exporter_run_the_scripts_they_watch():
     """kubelet never updates a subPath mount, so a script would never see its new code."""
-    exporter = yaml.safe_load(DEPLOYMENT.read_text())
+    exporter = load_yaml(DEPLOYMENT)
     pods = [(exporter, EXPORTER.name)]
     pods += [(ds, AGENT.name) for ds in daemonsets().values()]
     for workload, script in pods:
@@ -309,7 +307,7 @@ def test_probes_and_the_exporter_run_the_scripts_they_watch():
 
 def test_the_xcache_probe_runs_the_script_it_watches():
     """It lives in its own ConfigMap: the fleet's scripts stay out of its rollouts."""
-    workload, _ = yaml.safe_load_all(XCACHE_PROBE.read_text())
+    workload, _ = load_all(XCACHE_PROBE)
     (scripts,) = [
         m for m in container(workload)["volumeMounts"] if m["name"] == "scripts"
     ]
@@ -318,10 +316,7 @@ def test_the_xcache_probe_runs_the_script_it_watches():
         "python",
         f"{scripts['mountPath']}/xcache_probe.py",
     ]
-    root = yaml.safe_load((REPO / "flux/experimental/kustomization.yaml").read_text())
-    config = next(
-        g for g in root["configMapGenerator"] if g["name"] == "af-xcache-probe-config"
-    )
+    config = generator(load_yaml(EXPERIMENTAL), "af-xcache-probe-config")
     assert config["files"] == ["../../docker/af-node-monitor/xcache_probe.py"]
 
 
@@ -345,7 +340,7 @@ def test_rollouts_tolerate_a_permanently_unavailable_node():
 
 
 def exporter_env():
-    doc = yaml.safe_load(DEPLOYMENT.read_text())
+    doc = load_yaml(DEPLOYMENT)
     container = doc["spec"]["template"]["spec"]["containers"][0]
     return {e["name"]: e.get("value") for e in container["env"]}
 

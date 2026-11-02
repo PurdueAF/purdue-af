@@ -137,10 +137,15 @@ def test_af_node_monitor_has_dedicated_scrape_without_pod_host():
     node_mon = next(j for j in jobs() if j["job_name"] == "af-node-monitor")
     targets = node_mon["static_configs"][0]["targets"]
     assert "af-node-monitor-service:8000" in targets
-    drops = af_pod_monitor_drops()
-    assert any("af-node-monitor-service" in str(r.get("regex", "")) for r in drops), (
-        drops
+    # Prometheus sanitizes label names, so scrape-metrics also selects into af-pod-monitor.
+    services = (REPO / "apps/monitoring/af-monitoring/services.yaml").read_text()
+    service = next(
+        s
+        for s in yaml.safe_load_all(services)
+        if s["metadata"]["name"] == "af-node-monitor-service"
     )
+    labels = service["metadata"].get("labels", {})
+    assert not any(re.sub(r"\W", "_", k) == "scrape_metrics" for k in labels), labels
 
 
 def test_af_pod_monitor_scrape_does_not_steal_node_label():

@@ -9,14 +9,12 @@ import time
 import httpx
 import pytest
 import uvicorn
-import yaml
-from common import REPO, load_script
+from common import EXPERIMENTAL, REPO, generator, load_script, load_yaml
 from cryptography.fernet import Fernet
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 
 APP = REPO / "apps" / "mattermost-agent"
-EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
 agent = load_script(APP / "agent.py", "mattermost_agent")
 BOT = {"id": "bot", "username": "purdueaf-agent"}
 TEAM, CHANNEL = "CMS Experiment", "Purdue Analysis Facility"
@@ -1273,15 +1271,13 @@ async def test_the_metric_counts_live_links_and_names_nobody(make, monkeypatch):
 
 
 def test_every_user_may_log_in_to_the_service_and_keeps_their_own_rights():
-    values = yaml.safe_load(
-        (REPO / "apps/jupyterhub/jupyterhub/values.yaml").read_text()
-    )
+    values = load_yaml(REPO / "apps/jupyterhub/jupyterhub/values.yaml")
     scopes = values["hub"]["loadRoles"]["user"]["scopes"]
     assert set(scopes) == {"self", "access:services!service=mattermost-agent"}
 
 
 def test_every_key_the_pod_reads_is_in_the_secret():
-    deployment = yaml.safe_load((APP / "deployment.yaml").read_text())
+    deployment = load_yaml(APP / "deployment.yaml")
     container = deployment["spec"]["template"]["spec"]["containers"][0]
     keys = {
         e["valueFrom"]["secretKeyRef"]["key"]
@@ -1289,14 +1285,12 @@ def test_every_key_the_pod_reads_is_in_the_secret():
         if e.get("valueFrom", {}).get("secretKeyRef", {}).get("name")
         == "mattermost-agent"
     }
-    secret = yaml.safe_load((APP / "secret.yaml").read_text())
+    secret = load_yaml(APP / "secret.yaml")
     assert keys == set(secret["stringData"])
 
 
 def test_every_user_doc_is_mounted():
-    kustomization = yaml.safe_load(EXPERIMENTAL.read_text())
-    generated = {g["name"]: g for g in kustomization["configMapGenerator"]}
-    files = generated["mattermost-agent-docs"]["files"]
+    files = generator(load_yaml(EXPERIMENTAL), "mattermost-agent-docs")["files"]
     pages = {f.rsplit("/", 1)[1] for f in files}
     assert pages == {p.name for p in (REPO / "docs" / "docs").glob("*.md")} - {
         "contributing.md"
@@ -1304,7 +1298,7 @@ def test_every_user_doc_is_mounted():
 
 
 def test_its_role_is_served_by_the_llm_proxy():
-    deployment = yaml.safe_load((APP / "deployment.yaml").read_text())
+    deployment = load_yaml(APP / "deployment.yaml")
     container = deployment["spec"]["template"]["spec"]["containers"][0]
     env = {e["name"]: e.get("value") for e in container["env"]}
     llm = load_script(REPO / "apps/agentic-analysis/llm_proxy.py", "llm_proxy_config")

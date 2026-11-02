@@ -1,10 +1,7 @@
-# af-pod-monitor drops this Service so mount metrics carry no pod_node; a static job scrapes it.
 apiVersion: v1
 kind: Service
 metadata:
   name: af-node-monitor-service
-  labels:
-    scrape-metrics: "true"
 spec:
   selector:
     name: af-node-monitor

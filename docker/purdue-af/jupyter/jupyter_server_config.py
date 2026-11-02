@@ -3,6 +3,7 @@
 # mypy: ignore-errors
 import logging
 import os
+import sys
 
 c = get_config()  # noqa: F821
 c.ServerApp.ip = "0.0.0.0"
@@ -91,10 +92,8 @@ c.PersonaManager.builtin_mcp_servers = _builtin_mcp_servers()
 
 def _patch_websocket_protocol_ping_units():
     """WebSocketMixin uses ms; Tornado protocol expects seconds (see tornado.websocket)."""
-    try:
-        from tornado.websocket import WebSocketHandler
-    except ImportError:
-        return
+    from tornado.websocket import WebSocketHandler
+
     _orig = WebSocketHandler.get_websocket_protocol
 
     def _wrapped(self):
@@ -120,3 +119,29 @@ def _patch_websocket_protocol_ping_units():
 
 
 _patch_websocket_protocol_ping_units()
+
+
+def _start_profiling():
+    server = os.environ.get("PYROSCOPE_SERVER")
+    if not server:
+        return
+    # An exception here would discard this whole file and the session would not answer the hub.
+    try:
+        import pyroscope
+
+        pyroscope.configure(
+            application_name=os.environ["PYROSCOPE_APP"],
+            server_address=server,
+            sample_rate=100,
+            oncpu=True,
+            gil_only=True,
+            tags={
+                "component": "jupyter-server",
+                "user": os.environ.get("NB_USER", "unknown"),
+            },
+        )
+    except Exception as exc:
+        print(f"Pyroscope profiling not started: {exc!r}", file=sys.stderr)
+
+
+_start_profiling()

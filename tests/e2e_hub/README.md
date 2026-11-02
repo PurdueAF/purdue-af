@@ -17,14 +17,6 @@ mocked. Never touches the production cluster.
 | singleuser image (the real AF image)       |                                               |
 | spawn → JupyterLab HTTP response           |                                               |
 
-## Covered behaviors
-
-Login (allowed / denied / unknown idp / cern suffixing), spawn to a running
-JupyterLab, **LDAP uid/gid mapping landing in the pod env**, ownership
-labels, multi-user isolation, explicit profile selection landing in the pod,
-stop + cleanup, **userlist secret hot-reload** (the userlist-sync pipeline's
-core assumption), admin_users wiring, forged OAuth state rejection, logout.
-
 ## Run it
 
 CI runs it in [`ci-e2e.yml`](../../.github/workflows/ci-e2e.yml), against

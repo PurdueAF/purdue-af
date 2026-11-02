@@ -49,9 +49,9 @@ deployment:
     limits:
       memory: 2Gi
   extraPodSpec:
-    nodeSelector:
+    nodeSelector: &af-nodes
       cms-af-prod: "true"
-    tolerations:
+    tolerations: &af-tolerations
       - key: hub.jupyter.org/dedicated
         operator: Equal
         value: cms-af
@@ -72,13 +72,8 @@ console:
       memory: 128Mi
     limits:
       memory: 512Mi
-  nodeSelector:
-    cms-af-prod: "true"
-  tolerations:
-    - key: hub.jupyter.org/dedicated
-      operator: Equal
-      value: cms-af
-      effect: NoSchedule
+  nodeSelector: *af-nodes
+  tolerations: *af-tolerations
 
 # The auth Secret is secret-console-auth.yaml.
 ingress:

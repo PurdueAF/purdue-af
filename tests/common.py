@@ -8,6 +8,19 @@ from pathlib import Path
 import yaml
 
 REPO = Path(__file__).resolve().parents[1]
+EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
+CORE = REPO / "flux" / "core-production" / "kustomization.yaml"
+
+
+def load_yaml(path):
+    """The single document of a YAML file."""
+    return yaml.safe_load(path.read_text())
+
+
+def generator(root, name):
+    """The configMapGenerator entry `name` of a parsed Flux root."""
+    (entry,) = [g for g in root["configMapGenerator"] if g["name"] == name]
+    return entry
 
 
 def load_script(path, module_name):

@@ -195,7 +195,8 @@ project directory, with `pixi_env` defaulting to `default`) — one is required
 and the two are mutually exclusive. The gateway checks that the environment
 exists and is already built before the cluster starts, so run `pixi install`
 first. That environment has to sit where the workers can read it — `/work` or
-`/depot` — and to contain every package the analysis imports.
+`/depot` — to contain every package the analysis imports, `prometheus_client`
+among them, and to be readable by everyone: the gateway refuses any other.
 
 Workers inherit none of the session's environment variables either; pass them
 with `env=dict(os.environ)` at creation. For XRootD reads that env must carry

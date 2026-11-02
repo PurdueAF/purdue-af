@@ -5,15 +5,9 @@ name nobody generates, a placeholder Flux silently blanks out.
 """
 
 import pytest
-import yaml
-from common import REPO
+from common import EXPERIMENTAL, REPO, load_yaml
 
 INTERLINK = REPO / "apps" / "interlink"
-EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
-
-
-def load(path):
-    return yaml.safe_load(path.read_text())
 
 
 def merged(base, override):
@@ -31,18 +25,18 @@ def merged(base, override):
 def interlink_clusters():
     """{cluster: {"values": ..., "release": ..., "dir": ...}} for every
     apps/interlink/<cluster>/ whose HelmRelease is the interlink chart."""
-    shared = load(INTERLINK / "values.yaml")
+    shared = load_yaml(INTERLINK / "values.yaml")
     clusters = {}
     for d in sorted(INTERLINK.iterdir()):
         release = d / "helmrelease.yaml"
         if not d.is_dir() or not release.is_file():
             continue
-        if load(release)["spec"]["chart"]["spec"]["chart"] != "interlink":
+        if load_yaml(release)["spec"]["chart"]["spec"]["chart"] != "interlink":
             continue
         clusters[d.name] = {
             "dir": d,
-            "release": load(release),
-            "values": merged(shared, load(d / "values.yaml")),
+            "release": load_yaml(release),
+            "values": merged(shared, load_yaml(d / "values.yaml")),
         }
     assert clusters, "no interlink clusters found"
     return clusters
@@ -50,4 +44,4 @@ def interlink_clusters():
 
 @pytest.fixture(scope="session")
 def experimental():
-    return load(EXPERIMENTAL)
+    return load_yaml(EXPERIMENTAL)

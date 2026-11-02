@@ -137,28 +137,24 @@ cp /cvmfs/cms.cern.ch/SITECONF/T2_US_Purdue/storage.json /etc/cvmfs/ || true
 bashrc_af_file="$NEW_HOME/.bashrc_af"
 touch "$bashrc_af_file"
 
-cat >"$bashrc_af_file" <<'EOF'
-#!/bin/bash
+# sshd starts its shells with an empty environment: they get these values from this file.
+for _var in NB_USER NB_UID NB_GID PYROSCOPE_SERVER PYROSCOPE_APP \
+	DASK_GATEWAY__ADDRESS DASK_GATEWAY__PROXY_ADDRESS X509_CERT_DIR; do
+	if [ -n "${!_var:-}" ]; then
+		printf 'export %s=%q\n' "$_var" "${!_var}"
+	fi
+done >"$bashrc_af_file"
 
-# Ensure PATH includes system paths and pixi environment
-# Prepend pixi paths, ensure system paths are always included at the end
-SYSTEM_PATHS="/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin"
-if [ -z "${PATH}" ]; then
-    export PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${SYSTEM_PATHS}"
-else
-    export PATH="/usr/local/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}:${SYSTEM_PATHS}"
-fi
+cat >>"$bashrc_af_file" <<'EOF'
 
-export NB_USER="${NB_USER}"
-export NB_UID="${NB_UID}"
-export NB_GID="${NB_GID}"
+# Under sshd, PATH holds only the system directories.
+case ":${PATH}:" in
+*:/opt/pixi/bin:*) ;;
+*) export PATH="/usr/local/bin:/opt/npm-global/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin" ;;
+esac
+
 export PIXI_HOME="/work/users/${NB_USER}/.pixi-home"
 export PIXI_CACHE_DIR="/work/users/${NB_USER}/.pixi-cache/"
-export PYROSCOPE_SERVER="http://pyroscope.cms.svc.cluster.local:4040"
-export PYROSCOPE_APP="purdue-af"
-export DASK_GATEWAY__ADDRESS="http://dask-gateway.geddes.rcac.purdue.edu"
-export DASK_GATEWAY__PROXY_ADDRESS="traefik-dask-gateway.cms.geddes.rcac.purdue.edu:8786"
-export X509_CERT_DIR="/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates"
 
 echo "
 ╔═════════════════════════════════════════════════════════════════════════════════════════╗

@@ -44,15 +44,6 @@ class TestParseManifest:
             ["dbs3-client"],
         )
 
-    def test_line_parser_fallback(self, check_env, tmp_path, monkeypatch):
-        monkeypatch.setitem(sys.modules, "tomllib", None)
-        path = tmp_path / "pixi.toml"
-        path.write_text(MANIFEST)
-        assert check_env.parse_manifest(path) == (
-            ["python", "root", "gsl"],
-            ["dbs3-client"],
-        )
-
 
 def _meta(env_dir, name, files=(), depends=()):
     meta = env_dir / "conda-meta"

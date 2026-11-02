@@ -34,16 +34,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
-# One process keeps the run CI-sized. Measured with --max-files 1 on two
-# workers: `signal` resolves to a single ~1.5 GB / 511k-event file, 6s to
-# preprocess and ~83s to process, reading straight from eospublic. (Without
-# the MetricsCollector the same run processes in ~54s — worker tracking is
-# not free, and it is the price of covering the metrics path.)
-#
-# Do not assume a specific file: `max_files` slices whichever order
-# collect_file_paths() returns after aggregating every *.txt in the listing
-# directory, so the file (and the runtime) can change when upstream edits a
-# listing. Adding processes is a real runtime decision, not a free flag.
+# max_files slices collect_file_paths()'s order: a listing edit upstream changes the file.
 DEFAULT_PROCESSES = ["signal"]
 
 

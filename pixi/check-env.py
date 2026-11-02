@@ -28,6 +28,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from pathlib import Path
 
 # top-level artifacts that are not real importable APIs
@@ -38,33 +39,9 @@ _SP_RE = re.compile(
 
 
 def parse_manifest(path: Path) -> tuple[list[str], list[str]]:
-    """pixi.toml → (conda_deps, pypi_deps). Uses tomllib when available,
-    else a line parser good enough for flat dependency tables."""
-    text = path.read_text()
-    try:
-        import tomllib
-
-        doc = tomllib.loads(text)
-        conda = list(doc.get("dependencies", {}))
-        pypi = list(doc.get("pypi-dependencies", {}))
-        return conda, pypi
-    except ModuleNotFoundError:  # python < 3.11
-        conda, pypi, section = [], [], None
-        for line in text.splitlines():
-            line = line.split("#", 1)[0].strip()
-            if not line:
-                continue
-            if line.startswith("["):
-                section = line.strip("[]")
-                continue
-            m = re.match(r"^([\w.\-]+)\s*=", line)
-            if not m:
-                continue
-            if section == "dependencies":
-                conda.append(m.group(1))
-            elif section == "pypi-dependencies":
-                pypi.append(m.group(1))
-        return conda, pypi
+    """pixi.toml → (conda_deps, pypi_deps)."""
+    doc = tomllib.loads(path.read_text())
+    return list(doc.get("dependencies", {})), list(doc.get("pypi-dependencies", {}))
 
 
 def conda_toplevels(env_dir: Path) -> dict[str, list[str]]:
