@@ -464,6 +464,41 @@ async def test_the_last_turn_gets_no_tools_so_that_it_must_answer(make):
     assert server.replies[0]["message"] == "Done."
 
 
+async def test_the_last_turn_runs_no_tool_and_says_what_was_done(make):
+    calls = [tool_call("scale_dask_cluster")] * (agent.MAX_TURNS - 1)
+    bot, server, llm, facility = await make(*calls, tool_call("stop_af_session"))
+    await ready(bot)
+    await link(bot, server)
+    llm.personal = "yes"
+    question = post("q", "@purdueaf-agent scale my cluster")
+    server.thread = {"q": question}
+    await bot.handle(question)
+    assert facility.mcp.calls == ["scale_dask_cluster"] * (agent.MAX_TURNS - 1)
+    assert "tools" not in llm.bodies[-1]
+    assert llm.bodies[-1]["messages"][-1]["content"] == agent.FINISH
+    assert replies(server)[-1] == agent.ACTED.format(tools="scale_dask_cluster")
+
+
+async def test_an_empty_reply_after_an_action_does_not_invite_a_retry(make):
+    bot, server, llm, _ = await make(tool_call("scale_dask_cluster"), {"content": "  "})
+    await ready(bot)
+    await link(bot, server)
+    llm.personal = "yes"
+    question = post("q", "@purdueaf-agent scale my cluster")
+    server.thread = {"q": question}
+    await bot.handle(question)
+    assert replies(server)[-1] == agent.ACTED.format(tools="scale_dask_cluster")
+
+
+async def test_an_empty_reply_after_no_action_is_a_failure(make):
+    bot, server, *_ = await make({"content": ""})
+    await ready(bot)
+    question = post("q", "@purdueaf-agent is the AF up?")
+    server.thread = {"q": question}
+    await bot.handle(question)
+    assert replies(server)[-1] == agent.SORRY
+
+
 async def test_a_reply_cannot_mention_anyone(make):
     assert agent.clean("ping @channel, @all and @some.one") == (
         "ping @​channel, @​all and @​some.one"
@@ -1057,6 +1092,24 @@ async def test_others_text_stays_in_a_public_answers_context(make):
     await bot.handle(question)
     texts = [m["content"] for m in llm.bodies[0]["messages"][1:]]
     assert texts == ["Is CVMFS down?", "is it?"]
+
+
+@pytest.mark.parametrize(
+    ("reply", "personal"),
+    [
+        ("yes", True),
+        ("Yes.", True),
+        ("**Yes**", True),
+        ("no", False),
+        ("No.", False),
+        ("yesterday", False),
+        ("", False),
+    ],
+)
+async def test_only_a_clear_yes_makes_a_question_personal(make, reply, personal):
+    bot, server, llm, _ = await make()
+    llm.personal = reply
+    assert await bot.asks_personal([post()], post()) is personal
 
 
 async def test_a_failed_check_is_a_public_question(make):
