@@ -2,21 +2,14 @@
 
 import asyncio
 import os
-import sys
-from pathlib import Path
 
 import pytest
+from common import REPO
 
-# The service is a flat application (server.py, auth.py, tools/), not an
-# installed package — make its directory importable before anything else.
-_REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(_REPO / "docker" / "agentic-interface"))
-# gpu_queries.py is shared with the hub config and copied into the image.
-sys.path.insert(1, str(_REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles"))
 # The image bundles the skill beside server.py.
 os.environ.setdefault(
     "SKILL_PATH",
-    str(_REPO / ".claude" / "skills" / "purdue-af-agentic-interface" / "SKILL.md"),
+    str(REPO / ".claude" / "skills" / "purdue-af-agentic-interface" / "SKILL.md"),
 )
 
 import auth  # noqa: E402

@@ -847,12 +847,7 @@ def test_the_api_pod_installs_ldap3_with_its_own_image_where_python_finds_it():
     assert variable == {"name": "PYTHONPATH", "value": mount["mountPath"]}
 
 
-def test_both_gateways_keep_the_same_rules(config, monkeypatch):
-    # The modules beside gateway.py in the Ray gateway's ConfigMap.
-    monkeypatch.syspath_prepend(
-        REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles"
-    )
-    monkeypatch.syspath_prepend(RAY_GATEWAY.parent)
+def test_both_gateways_keep_the_same_rules(config):
     ray = load_script(RAY_GATEWAY, "ray_train_gateway_accounts")
     for rule in (
         "RESERVED_NAMES",
@@ -880,9 +875,11 @@ def test_lookup_reads_the_account_at_its_dn(config, monkeypatch, entries):
     """The search sits at the account's DN, on the host and base the Ray gateway
     also reads, so it matches no other account; a miss raises."""
     searches = []
+    unbinds = []
 
     class Connection:
-        def __init__(self, server, **kwargs):
+        def __init__(self, server, version, authentication, receive_timeout):
+            assert server["connect_timeout"] == receive_timeout == 10
             self.server = server
 
         def start_tls(self):
@@ -890,6 +887,9 @@ def test_lookup_reads_the_account_at_its_dn(config, monkeypatch, entries):
 
         def search(self, **kwargs):
             searches.append((self.server["host"], kwargs))
+
+        def unbind(self):
+            unbinds.append(self)
 
         def response_to_json(self):
             return json.dumps({"entries": entries})
@@ -911,6 +911,29 @@ def test_lookup_reads_the_account_at_its_dn(config, monkeypatch, entries):
     assert host == ray["ldapHost"]
     assert search["search_base"] == f"uid=someone,{ray['ldapBase']}"
     assert search["search_scope"] == "BASE"
+    assert len(unbinds) == 1
+
+
+def test_lookup_closes_the_connection_when_the_directory_fails(config, monkeypatch):
+    unbinds = []
+
+    class Connection:
+        def __init__(self, server, **kwargs):
+            pass
+
+        def start_tls(self):
+            raise TimeoutError("no answer")
+
+        def unbind(self):
+            unbinds.append(self)
+
+    fake = types.SimpleNamespace(
+        BASE="BASE", Connection=Connection, Server=lambda **kw: kw
+    )
+    monkeypatch.setitem(sys.modules, "ldap3", fake)
+    with pytest.raises(TimeoutError):
+        config["ldap_lookup"]("someone")
+    assert len(unbinds) == 1
 
 
 async def test_a_user_with_a_busy_cluster_gets_no_second_one(config):

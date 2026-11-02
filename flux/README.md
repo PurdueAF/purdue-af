@@ -16,5 +16,11 @@ the git ref it applies them from; and a `flux-kustomization.yaml` carrying the
 read with. Those two and each root's `git-repository.yaml` and
 `flux-kustomization.yaml` are applied out of band.
 
+Three more things exist only on the cluster or its storage: the PV that
+production's `hub-db-dir` claim selects by label, the check files the storage
+probes read (`CHECK_FILE` and `FIO_FILE` in
+`apps/monitoring/af-monitoring/daemonset-af-node-probe.yaml`), and
+`grid-certs-secret` ([its recipe](../apps/jupyterhub/af-x509-secrets/README.md)).
+
 A manifest reaches a cluster only once it is listed in a root here. What each
 ref means for a change, and how to roll one back: [RELEASING.md](../RELEASING.md).

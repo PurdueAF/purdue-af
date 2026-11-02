@@ -317,6 +317,7 @@ for values_file in $(git grep -lE "alerting_rules|recording_rules" -- 'apps/**/v
 	done
 done
 yq '.serverFiles["alerting_rules.yml"]' apps/monitoring/prometheus/values.yaml >"$workdir/rules.yml"
+yq '.serverFiles["recording_rules.yml"]' apps/monitoring/prometheus/values.yaml >"$workdir/recording.yml"
 cp tests/manifests/alerts.test.yml "$workdir/"
 echo "  promtool test tests/manifests/alerts.test.yml"
 if ! promtool test rules "$workdir/alerts.test.yml"; then

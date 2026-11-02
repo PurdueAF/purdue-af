@@ -3,7 +3,8 @@
 import base64
 import secrets
 
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from .config import settings
@@ -31,7 +32,9 @@ def _check(header: str) -> bool:
 
 
 class BasicAuthMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         if not settings.auth_enabled or request.url.path in PUBLIC_PATHS:
             return await call_next(request)
 

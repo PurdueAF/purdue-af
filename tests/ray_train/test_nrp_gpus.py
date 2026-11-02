@@ -1,7 +1,6 @@
 """Tests for apps/ray-train/nrp_gpus.py and the gateway's `GET /af/nrp-gpus`,
 against a fake of NRP's Prometheus."""
 
-import sys
 from types import SimpleNamespace
 
 import pytest
@@ -10,8 +9,6 @@ from aiohttp import ClientSession, web
 from aiohttp.test_utils import TestServer
 from common import REPO, load_script, sample
 
-sys.path.insert(0, str(REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles"))
-sys.path.insert(0, str(REPO / "apps" / "ray-train"))
 nrp = load_script(REPO / "apps" / "ray-train" / "nrp_gpus.py", "nrp_gpus")
 gw = load_script(REPO / "apps" / "ray-train" / "gateway.py", "ray_train_gateway")
 

@@ -9,17 +9,11 @@ the rest of the pipeline are real.
 import base64
 import json
 import subprocess
-from pathlib import Path
 
 import pytest
+from common import REPO
 
-SCRIPT = (
-    Path(__file__).resolve().parents[2]
-    / "apps"
-    / "jupyterhub"
-    / "userlist-sync"
-    / "sync-userlist.sh"
-)
+SCRIPT = REPO / "apps" / "jupyterhub" / "userlist-sync" / "sync-userlist.sh"
 
 CRIC_FIXTURE = json.dumps(
     [

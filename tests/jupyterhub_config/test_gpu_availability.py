@@ -2,6 +2,7 @@
 
 import logging
 import types
+from pathlib import Path
 
 import pytest
 from common import ConfigSink
@@ -277,7 +278,8 @@ def test_snippet_finds_gpu_queries_in_its_config_dir(monkeypatch):
 
     from hub_helpers import EXTRA_FILES
 
-    monkeypatch.setattr(sys, "path", [p for p in sys.path if p != str(EXTRA_FILES)])
+    kept = [p for p in sys.path if Path(p).resolve() != EXTRA_FILES.resolve()]
+    monkeypatch.setattr(sys, "path", kept)
     monkeypatch.delitem(sys.modules, "gpu_queries", raising=False)
 
     ns = load(monkeypatch)

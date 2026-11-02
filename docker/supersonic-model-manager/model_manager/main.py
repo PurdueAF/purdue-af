@@ -10,6 +10,7 @@ import logging
 import os
 import time
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -31,7 +32,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     root = repository.repo_root()
     try:
         root.mkdir(parents=True, exist_ok=True)
@@ -195,13 +196,14 @@ async def delete_model(name: str) -> dict:
 # --------------------------------------------------------------------------
 
 
-@app.post("/api/upload")
+# Explicit: FastAPI cannot build a response model from the return annotation's union.
+@app.post("/api/upload", response_model=dict)
 async def upload(
     files: list[UploadFile],
     name: str = Form(""),
     paths: str = Form(""),
     overwrite: bool = Form(False),
-) -> dict:
+) -> dict | JSONResponse:
     _require_writable()
 
     staging_root = repository.repo_root() / repository.STAGING_DIRNAME
@@ -219,10 +221,8 @@ async def upload(
     try:
         if single_archive:
             upload_file = files[0]
-            tmp = (
-                staging_root
-                / f"incoming-{uuid.uuid4().hex}-{Path(upload_file.filename).name}"
-            )
+            filename = upload_file.filename or ""
+            tmp = staging_root / f"incoming-{uuid.uuid4().hex}-{Path(filename).name}"
             try:
                 await asyncio.to_thread(
                     repository.copy_with_limit, upload_file.file, tmp
@@ -230,7 +230,7 @@ async def upload(
                 result = await asyncio.to_thread(
                     repository.install_archive,
                     tmp,
-                    upload_file.filename or "",
+                    filename,
                     name.strip(),
                     overwrite,
                 )

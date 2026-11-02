@@ -72,6 +72,7 @@ repos:
           - mcp>=2.3,<3
           # 49 ships no Intel Mac wheel, and a Rosetta Python installs this hook too.
           - cryptography<49
+          - fastapi>=0.115
           - starlette>=0.40
           - pydantic>=2.9
           - prometheus_client>=0.22

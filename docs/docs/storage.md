@@ -86,7 +86,9 @@ The best storage volume depends on the size of the output:
 
 * **Large outputs (over 100 GB):** save to **Purdue EOS**. Since Purdue EOS is not
   directly writable, save outputs into `/tmp/<username>/` first and then copy them
-  to EOS — see [Writing to EOS](guide-eos-write.md).
+  to EOS — see [Writing to EOS](guide-eos-write.md). `/tmp` is the node's local
+  disk: it is shared with everyone on that node and gone with the pod, so copy each
+  file out as soon as it is written.
 * **Small outputs (under 100 GB):**
 
     * Purdue users should use **work storage** or **Depot**.
@@ -97,7 +99,8 @@ The best storage volume depends on the size of the output:
     Avoid writing many files to Depot at the same time, as it may slow Depot down
     for everyone. If your jobs produce large outputs, first save them into
     `/tmp/<username>/` on the individual Slurm jobs / Dask workers, and then copy
-    them over to EOS — see [Writing to EOS](guide-eos-write.md).
+    them over to EOS as soon as each is written — see
+    [Writing to EOS](guide-eos-write.md).
 
 ## Shared project directories
 

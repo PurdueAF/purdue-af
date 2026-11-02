@@ -1,20 +1,7 @@
-"""Fixtures for the supersonic-model-manager suite.
-
-The service is a package (``model_manager``) living under docker/, not an
-installed distribution — make its directory importable before anything else.
-"""
-
-import sys
-from pathlib import Path
+"""Fixtures for the supersonic-model-manager suite."""
 
 import pytest
-
-sys.path.insert(
-    0, str(Path(__file__).resolve().parents[2] / "docker" / "supersonic-model-manager")
-)
-
-from model_manager import repository  # noqa: E402
-from model_manager.config import settings  # noqa: E402
+from model_manager.config import settings
 
 
 @pytest.fixture
@@ -61,6 +48,3 @@ def staged(tmp_path):
     staging = tmp_path / "staging"
     staging.mkdir()
     return staging
-
-
-__all__ = ["repository", "settings"]

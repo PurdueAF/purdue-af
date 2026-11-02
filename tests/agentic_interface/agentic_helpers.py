@@ -1,4 +1,4 @@
-"""Test helpers for the agentic-interface suite (sys.path set by conftest)."""
+"""Test helpers for the agentic-interface suite."""
 
 from contextlib import contextmanager
 from types import SimpleNamespace
