@@ -473,13 +473,16 @@ tests:
   - name: alloy behind the node count fires, counting nodes and not their mounts
     interval: 1m
     input_series:
-      - series: 'af_node_mount_result_fresh{mount_name="depot",node="n1",node_pool="prod"}'
+      - series: 'af_node_mount_probe_up{mount_name="depot",node="n1",node_pool="prod"}'
         values: 1x60
-      - series: 'af_node_mount_result_fresh{mount_name="work",node="n1",node_pool="prod"}'
+      - series: 'af_node_mount_probe_up{mount_name="work",node="n1",node_pool="prod"}'
         values: 1x60
-      - series: 'af_node_mount_result_fresh{mount_name="depot",node="n2",node_pool="prod"}'
+      - series: 'af_node_mount_probe_up{mount_name="depot",node="n2",node_pool="prod"}'
         values: 1x60
-      - series: 'af_node_mount_result_fresh{mount_name="work",node="n2",node_pool="prod"}'
+      - series: 'af_node_mount_probe_up{mount_name="work",node="n2",node_pool="prod"}'
+        values: 0x60
+      # A node that runs no probes runs nothing of ours, so it needs no shipper.
+      - series: 'af_node_mount_probe_up{mount_name="depot",node="n3",node_pool="prod"}'
         values: 0x60
       - series: 'kube_daemonset_status_number_ready{namespace="cms",daemonset="alloy"}'
         values: 1x29 2x30
