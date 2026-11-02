@@ -36,6 +36,7 @@ ALLOWED_LABELS = {
 }
 # Say nothing about who a series belongs to, and never reach the output.
 DROPPED_LABELS = {"__name__", "instance", "job"}
+COMPONENTS_PANEL = "Components"
 WINDOW = "1h"
 CONCURRENT_QUERIES = 6
 MAX_SERIES = 30
@@ -72,6 +73,29 @@ def _queries(panel: dict[str, Any]) -> list[tuple[tuple[str, str], str, str]]:
             legend = target.get("legendFormat") or ""
             queries.append((backend, GRAFANA_VARIABLE.sub(WINDOW, expr), legend))
     return queries
+
+
+async def component_problems() -> tuple[dict[str, float], list[str]]:
+    """The dashboard's Components rows that are not OK, by name, with the
+    fraction each one reads, and the rows that could not be read. Both are
+    empty when the dashboard is not mounted."""
+    try:
+        panels = [p for members in sections().values() for p in members]
+    except OSError:
+        return {}, []
+    problems: dict[str, float] = {}
+    unread: list[str] = []
+    for panel in panels:
+        if panel.get("title") != COMPONENTS_PANEL:
+            continue
+        for (client, url), query, legend in _queries(panel):
+            rows, problem = await prom_query(shared_client(client), url, query)
+            if problem:
+                unread.append(legend)
+            for _, value in prom_vector(rows):
+                if value < 1:
+                    problems[legend] = value
+    return problems, unread
 
 
 def _value(value: float, unit: Optional[str]) -> str:

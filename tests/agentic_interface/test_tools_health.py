@@ -9,13 +9,15 @@ are warnings (Impaired) not errors, an unknown must not look healthy, the
 rule's own summary is what the user reads, and no other user's alert may
 ever appear."""
 
+import json
 import time
 from datetime import datetime, timezone
 
+import pytest
 import respx
 from agentic_helpers import as_user, failure, register_tools
 from httpx import ConnectError, Response
-from tools import health
+from tools import health, metrics
 
 PROM_URL = f"{health.PROMETHEUS_URL}/api/v1/query"
 ALERTS_URL = f"{health.PROMETHEUS_URL}/api/v1/alerts"
@@ -319,3 +321,92 @@ async def test_a_failed_delivery_is_invisible_to_users(user_ctx):
     out = await run(firing=[alert("AFHelmReleaseNotReady", "warning", "delivery")])
     assert "**Healthy**" in out
     assert "AFHelmReleaseNotReady" not in out
+
+
+class TestDashboardComponents:
+    """Rows of the dashboard's Components panel, which may have no alert."""
+
+    @pytest.fixture
+    def dashboard(self, tmp_path, monkeypatch):
+        targets = [
+            {"expr": "geddes", "legendFormat": "Geddes storage"},
+            {"expr": "work", "legendFormat": "/work"},
+            {"expr": "hub", "legendFormat": "JupyterHub"},
+        ]
+        panel = {
+            "title": "Components",
+            "datasource": {"uid": "prometheus-rancher"},
+            "targets": targets,
+        }
+        path = tmp_path / "default.json"
+        path.write_text(json.dumps({"panels": [panel]}))
+        monkeypatch.setattr(metrics, "DASHBOARD_PATH", str(path))
+
+    def rows(self, values):
+        def answer(request):
+            query = dict(request.url.params)["query"]
+            if values.get(query, 0) is None:
+                return Response(503)
+            result = []
+            if query in values:
+                result = [{"metric": {}, "value": [0, str(values[query])]}]
+            return Response(200, json={"data": {"result": result}})
+
+        return answer
+
+    async def report(self, values, *alerts):
+        tools = register_tools(health)
+        with as_user():
+            with respx.mock:
+                respx.get(ALERTS_URL).mock(
+                    return_value=Response(200, json={"data": {"alerts": list(alerts)}})
+                )
+                respx.get(PROM_URL).mock(side_effect=self.rows({}))
+                respx.get(f"{metrics.CLUSTER_PROMETHEUS_URL}/api/v1/query").mock(
+                    side_effect=self.rows(values)
+                )
+                return await tools.tools["get_facility_health"]()
+
+    async def test_a_row_at_zero_with_no_alert_is_degraded(self, dashboard):
+        out = await self.report({"geddes": 0, "work": 1, "hub": 1})
+        assert "**Degraded**" in out
+        assert "**Geddes storage** is down" in out
+        assert "Nothing is failing" not in out
+
+    async def test_a_partial_row_with_no_alert_is_impaired(self, dashboard):
+        out = await self.report({"geddes": 0.5, "work": 1, "hub": 1})
+        assert "**Impaired**" in out
+        assert "**Geddes storage** is at 50%" in out
+
+    async def test_a_row_an_alert_covers_is_not_said_twice(self, dashboard):
+        firing = alert(
+            "AFMountFailing", "warning", "data", "/work is failing on node a"
+        )
+        out = await self.report({"geddes": 1, "work": 0.95, "hub": 1}, firing)
+        assert "/work is failing on node a" in out
+        assert "facility dashboard" not in out
+
+    async def test_a_row_that_cannot_be_read_is_unknown_not_ok(self, dashboard):
+        out = await self.report({"work": 1, "hub": 1, "geddes": None})
+        assert "**Partly unknown**" in out
+        assert "Could not read: Geddes storage." in out
+        assert "Nothing is failing" not in out
+
+    async def test_no_normal_line_beside_a_row_in_trouble(self, dashboard):
+        out = await self.report({"geddes": 0, "work": 1, "hub": 1})
+        assert "Normal:" not in out
+
+    async def test_all_rows_ok_is_healthy(self, dashboard):
+        out = await self.report({"geddes": 1, "work": 1, "hub": 1})
+        assert "**Healthy**" in out
+        assert "Nothing is failing" in out
+
+    async def test_a_blank_row_is_not_a_problem(self, dashboard):
+        out = await self.report({"work": 1, "hub": 1})
+        assert "**Healthy**" in out
+
+    async def test_no_dashboard_leaves_the_report_to_the_alerts(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(metrics, "DASHBOARD_PATH", str(tmp_path / "none.json"))
+        assert "**Healthy**" in await self.report({})

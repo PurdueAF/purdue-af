@@ -15,6 +15,10 @@ Three rules shape the output:
 * Every firing alert a user may see is listed under its component; "Normal"
   only covers components with nothing firing at all.
 
+Rows of the public dashboard's Components panel that no alert covers count too,
+so that this tool and the dashboard cannot disagree: a row at zero is down and
+makes the facility **Degraded**, a row in between makes it **Impaired**.
+
 Output is for the calling user: their own quota is reported, no other user's.
 """
 
@@ -29,6 +33,8 @@ from context import require_user
 from errors import UpstreamError, describe_exception, json_body, response_detail
 from mcp.server.mcpserver import MCPServer
 from shared import prom_query, prom_scalar, quote_label, shared_client
+
+from tools.metrics import component_problems
 
 EASTERN = ZoneInfo("America/New_York")
 
@@ -188,19 +194,39 @@ def register(mcp: MCPServer) -> None:
             and not n.startswith(SKIP_IMPAIR_PREFIXES)
         ]
 
-        if blocking:
+        problems, unread = await component_problems()
+        summaries = " ".join(
+            str((alert.get("annotations") or {}).get("summary"))
+            for alerts in by_component.values()
+            for matched in alerts.values()
+            for alert in matched
+        )
+        rows = {n: v for n, v in problems.items() if n not in summaries}
+        down = [name for name, value in rows.items() if value <= 0]
+        partial = [name for name, value in rows.items() if value > 0]
+
+        if blocking or down:
             verdict = "**Degraded**"
-        elif unknown:
+        elif unknown or unread:
             verdict = "**Partly unknown**"
-        elif impaired:
+        elif impaired or partial:
             verdict = "**Impaired**"
         else:
             verdict = "**Healthy**"
 
         lines = [f"{verdict} — Purdue Analysis Facility\n"]
 
-        if not blocking and not unknown and not impaired:
+        trouble = rows or unread
+        if not blocking and not unknown and not impaired and not trouble:
             lines.append("Nothing is failing across the facility.")
+
+        lines += [f"! **{name}** is down on the facility dashboard." for name in down]
+        lines += [
+            f"- **{name}** is at {rows[name] * 100:.0f}% on the facility dashboard."
+            for name in partial
+        ]
+        if unread:
+            lines.append(f"- Could not read: {', '.join(unread)}.")
 
         for component, alerts in sorted(by_component.items()):
             title = COMPONENT_TITLES.get(component, component)
@@ -227,7 +253,7 @@ def register(mcp: MCPServer) -> None:
             and component != "storage"
             and component not in HIDDEN_COMPONENTS
         ]
-        if clean:
+        if clean and not trouble:
             lines.append(f"\nNormal: {', '.join(clean).lower()}.")
 
         if home_util is not None:
