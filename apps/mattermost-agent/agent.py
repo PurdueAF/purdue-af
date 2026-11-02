@@ -90,6 +90,7 @@ CODE_LENGTH = 8
 CODE_ATTEMPTS = 3
 CODE_MESSAGE = re.compile(rf"^[{CODE_LETTERS}]{{{CODE_LENGTH}}}$")
 PERSONAL_POSTS = 5
+LINKED_METRIC = "purdue_af_mattermost_linked_accounts"
 YES = re.compile(r"\W*yes\b", re.IGNORECASE)
 PERSONAL_CHECK = (
     "You read messages sent to an assistant of a computing facility. Answer with one "
@@ -408,6 +409,11 @@ class Linking:
         if entry:
             self.forget(user)
         return None
+
+    def count(self) -> int:
+        """Accounts linked now."""
+        now = time.time()
+        return sum(now < entry["expires_at"] for entry in self.linked.values())
 
     def forget(self, user: str) -> None:
         if self.linked.pop(user, None):
@@ -1014,6 +1020,11 @@ def web(agent: Agent, base_url: str) -> Starlette:
             return PlainTextResponse(EXPIRED_LINK, status_code=403)
         return PlainTextResponse(CODE_PAGE.format(code=confirmation))
 
+    async def metrics(request: Request) -> Response:
+        return PlainTextResponse(
+            f"# TYPE {LINKED_METRIC} gauge\n{LINKED_METRIC} {agent.linking.count()}\n"
+        )
+
     async def health(request: Request) -> Response:
         return PlainTextResponse("ok", status_code=200 if agent.alive() else 503)
 
@@ -1024,6 +1035,7 @@ def web(agent: Agent, base_url: str) -> Starlette:
             Route(f"{PREFIX}/link", link),
             Route(f"{PREFIX}/oauth_callback", oauth_callback),
             Route("/healthz", health),
+            Route("/metrics", metrics),
         ]
     )
 

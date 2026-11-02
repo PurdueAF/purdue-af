@@ -36,6 +36,7 @@ user's older ones. A person sends `link` again when it runs out, and `unlink` to
 `unlink` forgets the token, which the Hub lists on its token page until it expires.
 
 Tokens are encrypted in `/state/links.enc` under `link-key`, keyed by Mattermost user id.
+`/metrics`, reachable only inside the cluster, gives how many accounts are linked.
 
 Each question first goes to the model alone with its author's own posts, to decide
 whether they ask about their own things. If so, it runs with the author's token and

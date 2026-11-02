@@ -9,3 +9,19 @@ spec:
     - name: http
       port: 8080
       targetPort: http
+---
+# Its own Service: both Prometheus instances scrape every port of one labelled scrape-metrics.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mattermost-agent-metrics
+  labels:
+    app: mattermost-agent
+    scrape-metrics: "true"
+spec:
+  selector:
+    app: mattermost-agent
+  ports:
+    - name: metrics
+      port: 8080
+      targetPort: http
