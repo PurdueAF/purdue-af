@@ -137,6 +137,7 @@ async def test_user_context_is_bound_during_request_and_reset_after(accept_token
     )
 
     assert inner.user_during_request == accept_token
+    assert inner.user_during_request is not accept_token  # the cached dict stays ours
     assert current_user.get(None) is None  # reset once the request is done
 
 
@@ -165,8 +166,6 @@ async def test_non_http_scope_passes_through():
 
 
 async def test_websocket_scope_is_closed_not_forwarded():
-    # Streamable HTTP never uses websockets — the middleware must refuse the
-    # handshake rather than send http.response messages on a websocket scope.
     inner = RecordingApp()
     send = SendCollector()
     scope = {"type": "websocket", "path": f"{PREFIX}/mcp", "headers": []}
@@ -207,7 +206,7 @@ def _api_calls(status):
 @pytest.fixture
 def never_resolve(monkeypatch):
     verify = AsyncMock()
-    monkeypatch.setattr(server, "verify_token", verify)
+    monkeypatch.setattr(server, "resolve_user", verify)
     yield
     verify.assert_not_awaited()
 
@@ -282,7 +281,7 @@ async def test_hub_unavailable_is_503_not_401(monkeypatch):
     async def down(token):
         raise HubUnavailable("JupyterHub API unreachable — connection refused")
 
-    monkeypatch.setattr(server, "verify_token", down)
+    monkeypatch.setattr(server, "resolve_user", down)
     before = _api_calls("503")
     inner = RecordingApp()
     send = SendCollector()
@@ -334,3 +333,32 @@ def test_main_serves_the_mcp_app_behind_auth(monkeypatch):
     assert isinstance(served["app"], server._AuthMiddleware)
     assert (served["host"], served["port"]) == ("0.0.0.0", 8888)
     assert [type(f) for f in access.filters] == [server._McpAccessFilter]
+
+
+@pytest.mark.parametrize(
+    ("path", "headers", "route", "status"),
+    [
+        ("/health", [], "health", "200"),
+        ("/metrics", [], "metrics", "200"),
+        ("/nope", [], "other", "404"),
+        (f"{PREFIX}/mcp", [], "mcp", "401"),
+        (f"{PREFIX}/mcp", bearer("bad"), "mcp", "401"),
+        (f"{PREFIX}/mcp", bearer("hub-down"), "mcp", "503"),
+        (f"{PREFIX}/mcp", bearer("good"), "mcp", "200"),
+    ],
+)
+async def test_each_request_is_counted_once(monkeypatch, path, headers, route, status):
+    async def resolve(token):
+        if token == "hub-down":
+            raise server.HubUnavailable("down")
+        return {"username": "alice", "token": token} if token == "good" else None
+
+    monkeypatch.setattr(server, "resolve_user", resolve)
+    labels = dict(route=route, status=status)
+    before = counter("purdue_af_mcp_api_calls_total", **labels)
+
+    await server._AuthMiddleware(RecordingApp())(
+        http_scope(path, headers=headers), noop_receive, SendCollector()
+    )
+
+    assert counter("purdue_af_mcp_api_calls_total", **labels) == before + 1

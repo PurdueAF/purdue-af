@@ -720,6 +720,7 @@ serverFiles:
             labels:
               severity: warning
               component: dev
+              audience: operators
             annotations:
               summary: "{{ $labels.mount_name }} is failing on dev node {{ $labels.node }}"
               description: >
@@ -789,6 +790,7 @@ serverFiles:
 
       # Can we still see what the facility is doing? -------------------------
       # node_filesystem_*{job="loki"} comes from the fs-exporter sidecar in loki/values.yaml.
+      # audience: operators keeps a rule out of get_facility_health.
       - name: af-observability
         rules:
           - alert: AFLokiStorageWillFill
@@ -802,6 +804,7 @@ serverFiles:
             labels:
               severity: warning
               component: observability
+              audience: operators
             annotations:
               summary: Loki PVC is on track to fill within 7 days
               description: >
@@ -822,7 +825,7 @@ serverFiles:
               severity: error
               component: observability
             annotations:
-              summary: Loki PVC is {{ $value | humanizePercentage }} full
+              summary: The log store is {{ $value | humanizePercentage }} full
               description: >
                 Act now — at 100% Loki loses both ingest and query. The compactor
                 needs free space to apply retention, so recovering from a full
@@ -837,7 +840,7 @@ serverFiles:
               severity: critical
               component: observability
             annotations:
-              summary: Loki is out of disk and dropping logs
+              summary: "Logs are being lost: the log store is out of disk"
               description: >
                 storage-loki-0 is full: chunk flushes fail with "no space left on
                 device" and every query 500s. Logs arriving now are lost: Alloy
@@ -924,7 +927,7 @@ serverFiles:
               severity: error
               component: observability
             annotations:
-              summary: Loki is not scrapeable
+              summary: "Logs cannot be searched: the log store is not answering"
               description: >
                 No log search for the facility, and the AFLokiStorage* alerts above
                 are blind while this fires. Check: kubectl -n cms get pod loki-0
@@ -934,6 +937,7 @@ serverFiles:
             labels:
               severity: warning
               component: observability
+              audience: operators
             annotations:
               summary: Prometheus failed to load its latest configuration
               description: >

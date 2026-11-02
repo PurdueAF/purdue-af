@@ -1,4 +1,4 @@
-# Ingress limited to known clients; egress is unrestricted.
+# Its intended clients; the namespace's own np-default, outside this repository, admits every other pod in cms too.
 # Kubelet probes come from the node host IP, which NetworkPolicy does not block under Calico.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -31,11 +31,7 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/name: prometheus
-        # (d) AF prometheus-server; it has no scrape job for this service.
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: prometheus
-        # (e) PurdueAF Agent, on Mattermost (apps/mattermost-agent).
+        # (d) PurdueAF Agent, on Mattermost (apps/mattermost-agent).
         - podSelector:
             matchLabels:
               app: mattermost-agent

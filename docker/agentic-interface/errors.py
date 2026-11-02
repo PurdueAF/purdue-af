@@ -1,24 +1,17 @@
-"""Uniform failure reporting for the agentic interface.
+"""The failures tools raise and the builders for the common ones.
 
-Every failure a tool reports is built here so that all of them answer the
-same three questions — what was attempted, why it failed (as the backend
-reported it, not as we guessed), and what to do next — and so that no
-failure is ever downgraded into "no data", "not ready" or an empty list.
-A user reading a tool result must always be able to tell a facility that is
-quiet from a facility that could not be asked.
+A failure says what was attempted, why it failed (as the backend reported it)
+and what to do next, and is never downgraded into "no data", "not ready" or an
+empty list: a user must always be able to tell a facility that is quiet from
+a facility that could not be asked.
 
-Failures are *raised*, as subclasses of the MCP SDK's ``ToolError``, never
-returned as strings: the SDK then delivers them on the protocol's own error
-channel (``isError: true``), so every client recognises a failure without
-parsing prose, while the message still carries the diagnosis. The subclass
-says whose fault it was, which is also the metrics label for the call.
+Failures are raised as subclasses of the MCP SDK's ``ToolError``, so the SDK
+delivers them on the protocol's own error channel (``isError: true``). The
+subclass says whose fault it was, which is also the metrics label for the call.
 
-Conventions the messages keep:
-
-* they start with ``Error:`` and name the backend in the user's terms
-  ("JupyterHub", "Dask Gateway", "the monitoring system"), never an
-  internal hostname;
-* transport failures say ``unreachable``, HTTP failures ``returned HTTP``.
+Messages start with ``Error:`` and name the backend in the user's terms, never
+an internal hostname; transport failures say ``unreachable``, HTTP failures
+``returned HTTP``.
 """
 
 import json
@@ -66,8 +59,7 @@ class ServiceFault(Failure):
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
 
-# Status → why a backend answered that way, in plain words. Anything else
-# 5xx is an internal error of the backend itself.
+# Why a backend answered that way; any other 5xx is its internal error.
 _STATUS_HINTS = {
     502: "it is down or restarting behind its proxy",
     503: "it is down, restarting, or overloaded",
@@ -77,6 +69,12 @@ _STATUS_HINTS = {
 RETRY_LATER = (
     "Try again in a minute; if it keeps failing, get_facility_health shows "
     "whether the facility itself is degraded."
+)
+
+
+_REPORT_IF_PERSISTENT = (
+    "This is a fault between the agentic interface and the facility, not in the "
+    "request; report it to AF support if it persists."
 )
 
 
@@ -177,7 +175,7 @@ def http_error(
 
 
 def malformed_response(
-    service: str, resp: httpx.Response, expected: str
+    service: str, resp: httpx.Response, expected: str, *, next_step: str = ""
 ) -> UpstreamError:
     """``service`` answered successfully but not in the shape we rely on."""
     detail = response_detail(resp, limit=120)
@@ -187,13 +185,7 @@ def malformed_response(
     )
     if detail:
         message += f" — {detail}"
-    return UpstreamError(
-        _finish(
-            message,
-            "This is a fault between the agentic interface and the facility, not "
-            "in the request; report it to AF support if it persists.",
-        )
-    )
+    return UpstreamError(_finish(message, next_step or _REPORT_IF_PERSISTENT))
 
 
 def invalid_arguments(tool: str, exc: BaseException) -> UserError:

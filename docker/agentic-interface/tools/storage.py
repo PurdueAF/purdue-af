@@ -3,12 +3,11 @@
 import asyncio
 from typing import Optional
 
-import httpx
-from config import PROMETHEUS_URL
+from config import PROMETHEUS_NAME, PROMETHEUS_URL
 from context import require_user
 from errors import UpstreamError
 from mcp.server.mcpserver import MCPServer
-from shared import prom_query, prom_scalar, quote_label, shared_client
+from shared import prom_value, quote_label, shared_client
 
 _DIRS = ("home", "work")
 
@@ -20,18 +19,6 @@ def dir_reading_query(prefix: str, metric: str, selector: str) -> str:
         f"af_{prefix}_dir_{metric}{{{selector}}}"
         f" and on(pod) af_{prefix}_dir_ok{{{selector}}} == 1"
     )
-
-
-async def _prom_scalar(
-    client: httpx.AsyncClient, query: str
-) -> tuple[Optional[float], Optional[str]]:
-    """Run an instant PromQL query → (first scalar or None, problem or None).
-
-    The problem is set only when Prometheus could not be asked; a None value
-    with no problem means the series does not exist.
-    """
-    rows, problem = await prom_query(client, PROMETHEUS_URL, query, timeout=5.0)
-    return prom_scalar(rows), problem
 
 
 def _bar(fraction: float, width: int = 20) -> str:
@@ -60,8 +47,11 @@ def register(mcp: MCPServer) -> None:
         ) -> list[tuple[Optional[float], Optional[str]]]:
             return await asyncio.gather(
                 *(
-                    _prom_scalar(
-                        client, dir_reading_query(prefix, metric, user_selector)
+                    prom_value(
+                        client,
+                        PROMETHEUS_URL,
+                        dir_reading_query(prefix, metric, user_selector),
+                        timeout=5.0,
                     )
                     for metric in ("used_kb", "size_kb", "util")
                 )
@@ -70,8 +60,7 @@ def register(mcp: MCPServer) -> None:
         # Query both directories concurrently; rows still render home-then-work.
         per_dir = await asyncio.gather(*(_dir_metrics(prefix) for prefix in _DIRS))
 
-        # "Prometheus is down" must never read as "no data": collect every
-        # problem and report the first if nothing at all could be read.
+        # "Prometheus is down" must never read as "no data".
         problems = [p for results in per_dir for _, p in results if p]
 
         rows: list[str] = ["# Storage usage (data age ≤ 5 min)\n"]
@@ -99,7 +88,8 @@ def register(mcp: MCPServer) -> None:
         if not any_data:
             if problems:
                 raise UpstreamError(
-                    f"Error: could not read storage metrics — Prometheus {problems[0]}. This "
+                    f"Error: could not read storage metrics — {PROMETHEUS_NAME} "
+                    f"{problems[0]}. This "
                     "is a monitoring problem, not a quota problem: your storage is "
                     "unaffected. Try again in a minute; get_facility_health shows "
                     "whether the facility itself is degraded."
@@ -112,7 +102,8 @@ def register(mcp: MCPServer) -> None:
 
         if problems:
             rows.append(
-                f"Note: some readings could not be fetched — Prometheus {problems[0]}. "
+                f"Note: some readings could not be fetched — {PROMETHEUS_NAME} "
+                f"{problems[0]}. "
                 "Missing figures above are a monitoring gap, not empty storage."
             )
 

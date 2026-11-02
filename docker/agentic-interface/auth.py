@@ -1,9 +1,4 @@
-"""Token validation and user-context resolution.
-
-``HubTokenVerifier`` is the MCP SDK's ``TokenVerifier`` protocol backed by
-the Hub: the middleware validates through it, and it is the seam the SDK's
-own auth stack (``MCPServer(token_verifier=…)``) would plug into.
-"""
+"""Token validation and user-context resolution."""
 
 import hashlib
 import time
@@ -11,36 +6,27 @@ from typing import Optional
 
 import httpx
 from cachetools import TTLCache
-from config import HUB_API_URL, NAMESPACE
+from config import HUB_API_URL
+from context import User
 from errors import describe_exception, json_body, response_detail
-from mcp.server.auth.provider import AccessToken
 from metrics import record_auth
-from shared import upstream_transport
+from shared import shared_client
 
 
 class HubUnavailable(Exception):
-    """The Hub could not be asked whether a token is valid.
-
-    Kept apart from an invalid token on purpose: the caller must answer
-    "try again" (503), never "your token is wrong" (401), and nothing about
-    the token may be cached either way.
-    """
+    """The Hub could not be asked whether a token is valid: the caller answers
+    "try again" (503), never "your token is wrong" (401)."""
 
     def __init__(self, detail: str) -> None:
         super().__init__(detail)
         self.detail = detail
 
 
-# Cache keys are sha256 hex digests of the token, never the raw token — a
-# cache dump (debugger, core, log) must not hand out live credentials. The
-# cached user_info dict still carries the raw token; tools need it downstream.
+# Keyed by sha256 of the token, so a dump of the keys hands out no credential.
 _CACHE_TTL = 60.0
 _CACHE_MAX = 1024
 
-# Negative cache: tokens the Hub actively rejected. Short TTL so a garbage-
-# token flood doesn't amplify into a live Hub API call per request, while a
-# freshly issued token is never locked out for long. Hub failures are
-# deliberately NOT cached — they say nothing about the token.
+# Tokens the Hub rejected; Hub failures are never cached, they say nothing of the token.
 _NEG_CACHE_TTL = 5.0
 _NEG_CACHE_MAX = 4096
 
@@ -50,11 +36,7 @@ def _now() -> float:
     return time.monotonic()
 
 
-# TTLCache drops expired entries first and least-recently-used ones once
-# full, which is exactly the bounding both caches need.
-# sha256(token) → user_info_dict
-_user_cache: TTLCache[str, dict] = TTLCache(_CACHE_MAX, _CACHE_TTL, timer=_now)
-# sha256(token) → True
+_user_cache: TTLCache[str, User] = TTLCache(_CACHE_MAX, _CACHE_TTL, timer=_now)
 _negative_cache: TTLCache[str, bool] = TTLCache(
     _NEG_CACHE_MAX, _NEG_CACHE_TTL, timer=_now
 )
@@ -64,22 +46,11 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-# Shared client: token validation runs on every MCP request, so reuse one
-# connection pool instead of paying a new TCP handshake each time.
-_client: Optional[httpx.AsyncClient] = None
+async def resolve_user(token: str) -> Optional[User]:
+    """Validate a JupyterHub Bearer token; return the user it belongs to.
 
-
-def _get_client() -> httpx.AsyncClient:
-    global _client
-    if _client is None:
-        _client = httpx.AsyncClient(timeout=10.0, transport=upstream_transport("hub"))
-    return _client
-
-
-async def resolve_user(token: str) -> Optional[dict]:
-    """Validate a JupyterHub Bearer token; return {username, namespace, token}.
-
-    Returns None only when the Hub itself rejected the token. Raises
+    Every caller of one token shares the returned dict, so copy it before
+    handing it on. Returns None only when the Hub itself rejected the token. Raises
     HubUnavailable when the Hub could not be reached, or answered with
     anything other than a verdict on the token — that says nothing about
     the token and must not be reported as "invalid".
@@ -95,9 +66,10 @@ async def resolve_user(token: str) -> Optional[dict]:
         return None
 
     try:
-        resp = await _get_client().get(
+        resp = await shared_client("hub").get(
             f"{HUB_API_URL}/user",
             headers={"Authorization": f"Bearer {token}"},
+            timeout=10.0,
         )
     except httpx.RequestError as exc:
         record_auth("hub_unreachable")
@@ -111,8 +83,7 @@ async def resolve_user(token: str) -> Optional[dict]:
         return None
 
     if resp.status_code != 200:
-        # 5xx: the Hub is broken; 404 and friends: this service is pointed
-        # at the wrong place. Neither is the token's fault.
+        # A broken Hub, or this service pointed at the wrong place: not the token.
         record_auth("hub_error")
         detail = response_detail(resp, limit=120)
         problem = f"JupyterHub API returned HTTP {resp.status_code}"
@@ -128,26 +99,7 @@ async def resolve_user(token: str) -> Optional[dict]:
             "JupyterHub API returned HTTP 200 but no user record for the token"
         )
 
-    user_info = {
-        "username": username,
-        "namespace": NAMESPACE,
-        "token": token,
-    }
-    _user_cache[key] = user_info
+    user: User = {"username": username, "token": token}
+    _user_cache[key] = user
     record_auth("validated")
-    return user_info
-
-
-class HubTokenVerifier:
-    """``mcp.server.auth.provider.TokenVerifier`` backed by the Hub.
-
-    ``client_id`` carries the Hub username — the SDK's AccessToken has no
-    other identity field, and the middleware maps it back into the user
-    context tools read. Raises HubUnavailable when no verdict is possible.
-    """
-
-    async def verify_token(self, token: str) -> AccessToken | None:
-        user = await resolve_user(token)
-        if user is None:
-            return None
-        return AccessToken(token=token, client_id=user["username"], scopes=[])
+    return user

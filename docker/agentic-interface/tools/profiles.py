@@ -12,7 +12,7 @@ from typing import Any, Optional
 import httpx
 import yaml
 from cachetools import TTLCache
-from config import NAMESPACE
+from config import NAMESPACE, PROMETHEUS_NAME
 from errors import UpstreamError, describe_exception, json_body, response_detail
 from mcp.server.mcpserver import MCPServer
 from shared import shared_client
@@ -23,16 +23,13 @@ from tools.gpu import free_gpus, gpu_error
 _K8S_API = "https://kubernetes.default.svc"
 _TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 _CA_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-_NAMESPACE = NAMESPACE
 _CONFIGMAP = "jupyterhub-config"
 
-# Fresh for 5 minutes; the last good read is kept separately so a broken
-# source degrades to stale data rather than nothing.
+# Fresh for 5 minutes; a broken source degrades to the last good read.
 _CACHE_TTL = 300.0
 _fresh: TTLCache[str, list[dict]] = TTLCache(1, _CACHE_TTL)
 _last_good: list[dict] = []
-# Why the last read failed, in user terms — reported instead of a bare
-# "service may be misconfigured". None after a successful read.
+# Why the last read failed, in user terms; None after a successful read.
 _last_error: Optional[str] = None
 # Single-flights the refresh so concurrent cache misses don't dogpile the API.
 _refresh_lock = asyncio.Lock()
@@ -88,12 +85,11 @@ async def _read_configmap() -> Optional[str]:
         )
         return None
 
-    # verify= goes to the transport: httpx ignores client-level TLS settings
-    # once a custom transport is supplied (applied on first creation only).
+    # verify= goes to the transport: httpx ignores it on a client given a transport.
     client = shared_client("kubernetes-api", verify=_CA_PATH)
     try:
         resp = await client.get(
-            f"{_K8S_API}/api/v1/namespaces/{_NAMESPACE}/configmaps/{_CONFIGMAP}",
+            f"{_K8S_API}/api/v1/namespaces/{NAMESPACE}/configmaps/{_CONFIGMAP}",
             headers={"Authorization": f"Bearer {token}"},
             timeout=5.0,
         )
@@ -104,13 +100,13 @@ async def _read_configmap() -> Optional[str]:
     if resp.status_code == 403:
         _last_error = (
             "the agentic-interface service account is not allowed to read "
-            f"ConfigMap '{_CONFIGMAP}' in namespace '{_NAMESPACE}' (Kubernetes "
+            f"ConfigMap '{_CONFIGMAP}' in namespace '{NAMESPACE}' (Kubernetes "
             "API HTTP 403) — an RBAC problem on the facility side"
         )
         return None
     if resp.status_code == 404:
         _last_error = (
-            f"ConfigMap '{_CONFIGMAP}' does not exist in namespace '{_NAMESPACE}' "
+            f"ConfigMap '{_CONFIGMAP}' does not exist in namespace '{NAMESPACE}' "
             "(Kubernetes API HTTP 404)"
         )
         return None
@@ -160,21 +156,23 @@ def _parse_profiles(values_yaml: str) -> list[dict]:
         for opt_key, opt_val in (p.get("profile_options") or {}).items():
             choices: dict[str, str] = {}
             gpu: dict[str, str] = {}  # choice key -> k8s GPU resource (amount > 0)
+            default: Optional[str] = None
             for ck, cv in (opt_val.get("choices") or {}).items():
                 label = (
                     cv.get("display_name", str(ck)) if isinstance(cv, dict) else str(cv)
                 )
-                if isinstance(cv, dict) and cv.get("default"):
-                    label += " (default)"
                 choices[str(ck)] = label
                 if isinstance(cv, dict):
+                    if cv.get("default") and default is None:
+                        default = str(ck)
                     resource = _gpu_resource(cv.get("kubespawner_override"))
                     if resource:
                         gpu[str(ck)] = resource
 
-            option = {
+            option: dict[str, Any] = {
                 "display_name": opt_val.get("display_name", str(opt_key)),
                 "choices": choices,
+                "default": default,
             }
             if gpu:
                 option["gpu"] = gpu
@@ -211,8 +209,7 @@ async def get_profiles() -> list[dict]:
         return _fresh["profiles"]
 
     async with _refresh_lock:
-        # Re-check after acquiring — another task may have refreshed while
-        # we waited on the lock.
+        # Another task may have refreshed while we waited on the lock.
         if "profiles" in _fresh:
             return _fresh["profiles"]
 
@@ -230,6 +227,14 @@ async def get_profiles() -> list[dict]:
 
         # Return stale data rather than nothing
         return _last_good
+
+
+def labelled_choices(option: dict) -> dict[str, str]:
+    """An option's choices as a user reads them, with its default marked."""
+    return {
+        key: f"{label} (default)" if key == option.get("default") else label
+        for key, label in (option.get("choices") or {}).items()
+    }
 
 
 def find_profile(profiles: list[dict], name: str) -> Optional[dict]:
@@ -285,7 +290,7 @@ def register(mcp: MCPServer) -> None:
                 for opt_key, opt_info in p["options"].items():
                     block.append(f'  **"{opt_key}"** — {opt_info["display_name"]}')
                     gpu_map = opt_info.get("gpu") or {}
-                    for ck, label in opt_info["choices"].items():
+                    for ck, label in labelled_choices(opt_info).items():
                         block.append(
                             f'    `"{ck}"` → {_gpu_label(label, gpu_map.get(ck), free)}'
                         )
@@ -295,7 +300,7 @@ def register(mcp: MCPServer) -> None:
         if has_gpu and free is None:
             sections.append(
                 "Note: live GPU availability is unknown right now "
-                f"({gpu_error() or 'the monitoring system did not answer'}), so GPU "
+                f"({gpu_error() or f'{PROMETHEUS_NAME} did not answer'}), so GPU "
                 "choices are listed without live counts and a GPU flavour may "
                 "turn out to be exhausted when the session starts."
             )

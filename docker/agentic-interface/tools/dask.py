@@ -1,7 +1,8 @@
 """Dask cluster tools — create, list, inspect, scale, stop via Gateway API.
 
 Calls carry the caller's own JupyterHub token, so the gateway shows each user
-only their own clusters.
+only their own clusters. Limits are the gateway's: it refuses or clamps, and
+these tools relay what it said.
 
 Worker counts come from the AF Prometheus (dask_scheduler_workers). Live CPU /
 memory usage comes from the cluster Prometheus (cadvisor), filtered to Running
@@ -15,9 +16,12 @@ from typing import Any, Optional
 
 import httpx
 from config import (
+    CLUSTER_PROMETHEUS_NAME,
     CLUSTER_PROMETHEUS_URL,
     DASK_GATEWAY_URL,
     GLOBAL_PIXI_PROJECT,
+    NAMESPACE,
+    PROMETHEUS_NAME,
     PROMETHEUS_URL,
 )
 from context import require_user
@@ -34,33 +38,13 @@ from errors import (
 )
 from mcp.server.mcpserver import Context, MCPServer
 from pydantic import BaseModel, Field
-from shared import prom_query, prom_scalar, prom_vector, quote_label, shared_client
+from shared import prom_samples, prom_value, quote_label, shared_client
 
 from tools.elicitation import ask
 
 _SERVICE = "Dask Gateway"
 
-
-# Mirror apps/dask-gateway/values.yaml.
-MAX_WORKERS = 1000
-_WORKER_CORES = (0.1, 64.0)
-_WORKER_MEMORY = (0.1, 64.0)
-
-
-def _check_worker_size(worker_cores: float, worker_memory: float) -> None:
-    """Raise UserError if the per-worker size exceeds the gateway's configured
-    option limits. The gateway enforces these too; checking here turns a 422
-    round-trip into an immediate, precise message."""
-    lo, hi = _WORKER_CORES
-    if not lo <= worker_cores <= hi:
-        raise UserError(f"Error: worker_cores must be between {lo:g} and {hi:g}.")
-    lo, hi = _WORKER_MEMORY
-    if not lo <= worker_memory <= hi:
-        raise UserError(f"Error: worker_memory must be between {lo:g} and {hi:g} GiB.")
-
-
-# Bounds the create/scale wait for a PENDING scheduler; the gateway refuses to
-# scale a cluster that is not RUNNING.
+# Bounds the wait for a PENDING scheduler: the gateway scales only a RUNNING one.
 SCHEDULER_READY_TIMEOUT = 120.0
 SCHEDULER_POLL_INTERVAL = 3.0
 
@@ -68,8 +52,7 @@ SCHEDULER_POLL_INTERVAL = 3.0
 _TERMINAL_STATUSES = frozenset({"STOPPING", "STOPPED", "FAILED"})
 
 
-# Cluster names land in gateway URL paths and (via _cluster_id) in PromQL
-# regexes, so only accept the character set the gateway emits.
+# Names land in gateway URL paths and PromQL regexes: only what the gateway emits.
 _CLUSTER_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
@@ -157,17 +140,25 @@ def _fmt_cluster(c: dict) -> str:
     return "\n".join(lines)
 
 
-async def _cluster_status(cluster_name: str) -> str:
-    """The gateway's current status word for ``cluster_name`` (upper-case)."""
+async def _cluster_record(cluster_name: str, action: str) -> dict[str, Any]:
+    """The gateway's record of ``cluster_name``."""
     resp = await _gateway(
         "GET",
         f"/api/v1/clusters/{cluster_name}",
-        action=f"check the state of cluster '{cluster_name}'",
+        action=action,
         cluster_name=cluster_name,
     )
     record = json_body(resp)
     if not isinstance(record, dict):
         raise malformed_response(_SERVICE, resp, "a cluster record")
+    return record
+
+
+async def _cluster_status(cluster_name: str) -> str:
+    """The gateway's current status word for ``cluster_name`` (upper-case)."""
+    record = await _cluster_record(
+        cluster_name, f"check the state of cluster '{cluster_name}'"
+    )
     return str(record.get("status") or "UNKNOWN").upper()
 
 
@@ -177,14 +168,7 @@ async def _await_scheduler(
     """Poll until ``cluster_name`` is RUNNING, or the wait runs out.
 
     Returns ``(last_status, seconds_waited)``; the caller decides what a
-    still-PENDING cluster means for it. A cluster that has entered a terminal
-    state raises instead — no amount of waiting brings it back.
-
-    An already-RUNNING cluster costs exactly one GET, so this is safe to call
-    on the normal path.
-
-    The bounds are read at call time, not bound as defaults, so tests can
-    shorten them.
+    still-PENDING cluster means for it. A cluster in a terminal state raises.
     """
     deadline = time.monotonic() + (
         SCHEDULER_READY_TIMEOUT if timeout is None else timeout
@@ -236,28 +220,37 @@ async def _gateway(
 
 async def _require_owned_cluster(cluster_name: str) -> None:
     """Raise a Failure if the user cannot access ``cluster_name``."""
-    await _gateway(
-        "GET",
-        f"/api/v1/clusters/{cluster_name}",
-        action=f"access cluster '{cluster_name}'",
+    await _cluster_record(cluster_name, f"access cluster '{cluster_name}'")
+
+
+async def _scale(cluster_name: str, n_workers: int) -> Optional[str]:
+    """Ask for ``n_workers``; what the gateway said if it did not take that count.
+
+    Over the user's limit the gateway scales to the limit and answers 200 with
+    ok false. The timeout is long because its forward to a scheduler that has
+    just reached RUNNING retries, and a timeout here reports an applied scale as
+    failed.
+    """
+    resp = await _gateway(
+        "POST",
+        f"/api/v1/clusters/{cluster_name}/scale",
+        action=f"scale to {n_workers} worker(s)",
         cluster_name=cluster_name,
+        ok=(200, 204),
+        timeout=30.0,
+        json={"count": n_workers},
     )
+    answer = json_body(resp)
+    if isinstance(answer, dict) and answer.get("ok") is False:
+        return str(answer.get("msg") or f"{_SERVICE} did not take that worker count.")
+    return None
 
 
-async def _prom_scalar(
-    client: httpx.AsyncClient, base_url: str, query: str
-) -> tuple[Optional[float], Optional[str]]:
-    """(first scalar or None, problem or None) — see shared.prom_query."""
-    rows, problem = await prom_query(client, base_url, query)
-    return prom_scalar(rows), problem
-
-
-async def _prom_vector(
-    client: httpx.AsyncClient, base_url: str, query: str
-) -> tuple[list[tuple[dict, float]], Optional[str]]:
-    """((labels, value) rows, problem or None) — see shared.prom_query."""
-    rows, problem = await prom_query(client, base_url, query)
-    return prom_vector(rows), problem
+def _check_worker_count(n_workers: int) -> None:
+    """Refused here: on create the cluster would already exist by the time the
+    gateway refused the count."""
+    if n_workers < 0:
+        raise UserError("Error: n_workers must be ≥ 0.")
 
 
 def _stats(values: list[float]) -> Optional[tuple[float, float, float]]:
@@ -310,10 +303,6 @@ def _build_cluster_options(
             "Error: provide either pixi_project (directory with pixi.toml) "
             "or conda_env (path to a conda/pixi env prefix)."
         )
-    if worker_cores <= 0:
-        raise UserError("Error: worker_cores must be > 0.")
-    if worker_memory <= 0:
-        raise UserError("Error: worker_memory must be > 0 (GiB).")
 
     options: dict = {
         "worker_cores": worker_cores,
@@ -331,6 +320,34 @@ def _build_cluster_options(
     return options
 
 
+# Default worker size when the user picks "default".
+DEFAULT_WORKER_CORES = 1.0
+DEFAULT_WORKER_MEMORY = 4.0
+
+_COUNT_CHOICES = ("0", "10", "50")
+
+# The choices create_dask_cluster takes, for the agent to put to the user.
+CREATE_MENU = (
+    "1) worker environment — one of:\n"
+    f"   • global (default): shared pixi env at {GLOBAL_PIXI_PROJECT} — pass "
+    "env_source='global'.\n"
+    "   • your pixi project: pass pixi_project='/path' (+ optional pixi_env).\n"
+    "   • your conda env: pass conda_env='/path'.\n"
+    f"2) worker size: default ({DEFAULT_WORKER_CORES:g} core / "
+    f"{DEFAULT_WORKER_MEMORY:g} GiB) or custom (pass worker_cores + "
+    "worker_memory in GiB).\n"
+    f"3) worker count to start with: {', '.join(_COUNT_CHOICES)}, or a custom "
+    "number (pass n_workers)."
+)
+
+# Returned when a choice cannot be elicited; agent clients may auto-decline.
+_CREATE_CHOICES_HELP = (
+    "create_dask_cluster needs these choices from the user. Ask them (use the "
+    "client's multiple-choice UI if available), then call create_dask_cluster "
+    f"again with explicit arguments:\n{CREATE_MENU}"
+)
+
+
 # ── Elicitation schemas (rendered as multiple-choice forms by capable clients) ─
 
 
@@ -341,7 +358,7 @@ class _EnvChoice(BaseModel):
         default="global",
         json_schema_extra={"enum": ["global", "pixi", "conda"]},
         description=(
-            "global = shared pixi env at /work/pixi/global; "
+            f"global = shared pixi env at {GLOBAL_PIXI_PROJECT}; "
             "pixi = your own pixi project; conda = your own conda env."
         ),
     )
@@ -366,11 +383,6 @@ class _CondaChoice(BaseModel):
     )
 
 
-# Default worker size when the user picks "default".
-DEFAULT_WORKER_CORES = 1.0
-DEFAULT_WORKER_MEMORY = 4.0
-
-
 class _SizeChoice(BaseModel):
     """How big each worker should be."""
 
@@ -388,16 +400,8 @@ class _SizeChoice(BaseModel):
 class _CustomSize(BaseModel):
     """Custom per-worker resources."""
 
-    worker_cores: float = Field(
-        gt=0,
-        description=f"Cores per worker ({_WORKER_CORES[0]:g}–{_WORKER_CORES[1]:g}).",
-    )
-    worker_memory: float = Field(
-        gt=0,
-        description=(
-            f"Memory per worker in GiB ({_WORKER_MEMORY[0]:g}–{_WORKER_MEMORY[1]:g})."
-        ),
-    )
+    worker_cores: float = Field(gt=0, description="Cores per worker.")
+    worker_memory: float = Field(gt=0, description="Memory per worker in GiB.")
 
 
 class _CountChoice(BaseModel):
@@ -405,10 +409,10 @@ class _CountChoice(BaseModel):
 
     count: str = Field(
         default="0",
-        json_schema_extra={"enum": ["0", "10", "50", "custom"]},
+        json_schema_extra={"enum": [*_COUNT_CHOICES, "custom"]},
         description=(
-            "Number of workers to start with: 0 (scale later), 10, 50, or "
-            "custom to enter your own number."
+            f"Number of workers to start with: {_COUNT_CHOICES[0]} (scale later), "
+            f"{', '.join(_COUNT_CHOICES[1:])}, or custom to enter your own number."
         ),
     )
 
@@ -417,24 +421,6 @@ class _CustomCount(BaseModel):
     """Custom starting worker count."""
 
     n_workers: int = Field(ge=0, description="Number of workers to start with.")
-
-
-# Returned when a choice cannot be elicited; agent clients may auto-decline,
-# so a non-accept never proves the user said no.
-_CREATE_CHOICES_HELP = (
-    "create_dask_cluster needs these choices from the user. Ask them (use the "
-    "client's multiple-choice UI if available), then call create_dask_cluster "
-    "again with explicit arguments:\n"
-    "1) worker environment — one of:\n"
-    "   • global (default): shared pixi env at /work/pixi/global — pass "
-    "env_source='global'.\n"
-    "   • your pixi project: pass pixi_project='/path' (+ optional pixi_env).\n"
-    "   • your conda env: pass conda_env='/path'.\n"
-    "2) worker size: default (1 core / 4 GiB) or custom (pass worker_cores + "
-    "worker_memory in GiB).\n"
-    "3) worker count to start with: 0, 10, 50, or a custom number (pass "
-    "n_workers)."
-)
 
 
 # Workers register asynchronously and the count comes from a scrape.
@@ -448,6 +434,133 @@ _WORKERS_PENDING_NEXT = [
     "that, query_dask_logs shows what the workers are doing and "
     "get_facility_health shows whether the facility is short of capacity.",
 ]
+
+
+async def _resolve_env(
+    ctx: Context,
+    env_source: Optional[str],
+    pixi_project: Optional[str],
+    pixi_env: str,
+    conda_env: Optional[str],
+) -> tuple[Optional[str], str, Optional[str]]:
+    """``(pixi_project, pixi_env, conda_env)``: infer the environment from
+    explicit paths, else ask the user."""
+    if pixi_project:
+        env_source = "pixi"
+    elif conda_env:
+        env_source = "conda"
+    elif env_source is None:
+        choice = await ask(
+            ctx, "Choose the worker environment.", _EnvChoice, _CREATE_CHOICES_HELP
+        )
+        env_source = choice.env_source
+
+    if env_source == "global":
+        return GLOBAL_PIXI_PROJECT, "default", conda_env
+    if env_source == "pixi":
+        if not pixi_project:
+            choice = await ask(
+                ctx,
+                "Provide the path to your pixi project.",
+                _PixiChoice,
+                _CREATE_CHOICES_HELP,
+            )
+            pixi_project, pixi_env = choice.pixi_project, choice.pixi_env
+        return pixi_project, pixi_env, conda_env
+    if env_source == "conda":
+        if not conda_env:
+            choice = await ask(
+                ctx,
+                "Provide the path to your conda environment.",
+                _CondaChoice,
+                _CREATE_CHOICES_HELP,
+            )
+            conda_env = choice.conda_env
+        return pixi_project, pixi_env, conda_env
+    raise UserError(
+        f"Error: unknown env_source '{env_source}'. Use 'global', 'pixi', or 'conda'."
+    )
+
+
+async def _resolve_size(
+    ctx: Context, worker_cores: Optional[float], worker_memory: Optional[float]
+) -> tuple[float, float]:
+    """``(cores, memory)``: ask only if neither was supplied."""
+    if worker_cores is None and worker_memory is None:
+        choice = await ask(
+            ctx, "Choose the worker size.", _SizeChoice, _CREATE_CHOICES_HELP
+        )
+        if choice.size == "custom":
+            size = await ask(
+                ctx,
+                "Specify the resources per worker.",
+                _CustomSize,
+                _CREATE_CHOICES_HELP,
+            )
+            worker_cores, worker_memory = size.worker_cores, size.worker_memory
+    return (
+        DEFAULT_WORKER_CORES if worker_cores is None else worker_cores,
+        DEFAULT_WORKER_MEMORY if worker_memory is None else worker_memory,
+    )
+
+
+async def _resolve_count(ctx: Context, n_workers: Optional[int]) -> int:
+    """The starting worker count: ask only if it was not supplied."""
+    if n_workers is not None:
+        return n_workers
+    choice = await ask(
+        ctx,
+        "How many workers should the cluster start with?",
+        _CountChoice,
+        _CREATE_CHOICES_HELP,
+    )
+    if choice.count != "custom":
+        return int(choice.count)
+    count = await ask(
+        ctx,
+        "Specify the number of workers to start with.",
+        _CustomCount,
+        _CREATE_CHOICES_HELP,
+    )
+    return int(count.n_workers)
+
+
+async def _start_workers(cluster_name: str, n_workers: int) -> list[str]:
+    """Result lines for scaling a new cluster. It exists whatever happens here,
+    so a failure is reported in them: the caller still needs its name."""
+    try:
+        status, waited = await _await_scheduler(cluster_name)
+    except Failure as exc:
+        return [
+            "",
+            f"Created with 0 workers — waiting for the scheduler failed: {exc}",
+        ]
+
+    if status != "RUNNING":
+        return [
+            "",
+            f"Created with 0 workers: the scheduler was still {status} after "
+            f"{waited:.0f} s, and the gateway only accepts workers once the "
+            "cluster is RUNNING.",
+            f"Next: scale_dask_cluster('{cluster_name}', {n_workers}) — it "
+            "waits for the scheduler too, so calling it again is usually all "
+            "that is needed.",
+        ]
+
+    try:
+        clamped = await _scale(cluster_name, n_workers)
+    except Failure as exc:
+        return [
+            "",
+            f"Created with 0 workers — the scale request failed: {exc}",
+            f"Retry with scale_dask_cluster('{cluster_name}', {n_workers}).",
+        ]
+
+    lines = []
+    if waited >= SCHEDULER_POLL_INTERVAL:
+        lines.append(f"Scheduler became RUNNING after {waited:.0f} s.")
+    lines.append(clamped or f"Scaling to {n_workers} worker(s).")
+    return lines + _WORKERS_PENDING_NEXT
 
 
 def register(mcp: MCPServer) -> None:
@@ -501,8 +614,6 @@ def register(mcp: MCPServer) -> None:
             "",
             "Notes:",
             "  • Provide exactly one of pixi_project or conda_env.",
-            "  • worker_memory is in GiB.",
-            "  • Only one active cluster per user is allowed.",
         ]
         return "\n".join(lines)
 
@@ -528,27 +639,23 @@ def register(mcp: MCPServer) -> None:
         returned instead — collect them from the user and call again with
         explicit args.
 
-        Worker environment (``env_source``):
-          • 'global' — shared pixi env at /work/pixi/global
-          • 'pixi' — your own pixi project (set ``pixi_project`` + ``pixi_env``)
-          • 'conda' — your own conda env (set ``conda_env``)
-
         Passing ``pixi_project`` or ``conda_env`` directly implies the matching
         ``env_source``. Passing ``worker_cores``/``worker_memory`` skips the size
         question; passing ``n_workers`` skips the count question.
 
         Args:
-            env_source: 'global', 'pixi', or 'conda'. Elicited if omitted and no
-                        pixi_project/conda_env is given.
+            env_source: 'global' (the shared pixi env), 'pixi', or 'conda'.
+                        Elicited if omitted and no pixi_project/conda_env is
+                        given.
             pixi_project: Path to a pixi project directory.
             pixi_env: Pixi environment name within the project (default 'default').
             conda_env: Path to a conda/mamba env prefix (mutually exclusive with
                        pixi_project).
-            worker_cores: Cores per worker (0.1–64). Defaults to 1 if the user
-                          picks the default size.
-            worker_memory: Memory per worker in GiB (0.1–64). Defaults to 4 if
-                           the user picks the default size.
-            n_workers: Workers to start with (0–1000). 0 (or omitted with a
+            worker_cores: Cores per worker. Defaults to 1 if the user picks the
+                          default size.
+            worker_memory: Memory per worker in GiB. Defaults to 4 if the user
+                           picks the default size.
+            n_workers: Workers to start with. 0 (or omitted with a
                        non-eliciting client) starts the cluster empty. A
                        non-zero count waits for the scheduler to come up
                        before scaling, so the call takes as long as the
@@ -556,89 +663,20 @@ def register(mcp: MCPServer) -> None:
             env: Extra environment variables for workers (e.g. X509_USER_PROXY,
                  PYTHONPATH, NB_UID/NB_GID for CERN/FNAL users).
         """
-        if n_workers is not None and n_workers < 0:
-            raise UserError("Error: n_workers must be ≥ 0.")
-        if n_workers is not None and n_workers > MAX_WORKERS:
-            raise UserError(f"Error: n_workers must be ≤ {MAX_WORKERS}.")
+        if n_workers is not None:
+            _check_worker_count(n_workers)
         if worker_cores is not None and worker_cores <= 0:
             raise UserError("Error: worker_cores must be > 0.")
         if worker_memory is not None and worker_memory <= 0:
             raise UserError("Error: worker_memory must be > 0 (GiB).")
 
-        help_text = _CREATE_CHOICES_HELP
-
-        # ── Worker environment: infer from explicit paths, else ask the user ──
-        if pixi_project:
-            env_source = "pixi"
-        elif conda_env:
-            env_source = "conda"
-        elif env_source is None:
-            choice = await ask(
-                ctx, "Choose the worker environment.", _EnvChoice, help_text
-            )
-            env_source = choice.env_source
-
-        if env_source == "global":
-            pixi_project = GLOBAL_PIXI_PROJECT
-            pixi_env = "default"
-        elif env_source == "pixi":
-            if not pixi_project:
-                choice = await ask(
-                    ctx,
-                    "Provide the path to your pixi project.",
-                    _PixiChoice,
-                    help_text,
-                )
-                pixi_project, pixi_env = choice.pixi_project, choice.pixi_env
-        elif env_source == "conda":
-            if not conda_env:
-                choice = await ask(
-                    ctx,
-                    "Provide the path to your conda environment.",
-                    _CondaChoice,
-                    help_text,
-                )
-                conda_env = choice.conda_env
-        else:
-            raise UserError(
-                f"Error: unknown env_source '{env_source}'. "
-                "Use 'global', 'pixi', or 'conda'."
-            )
-
-        # ── Worker size: ask only if neither cores nor memory was supplied ──
-        if worker_cores is None and worker_memory is None:
-            choice = await ask(ctx, "Choose the worker size.", _SizeChoice, help_text)
-            if choice.size == "custom":
-                size = await ask(
-                    ctx, "Specify the resources per worker.", _CustomSize, help_text
-                )
-                worker_cores, worker_memory = size.worker_cores, size.worker_memory
-        if worker_cores is None:
-            worker_cores = DEFAULT_WORKER_CORES
-        if worker_memory is None:
-            worker_memory = DEFAULT_WORKER_MEMORY
-        _check_worker_size(worker_cores, worker_memory)
-
-        # ── Worker count: ask only if n_workers was not supplied ──
-        if n_workers is None:
-            choice = await ask(
-                ctx,
-                "How many workers should the cluster start with?",
-                _CountChoice,
-                help_text,
-            )
-            if choice.count == "custom":
-                count = await ask(
-                    ctx,
-                    "Specify the number of workers to start with.",
-                    _CustomCount,
-                    help_text,
-                )
-                n_workers = count.n_workers
-                if n_workers > MAX_WORKERS:
-                    raise UserError(f"Error: n_workers must be ≤ {MAX_WORKERS}.")
-            else:
-                n_workers = int(choice.count)
+        pixi_project, pixi_env, conda_env = await _resolve_env(
+            ctx, env_source, pixi_project, pixi_env, conda_env
+        )
+        worker_cores, worker_memory = await _resolve_size(
+            ctx, worker_cores, worker_memory
+        )
+        n_workers = await _resolve_count(ctx, n_workers)
 
         username = require_user()["username"]
         options = _build_cluster_options(
@@ -689,53 +727,7 @@ def register(mcp: MCPServer) -> None:
             ]
             return "\n".join(lines)
 
-        # The cluster exists whatever happens next, so anything that goes wrong
-        # from here is reported inside the result rather than as a failure of
-        # the call — the caller still needs the name.
-        try:
-            status, waited = await _await_scheduler(cluster_name)
-        except Failure as exc:
-            lines += [
-                "",
-                f"Created with 0 workers — waiting for the scheduler failed: {exc}",
-            ]
-            return "\n".join(lines)
-
-        if status != "RUNNING":
-            lines += [
-                "",
-                f"Created with 0 workers: the scheduler was still {status} after "
-                f"{waited:.0f} s, and the gateway only accepts workers once the "
-                "cluster is RUNNING.",
-                f"Next: scale_dask_cluster('{cluster_name}', {n_workers}) — it "
-                "waits for the scheduler too, so calling it again is usually all "
-                "that is needed.",
-            ]
-            return "\n".join(lines)
-
-        try:
-            await _gateway(
-                "POST",
-                f"/api/v1/clusters/{cluster_name}/scale",
-                action=f"scale to {n_workers} worker(s)",
-                cluster_name=cluster_name,
-                ok=(200, 204),
-                timeout=30.0,
-                json={"count": n_workers},
-            )
-        except Failure as exc:
-            lines += [
-                "",
-                f"Created with 0 workers — the scale request failed: {exc}",
-                f"Retry with scale_dask_cluster('{cluster_name}', {n_workers}).",
-            ]
-            return "\n".join(lines)
-
-        if waited >= SCHEDULER_POLL_INTERVAL:
-            lines.append(f"Scheduler became RUNNING after {waited:.0f} s.")
-        lines.append(f"Scaling to {n_workers} worker(s).")
-        lines += _WORKERS_PENDING_NEXT
-        return "\n".join(lines)
+        return "\n".join(lines + await _start_workers(cluster_name, n_workers))
 
     @mcp.tool()
     async def get_dask_cluster_info(cluster_name: str) -> str:
@@ -745,15 +737,7 @@ def register(mcp: MCPServer) -> None:
             cluster_name: Cluster identifier returned by list_dask_clusters.
         """
         _validate_cluster_name(cluster_name)
-        resp = await _gateway(
-            "GET",
-            f"/api/v1/clusters/{cluster_name}",
-            action=f"inspect cluster '{cluster_name}'",
-            cluster_name=cluster_name,
-        )
-        c = json_body(resp)
-        if not isinstance(c, dict):
-            raise malformed_response(_SERVICE, resp, "a cluster record")
+        c = await _cluster_record(cluster_name, f"inspect cluster '{cluster_name}'")
         workers = c.get("workers") or {}
         worker_lines: list[str] = []
         if isinstance(workers, dict):
@@ -801,16 +785,16 @@ def register(mcp: MCPServer) -> None:
 
         prom = shared_client("prometheus")
         (total, p1), (by_state, p2), (desired, p3) = await asyncio.gather(
-            _prom_scalar(prom, PROMETHEUS_URL, total_q),
-            _prom_vector(prom, PROMETHEUS_URL, by_state_q),
-            _prom_scalar(prom, PROMETHEUS_URL, desired_q),
+            prom_value(prom, PROMETHEUS_URL, total_q),
+            prom_samples(prom, PROMETHEUS_URL, by_state_q),
+            prom_value(prom, PROMETHEUS_URL, desired_q),
         )
 
         problem = p1 or p2 or p3
         if problem:
             raise UpstreamError(
                 f"Error: could not read worker metrics for '{cluster_name}' — "
-                f"Prometheus {problem}. The cluster itself may be fine: "
+                f"{PROMETHEUS_NAME} {problem}. The cluster itself may be fine: "
                 "get_dask_cluster_info shows the gateway's own view of its workers."
             )
         if total is None:
@@ -852,32 +836,32 @@ def register(mcp: MCPServer) -> None:
         worker_re = f"dask-worker-{re.escape(cid)}-.+"
         # Only Running pods — cadvisor keeps series for terminated workers.
         running = (
-            f'kube_pod_status_phase{{namespace="cms",phase="Running",'
+            f'kube_pod_status_phase{{namespace="{NAMESPACE}",phase="Running",'
             f'pod=~"{worker_re}"}}'
         )
         cpu_q = (
             f"sum by (pod) ("
-            f'rate(container_cpu_usage_seconds_total{{namespace="cms",'
+            f'rate(container_cpu_usage_seconds_total{{namespace="{NAMESPACE}",'
             f'pod=~"{worker_re}",container="dask-worker"}}[2m])'
             f" * on(namespace,pod) group_left {running})"
         )
         mem_q = (
             f"sum by (pod) ("
-            f'container_memory_working_set_bytes{{namespace="cms",'
+            f'container_memory_working_set_bytes{{namespace="{NAMESPACE}",'
             f'pod=~"{worker_re}",container="dask-worker"}}'
             f" * on(namespace,pod) group_left {running})"
         )
 
         prom = shared_client("cluster-prometheus")
         (cpu_rows, p1), (mem_rows, p2) = await asyncio.gather(
-            _prom_vector(prom, CLUSTER_PROMETHEUS_URL, cpu_q),
-            _prom_vector(prom, CLUSTER_PROMETHEUS_URL, mem_q),
+            prom_samples(prom, CLUSTER_PROMETHEUS_URL, cpu_q),
+            prom_samples(prom, CLUSTER_PROMETHEUS_URL, mem_q),
         )
         problem = p1 or p2
         if problem:
             raise UpstreamError(
                 f"Error: could not read resource usage for '{cluster_name}' — "
-                f"the monitoring system {problem}. The cluster itself may be "
+                f"{CLUSTER_PROMETHEUS_NAME} {problem}. The cluster itself may be "
                 "fine: get_dask_worker_count and get_dask_cluster_info do not "
                 "depend on this data."
             )
@@ -931,13 +915,10 @@ def register(mcp: MCPServer) -> None:
 
         Args:
             cluster_name: Cluster identifier returned by list_dask_clusters.
-            n_workers: Target worker count (0–1000).
+            n_workers: Target worker count.
         """
         _validate_cluster_name(cluster_name)
-        if n_workers < 0:
-            raise UserError("Error: n_workers must be ≥ 0.")
-        if n_workers > MAX_WORKERS:
-            raise UserError(f"Error: n_workers must be ≤ {MAX_WORKERS}.")
+        _check_worker_count(n_workers)
 
         # A starting cluster rejects scaling; a RUNNING one costs one extra GET here.
         status, waited = await _await_scheduler(cluster_name)
@@ -952,15 +933,10 @@ def register(mcp: MCPServer) -> None:
                 "resumes the wait."
             )
 
-        await _gateway(
-            "POST",
-            f"/api/v1/clusters/{cluster_name}/scale",
-            action=f"scale to {n_workers} worker(s)",
-            cluster_name=cluster_name,
-            ok=(200, 204),
-            json={"count": n_workers},
-        )
-        lines = [f"Cluster '{cluster_name}' scaling to {n_workers} worker(s)."]
+        clamped = await _scale(cluster_name, n_workers)
+        lines = [
+            clamped or f"Cluster '{cluster_name}' scaling to {n_workers} worker(s)."
+        ]
         if waited >= SCHEDULER_POLL_INTERVAL:
             lines.insert(0, f"Scheduler became RUNNING after {waited:.0f} s.")
         if n_workers:

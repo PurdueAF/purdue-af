@@ -116,7 +116,7 @@ GPU_PROM_URL = f"{gpu.PROMETHEUS_URL}/api/v1/query"
 async def test_free_gpus_records_why_it_is_unknown():
     respx.get(GPU_PROM_URL).mock(side_effect=ConnectError("down"))
     assert await gpu.free_gpus() is None
-    assert gpu.gpu_error() == "Prometheus unreachable — connection failed (down)"
+    assert gpu.gpu_error() == "Prometheus is unreachable — connection failed (down)"
 
     gpu._cache.clear()
     respx.get(GPU_PROM_URL).mock(return_value=Response(500, text="boom"))
@@ -133,4 +133,33 @@ async def test_free_gpus_records_why_it_is_unknown():
     gpu._cache.clear()
     respx.get(GPU_PROM_URL).mock(return_value=Response(200, json={"data": "junk"}))
     assert await gpu.free_gpus() is None
-    assert "unexpected shape" in gpu.gpu_error()
+    assert "not a query result" in gpu.gpu_error()
+
+
+def _free_of(alloc, used):
+    def responder(request):
+        rows = alloc if "allocatable" in request.url.params["query"] else used
+        if isinstance(rows, int):
+            return Response(rows)
+        return Response(200, json={"data": {"result": rows}})
+
+    respx.get(GPU_PROM_URL).mock(side_effect=responder)
+    return gpu.free_gpus()
+
+
+@respx.mock
+async def test_a_failed_used_query_is_unknown_not_zero_in_use():
+    """Reading it as none in use would offer exhausted flavors."""
+    alloc = [_prom_result("nvidia_com_gpu", 8)]
+    assert await _free_of(alloc, 500) is None
+    assert gpu.gpu_error() == "Prometheus returned HTTP 500"
+
+
+@respx.mock
+async def test_a_dropped_allocatable_row_is_unknown_not_none_free():
+    alloc = [
+        _prom_result("nvidia_com_gpu", 8),
+        {"metric": {"resource": "nvidia_com_mig_1g_5gb"}, "value": [0, "NaN-ish"]},
+    ]
+    assert await _free_of(alloc, []) is None
+    assert gpu.gpu_error() == "Prometheus returned GPU metrics in an unexpected shape"

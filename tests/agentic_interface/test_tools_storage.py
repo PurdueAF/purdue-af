@@ -1,10 +1,10 @@
-"""Tests for tools/storage.py — Prometheus scalar queries and quota report."""
+"""Tests for tools/storage.py — the quota report."""
 
 import re
 
 import respx
 from agentic_helpers import as_user, failure, register_tools
-from httpx import AsyncClient, ConnectError, Response
+from httpx import ConnectError, Response
 from tools import storage
 
 PROM_URL = f"{storage.PROMETHEUS_URL}/api/v1/query"
@@ -12,50 +12,6 @@ PROM_URL = f"{storage.PROMETHEUS_URL}/api/v1/query"
 
 def prom_result(value):
     return {"data": {"result": [{"value": [1700000000, str(value)]}]}}
-
-
-# ── _prom_scalar ──────────────────────────────────────────────────────────────
-
-
-@respx.mock
-async def test_prom_scalar_returns_float():
-    respx.get(PROM_URL).respond(200, json=prom_result(42.5))
-    async with AsyncClient() as client:
-        assert await storage._prom_scalar(client, "q") == (42.5, None)
-
-
-@respx.mock
-async def test_prom_scalar_empty_result_is_none_without_problem():
-    respx.get(PROM_URL).respond(200, json={"data": {"result": []}})
-    async with AsyncClient() as client:
-        assert await storage._prom_scalar(client, "q") == (None, None)
-
-
-@respx.mock
-async def test_prom_scalar_http_error_is_a_problem():
-    respx.get(PROM_URL).respond(503)
-    async with AsyncClient() as client:
-        value, problem = await storage._prom_scalar(client, "q")
-    assert value is None
-    assert problem == "returned HTTP 503"
-
-
-@respx.mock
-async def test_prom_scalar_unreachable_is_a_problem():
-    respx.get(PROM_URL).mock(side_effect=ConnectError("down"))
-    async with AsyncClient() as client:
-        value, problem = await storage._prom_scalar(client, "q")
-    assert value is None
-    assert problem.startswith("is unreachable")
-
-
-@respx.mock
-async def test_prom_scalar_malformed_value_is_none():
-    respx.get(PROM_URL).respond(
-        200, json={"data": {"result": [{"value": [1700000000, "NaN-ish?"]}]}}
-    )
-    async with AsyncClient() as client:
-        assert await storage._prom_scalar(client, "q") == (None, None)
 
 
 # ── _bar ──────────────────────────────────────────────────────────────────────

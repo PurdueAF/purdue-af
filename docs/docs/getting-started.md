@@ -108,5 +108,5 @@ Join the Mattermost channel and the mailing list listed in [Support](support.md)
 * Set up a [project-specific Pixi environment](guide-pixi.md)
 * Try the [interactive demos](https://github.com/PurdueAF/purdue-af-demos)
 * When your analysis outgrows a single session, [scale out with Dask Gateway](guide-dask-gateway.md)
-* Run `claude` or `codex` in a terminal — both come pre-connected to the
-  [agentic interface](guide-agentic-interface.md), or connect your own agent
+* Run `claude`, `codex` or `opencode` in a terminal — all three come
+  pre-connected to the [agentic interface](guide-agentic-interface.md), or connect your own agent

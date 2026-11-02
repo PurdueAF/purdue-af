@@ -1,17 +1,13 @@
 """AF session management — start, stop, and inspect the user's JupyterHub server.
 
 All calls go through the JupyterHub REST API using the user's own token, so they
-are automatically scoped to that user's server.
-
-Failure reporting follows errors.py: every Hub answer that is not what a tool
-needed is translated into what it means for *this* user — a token that has
-just been revoked, a token that may not manage sessions, a hub that is down —
-and no state is ever inferred from a call that did not succeed.
+are automatically scoped to that user's server. No state is ever inferred from
+a call that did not succeed.
 """
 
 import asyncio
 import time
-from typing import Any, Optional
+from typing import Any, NamedTuple, Optional
 
 import httpx
 from config import HUB_API_URL, PUBLIC_URL, TOKEN_URL
@@ -31,8 +27,14 @@ from errors import (
 from mcp.server.mcpserver import Context, MCPServer
 from shared import shared_client
 
+from tools import profiles
 from tools.elicitation import ask, single_choice_model
 from tools.gpu import apply_availability, free_gpus
+
+_SERVICE = "JupyterHub API"
+_POLL_INTERVAL = 10
+# Bounds restart's wait for a stop: the call holds its request open meanwhile.
+_STOP_WAIT = 90.0
 
 
 def _auth(token: str) -> dict:
@@ -45,10 +47,9 @@ def _auth(token: str) -> dict:
 def _hub_error(resp: httpx.Response, action: str, username: str) -> Failure:
     """What a non-2xx Hub answer means for this user, and what to do next.
 
-    The token passed the service's own check moments earlier, so a 401 here
-    means it has just been revoked — inside a session that is what a restart
-    does. A 403 is the other in-session case: a session's own token may read
-    its session but not manage it.
+    The token passed the service's own check moments earlier, so a 401 means it
+    has just been revoked: inside a session a restart does that. A 403 is a
+    session's own token, which may read its session but not manage it.
     """
     code = resp.status_code
     if code == 401:
@@ -75,7 +76,7 @@ def _hub_error(resp: httpx.Response, action: str, username: str) -> Failure:
             f"to {action} — the account may have been removed from the hub. "
             "Contact AF support."
         )
-    return http_error("JupyterHub API", resp, action=action)
+    return http_error(_SERVICE, resp, action=action)
 
 
 async def _hub(
@@ -101,7 +102,7 @@ async def _hub(
         )
     except httpx.RequestError as exc:
         raise unreachable(
-            "JupyterHub API",
+            _SERVICE,
             exc,
             next_step=f"The request to {action} was not made. Try again in a "
             "minute; if the hub stays unreachable, get_facility_health shows "
@@ -115,10 +116,14 @@ async def _hub(
 _CANNOT_SEE_SERVERS = (
     "Error: cannot read session state for '{username}': this token is not "
     "permitted to list servers, so I cannot tell whether a session is running. "
-    "This is a permissions gap, not a stopped session — inside an AF session it "
-    "means the session image predates the fix (restart the session); from your "
-    "own machine, mint a fresh token at {token_url}. The JupyterHub interface "
-    "at {public_url}/hub/home always shows the real state."
+    "This is a permissions gap, not a stopped session: this token lacks "
+    "read:servers. Inside an AF session, a restarted session gets a token that "
+    "has it; from your own machine, mint a fresh token at {token_url}. The "
+    "JupyterHub interface at {public_url}/hub/home always shows the real state."
+)
+_STILL_STOPPING = (
+    "Error: the session is still stopping, so it cannot start yet. Wait for "
+    "get_session_status to report no active session, then call start_af_session."
 )
 
 
@@ -128,6 +133,131 @@ def _cannot_see_servers(username: str) -> AuthError:
             username=username, token_url=TOKEN_URL, public_url=PUBLIC_URL
         )
     )
+
+
+def _servers(resp: httpx.Response, username: str) -> dict[str, Any]:
+    """The servers in a GET /users/{name} answer; only an empty dict means none.
+
+    The Hub omits `servers` from a user model when the token lacks
+    `read:servers`, as a session's own token can, so absent means unknown.
+    """
+    data = json_body(resp)
+    if isinstance(data, dict) and data.get("servers") is None:
+        raise _cannot_see_servers(username)
+    servers = data.get("servers") if isinstance(data, dict) else None
+    if not isinstance(servers, dict):
+        raise malformed_response(_SERVICE, resp, "a user record")
+    return servers
+
+
+async def _user_servers(token: str, username: str) -> dict[str, Any]:
+    resp = await _hub(
+        "GET",
+        f"/users/{username}",
+        token=token,
+        username=username,
+        action="read the session state",
+    )
+    return _servers(resp, username)
+
+
+async def _stop(token: str, username: str) -> int:
+    """Ask the Hub to stop the server; its status says how that went: 400 when
+    no server was running, 202 while the stop is still in progress."""
+    resp = await _hub(
+        "DELETE",
+        f"/users/{username}/server",
+        token=token,
+        username=username,
+        action="stop the session",
+        ok=(200, 202, 204, 400),
+        timeout=15.0,
+    )
+    return resp.status_code
+
+
+async def _spawn(token: str, username: str, opts: dict) -> httpx.Response:
+    return await _hub(
+        "POST",
+        f"/users/{username}/server",
+        token=token,
+        username=username,
+        action="start the session",
+        ok=(200, 201, 202, 400),
+        timeout=15.0,
+        json=opts,
+    )
+
+
+def _spawn_refusal(resp: httpx.Response) -> str:
+    """Why the Hub answered a spawn with 400, from its own texts: "running",
+    "stopping", or "rejected" for the options."""
+    if "is already running" in resp.text:
+        return "running"
+    if "is pending stop" in resp.text:
+        return "stopping"
+    return "rejected"
+
+
+async def _await_stop(token: str, username: str) -> None:
+    """Wait, bounded, for a stop still in progress; the spawn after it reports
+    a stop that outlasts the wait."""
+    deadline = time.monotonic() + _STOP_WAIT
+    while True:
+        try:
+            server = (await _user_servers(token, username)).get("")
+            if server is None or server.get("pending") != "stop":
+                return
+        except UpstreamError:
+            pass  # keep polling: a backend blip says nothing about the stop
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return
+        await asyncio.sleep(min(_POLL_INTERVAL, remaining))
+
+
+class _Poll(NamedTuple):
+    """What one status check of a wait found."""
+
+    seen: str
+    ready: bool = False
+    started: str = ""
+    failed: bool = False
+    absent: bool = False
+
+
+def _classify_poll(resp: httpx.Response, username: str) -> _Poll:
+    """What a status answer means for a wait; raises when waiting cannot help."""
+    if resp.status_code in (401, 403, 404):
+        raise _hub_error(resp, "check the session state", username)
+    if resp.status_code != 200:
+        return _Poll(f"{_SERVICE} returned HTTP {resp.status_code}", failed=True)
+    server = _servers(resp, username).get("")
+    if server is None:
+        return _Poll("no server listed", absent=True)
+    if server.get("ready", False):
+        return _Poll(
+            "session is running", ready=True, started=server.get("started", "")
+        )
+    pending = server.get("pending")
+    if pending == "stop":
+        raise UserError(
+            "Error: the session is stopping, not starting. "
+            "Wait for get_session_status to report no active "
+            "session, then call start_af_session."
+        )
+    return _Poll(
+        f"session pending ({pending})" if pending else "session listed but not ready"
+    )
+
+
+def _start_call(opts: dict) -> str:
+    """The start_af_session call that reuses spawn options ``opts``."""
+    rest = {key: value for key, value in opts.items() if key != "profile"}
+    args = [f"profile_name={opts['profile']!r}"] if "profile" in opts else []
+    if rest:
+        args.append(f"user_options={rest!r}")
+    return f"start_af_session({', '.join(args)})" if args else "start_af_session"
 
 
 # ── profile / option selection helpers ────────────────────────────────────────
@@ -142,35 +272,95 @@ _ELICIT_FALLBACK = (
 )
 
 
-def _default_profile(profiles: list[dict]) -> Optional[dict]:
+def _default_profile(available: list[dict]) -> Optional[dict]:
     """Return the profile marked default, else the first, else None."""
-    for p in profiles:
+    for p in available:
         if p.get("default"):
             return p
-    return profiles[0] if profiles else None
+    return available[0] if available else None
 
 
-def _default_choice_key(choices: dict[str, str]) -> Optional[str]:
-    """Pick the choice key whose label is marked '(default)', else the first."""
-    for key, label in choices.items():
-        if str(label).rstrip().endswith("(default)"):
-            return key
-    return next(iter(choices), None)
+def _named_profile(available: list[dict], name: str, otherwise: str) -> dict:
+    """The profile called ``name``. ``otherwise`` is the caller's way forward
+    while the profile list cannot be read."""
+    selected = profiles.find_profile(available, name)
+    if selected is not None:
+        return selected
+    if not available:
+        raise UpstreamError(
+            f"Error: cannot check profile '{name}' — the profile list could not "
+            f"be read ({profiles.profiles_error() or 'unknown reason'}). Try again "
+            f"in a minute, or {otherwise}."
+        )
+    known = ", ".join(f'"{p["slug"]}"' for p in available)
+    raise UserError(
+        f"Unknown profile '{name}'. "
+        f"Call list_af_profiles to see available options. "
+        f"Known slugs: {known}"
+    )
 
 
-def _servers(data: dict[str, Any]) -> Optional[dict[str, Any]]:
-    """Return the user's servers, or None when the token may not see them.
+async def _choose_profile(
+    ctx: Context,
+    available: list[dict],
+    profile_name: Optional[str],
+    use_defaults: bool,
+) -> Optional[dict]:
+    """The profile to launch; None leaves the choice to the Hub (no profile list)."""
+    if profile_name:
+        return _named_profile(
+            available,
+            profile_name,
+            "call start_af_session(use_defaults=True) to launch the Hub's default "
+            "profile",
+        )
+    if use_defaults:
+        return _default_profile(available)
+    if len(available) <= 1:
+        return available[0] if available else None
+    model = single_choice_model(
+        "ProfileChoice",
+        [p["slug"] for p in available],
+        labels=[
+            p["display_name"] + (" (default)" if p.get("default") else "")
+            for p in available
+        ],
+        default=(_default_profile(available) or {}).get("slug"),
+        description="Analysis Facility session profile.",
+        field="profile",
+    )
+    choice = await ask(ctx, "Choose a session profile.", model, _ELICIT_FALLBACK)
+    return profiles.find_profile(available, choice.profile)
 
-    The Hub omits `servers` entirely from a user model when the token lacks
-    `read:servers` — it does NOT return an empty dict. Singleuser server tokens
-    (what an agent running inside a session carries) are exactly that case, so
-    treating a missing key as "no session" tells a user their running session
-    does not exist. Absent means unknown; only an empty dict means none.
-    """
-    servers = data.get("servers")
-    if servers is None:
-        return None
-    return servers if isinstance(servers, dict) else {}
+
+async def _ask_options(ctx: Context, profile: dict, opts: dict) -> None:
+    """Ask for each option of ``profile`` the caller didn't specify, into ``opts``."""
+    for opt_key, opt_info in profile.get("options", {}).items():
+        if opt_key in opts:
+            continue
+        choices = profiles.labelled_choices(opt_info)
+        if not choices:
+            continue
+        # The same availability the Hub form shows, with exhausted flavors hidden.
+        gpu_map = opt_info.get("gpu")
+        if gpu_map:
+            labels_map, keys = apply_availability(choices, gpu_map, await free_gpus())
+        else:
+            labels_map, keys = choices, list(choices)
+        model = single_choice_model(
+            f"Option_{len(opts)}",
+            keys,
+            labels=[labels_map[k] for k in keys],
+            default=opt_info.get("default"),
+            description=opt_info.get("display_name", opt_key),
+        )
+        choice = await ask(
+            ctx,
+            f"{opt_info.get('display_name', opt_key)}:",
+            model,
+            _ELICIT_FALLBACK,
+        )
+        opts[opt_key] = choice.value
 
 
 def register(mcp: MCPServer) -> None:
@@ -185,19 +375,7 @@ def register(mcp: MCPServer) -> None:
         token = user["token"]
         username = user["username"]
 
-        resp = await _hub(
-            "GET",
-            f"/users/{username}",
-            token=token,
-            username=username,
-            action="read the session state",
-        )
-        data = json_body(resp)
-        if not isinstance(data, dict):
-            raise malformed_response("JupyterHub API", resp, "a user record")
-        servers = _servers(data)
-        if servers is None:
-            raise _cannot_see_servers(username)
+        servers = await _user_servers(token, username)
 
         base = f"{PUBLIC_URL}/user/{username}"
         lab_url = f"{base}/lab"
@@ -244,8 +422,7 @@ def register(mcp: MCPServer) -> None:
         if started:
             lines.append(f"started: {started}")
 
-        # Always include both interface links so the user can open either at any time.
-        # Mark which one was selected at spawn time (or JupyterLab if unspecified).
+        # Both links always; the one selected at spawn time (default JupyterLab) is marked.
         lines.append("\nInterface links:")
         lines.append(
             f"  JupyterLab  {lab_url}" + ("" if vscode_active else "  ← active")
@@ -294,108 +471,25 @@ def register(mcp: MCPServer) -> None:
 
         opts: dict = dict(user_options or {})
 
-        from tools.profiles import find_profile, get_profiles, profiles_error
-
-        profiles = await get_profiles()
-
-        # ── Resolve which profile to launch ──
-        selected: Optional[dict] = None
-        if profile_name:
-            selected = find_profile(profiles, profile_name)
-            if selected is None:
-                if not profiles:
-                    raise UpstreamError(
-                        f"Error: cannot check profile '{profile_name}' — the "
-                        "profile list could not be read "
-                        f"({profiles_error() or 'unknown reason'}). Try again in "
-                        "a minute, or call start_af_session(use_defaults=True) "
-                        "to launch the Hub's default profile."
-                    )
-                known = ", ".join(f'"{p["slug"]}"' for p in profiles)
-                raise UserError(
-                    f"Unknown profile '{profile_name}'. "
-                    f"Call list_af_profiles to see available options. "
-                    f"Known slugs: {known}"
-                )
-        elif use_defaults:
-            selected = _default_profile(profiles)
-        elif len(profiles) == 1:
-            # Only ask when there is a genuine choice to make.
-            selected = profiles[0]
-        elif profiles:
-            model = single_choice_model(
-                "ProfileChoice",
-                [p["slug"] for p in profiles],
-                labels=[
-                    p["display_name"] + (" (default)" if p.get("default") else "")
-                    for p in profiles
-                ],
-                default=(_default_profile(profiles) or {}).get("slug"),
-                description="Analysis Facility session profile.",
-                field="profile",
-            )
-            choice = await ask(
-                ctx, "Choose a session profile.", model, _ELICIT_FALLBACK
-            )
-            selected = find_profile(profiles, choice.profile)
-        # profiles empty (e.g. local/dev) → selected stays None → Hub default.
+        available = await profiles.get_profiles()
+        selected = await _choose_profile(ctx, available, profile_name, use_defaults)
 
         if selected is not None:
             # KubeSpawner selects the profile by slug; always include it.
             opts["profile"] = selected["slug"]
-
-            # ── Ask for each option the caller didn't already specify ──
             if not use_defaults:
-                for opt_key, opt_info in selected.get("options", {}).items():
-                    if opt_key in opts:
-                        continue
-                    choices = opt_info.get("choices") or {}
-                    if not choices:
-                        continue
-                    # GPU options: annotate with live availability and hide any
-                    # flavor that has none free right now (same data the Hub form
-                    # uses). Non-GPU options are unchanged.
-                    gpu_map = opt_info.get("gpu")
-                    if gpu_map:
-                        labels_map, keys = apply_availability(
-                            choices, gpu_map, await free_gpus()
-                        )
-                    else:
-                        labels_map, keys = choices, list(choices)
-                    model = single_choice_model(
-                        f"Option_{len(opts)}",
-                        keys,
-                        labels=[labels_map[k] for k in keys],
-                        default=_default_choice_key(choices),
-                        description=opt_info.get("display_name", opt_key),
-                    )
-                    choice = await ask(
-                        ctx,
-                        f"{opt_info.get('display_name', opt_key)}:",
-                        model,
-                        _ELICIT_FALLBACK,
-                    )
-                    opts[opt_key] = choice.value
+                await _ask_options(ctx, selected, opts)
 
-        resp = await _hub(
-            "POST",
-            f"/users/{username}/server",
-            token=token,
-            username=username,
-            action="start the session",
-            ok=(200, 201, 202, 400),
-            timeout=15.0,
-            json=opts,
-        )
+        resp = await _spawn(token, username, opts)
 
         if resp.status_code == 400:
-            # 400 is most commonly "already running", but JupyterHub also uses it
-            # for rejected spawn options — don't mask those behind a success message.
-            body = resp.text.lower()
-            if "already running" in body or "already pending" in body:
+            refusal = _spawn_refusal(resp)
+            if refusal == "running":
                 return (
                     "Session is already running. Use get_session_status to see its URL."
                 )
+            if refusal == "stopping":
+                raise UserError(_STILL_STOPPING)
             raise UserError(
                 "Error: JupyterHub rejected the spawn request — "
                 f"{response_detail(resp) or 'no reason given'}. Check the profile "
@@ -404,10 +498,10 @@ def register(mcp: MCPServer) -> None:
             )
 
         note = ""
-        if selected is None and not profiles:
+        if selected is None and not available:
             note = (
                 "\nNote: the profile list could not be read "
-                f"({profiles_error() or 'unknown reason'}), so the Hub's default "
+                f"({profiles.profiles_error() or 'unknown reason'}), so the Hub's default "
                 "profile and options were used."
             )
 
@@ -434,16 +528,7 @@ def register(mcp: MCPServer) -> None:
         token = user["token"]
         username = user["username"]
 
-        resp = await _hub(
-            "DELETE",
-            f"/users/{username}/server",
-            token=token,
-            username=username,
-            action="stop the session",
-            ok=(200, 202, 204, 400),
-            timeout=15.0,
-        )
-        if resp.status_code == 400:
+        if await _stop(token, username) == 400:
             return "No session is currently running."
 
         return (
@@ -470,11 +555,9 @@ def register(mcp: MCPServer) -> None:
         token = user["token"]
         username = user["username"]
 
-        # Clamp rather than error: this call holds the request open for the
-        # whole wait, so an unbounded timeout would pin a connection.
+        # This call holds the request open for the whole wait.
         timeout_seconds = max(1, min(timeout_seconds, 600))
         deadline = time.monotonic() + timeout_seconds
-        poll_interval = 10
         attempts = 0
         failed_polls = 0
         absent_polls = 0
@@ -490,70 +573,45 @@ def register(mcp: MCPServer) -> None:
                     timeout=10.0,
                 )
             except httpx.RequestError as exc:
-                # Transient network trouble: keep polling, but remember it so a
-                # timeout can say the hub was unreachable rather than "not ready".
+                # So a timeout can say the hub was unreachable, not "not ready".
                 failed_polls += 1
-                last_seen = f"JupyterHub API unreachable — {describe_exception(exc)}"
+                last_seen = f"{_SERVICE} unreachable — {describe_exception(exc)}"
             else:
-                if resp.status_code in (401, 403, 404):
-                    # No amount of waiting changes what the token may see.
-                    raise _hub_error(resp, "check the session state", username)
-                if resp.status_code != 200:
+                poll = _classify_poll(resp, username)
+                last_seen = poll.seen
+                if poll.ready:
+                    lines = [
+                        "Session is running.",
+                        f"(became ready after {attempts} poll(s))",
+                    ]
+                    if poll.started:
+                        lines.insert(1, f"started: {poll.started}")
+                    lines += [
+                        "",
+                        "Next: get_session_status returns browser links.",
+                    ]
+                    return "\n".join(lines)
+                if poll.failed:
                     failed_polls += 1
-                    last_seen = f"JupyterHub API returned HTTP {resp.status_code}"
-                else:
-                    data = json_body(resp)
-                    servers = _servers(data if isinstance(data, dict) else {})
-                    if servers is None:
-                        raise _cannot_see_servers(username)
-                    default = servers.get("")
-                    if default is None:
-                        # A spawn in progress is always listed (pending="spawn");
-                        # nothing listed means no spawn was accepted, or it has
-                        # already failed. Two looks rule out a momentary gap.
-                        absent_polls += 1
-                        if absent_polls >= 2:
-                            raise UserError(
-                                "Error: no session is starting or running — "
-                                f"JupyterHub lists no server for '{username}', "
-                                "so either start_af_session was not called or the "
-                                "spawn failed. Call start_af_session again; if it "
-                                "fails again, the spawn page at "
-                                f"{PUBLIC_URL}/hub/home shows JupyterHub's reason."
-                            )
-                        last_seen = "no server listed"
-                    else:
-                        absent_polls = 0
-                        if default.get("ready", False):
-                            started = default.get("started", "")
-                            lines = [
-                                "Session is running.",
-                                f"(became ready after {attempts} poll(s))",
-                            ]
-                            if started:
-                                lines.insert(1, f"started: {started}")
-                            lines += [
-                                "",
-                                "Next: get_session_status returns browser links.",
-                            ]
-                            return "\n".join(lines)
-                        pending = default.get("pending")
-                        if pending == "stop":
-                            raise UserError(
-                                "Error: the session is stopping, not starting. "
-                                "Wait for get_session_status to report no active "
-                                "session, then call start_af_session."
-                            )
-                        last_seen = (
-                            f"session pending ({pending})"
-                            if pending
-                            else "session listed but not ready"
+                elif poll.absent:
+                    # A spawn in progress is always listed; two looks rule out a gap.
+                    absent_polls += 1
+                    if absent_polls >= 2:
+                        raise UserError(
+                            "Error: no session is starting or running — "
+                            f"JupyterHub lists no server for '{username}', "
+                            "so either start_af_session was not called or the "
+                            "spawn failed. Call start_af_session again; if it "
+                            "fails again, the spawn page at "
+                            f"{PUBLIC_URL}/hub/home shows JupyterHub's reason."
                         )
+                else:
+                    absent_polls = 0
 
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 break
-            await asyncio.sleep(min(poll_interval, remaining))
+            await asyncio.sleep(min(_POLL_INTERVAL, remaining))
 
         lines = [
             f"Session did not become ready within {timeout_seconds} s.",
@@ -592,87 +650,45 @@ def register(mcp: MCPServer) -> None:
         token = user["token"]
         username = user["username"]
 
-        # 1. Capture current user_options before stopping. A hub that cannot
-        #    answer is not fatal — but it is reported, because "same options
-        #    as before" silently becoming "default options" is a surprise.
-        #    A token that may not read the state is fatal: nothing else works.
+        # Reported: "same options as before" must not silently become the defaults.
         prior_opts: dict = {}
         prior_note = ""
         try:
-            info = await _hub(
-                "GET",
-                f"/users/{username}",
-                token=token,
-                username=username,
-                action="read the session state",
-            )
+            servers = await _user_servers(token, username)
         except UpstreamError as exc:
             prior_note = f" (the previous options could not be read: {exc})"
         else:
-            data = json_body(info)
-            servers = _servers(data if isinstance(data, dict) else {}) or {}
             prior_opts = servers.get("", {}).get("user_options", {}) or {}
 
-        # 2. Decide on spawn options: caller overrides take precedence over prior state.
         spawn_opts: dict = dict(user_options or prior_opts)
         if profile_name:
-            from tools.profiles import find_profile, get_profiles, profiles_error
+            spawn_opts["profile"] = _named_profile(
+                await profiles.get_profiles(),
+                profile_name,
+                "call restart_af_session without profile_name to keep the current "
+                "profile",
+            )["slug"]
 
-            profiles = await get_profiles()
-            profile = find_profile(profiles, profile_name)
-            if profile is None:
-                known = (
-                    ", ".join(f'"{p["slug"]}"' for p in profiles)
-                    if profiles
-                    else f"unavailable ({profiles_error() or 'unknown reason'})"
-                )
-                raise UserError(
-                    f"Unknown profile '{profile_name}'. "
-                    f"Call list_af_profiles to see options. "
-                    f"Known slugs: {known}"
-                )
-            spawn_opts["profile"] = profile["slug"]
-
-        # 3. Stop.
-        stop = await _hub(
-            "DELETE",
-            f"/users/{username}/server",
-            token=token,
-            username=username,
-            action="stop the session",
-            ok=(200, 202, 204, 400),
-            timeout=15.0,
-        )
-        was_running = stop.status_code != 400  # 400 = no server was running
-        if was_running:
-            # 4. Brief pause to let Kubernetes terminate the pod before re-spawning.
-            await asyncio.sleep(3)
-
-        # 5. Start.
+        stopped = await _stop(token, username)
+        start_call = _start_call(spawn_opts)
         try:
-            start = await _hub(
-                "POST",
-                f"/users/{username}/server",
-                token=token,
-                username=username,
-                action="start the session",
-                ok=(200, 201, 202, 400),
-                timeout=15.0,
-                json=spawn_opts,
-            )
+            if stopped == 202:
+                await _await_stop(token, username)
+            elif stopped != 400:
+                await asyncio.sleep(3)  # let Kubernetes terminate the pod
+            start = await _spawn(token, username, spawn_opts)
         except Failure as exc:
             raise type(exc)(
                 f"Session was stopped, but the restart failed. {exc} "
-                "Use start_af_session to try again."
+                f"Use {start_call} to try again."
             )
 
         if start.status_code == 400:
-            body = start.text.lower()
-            if any(w in body for w in ("pending", "running", "stop", "terminat")):
-                # Pod still terminating — ask the user to retry
+            if _spawn_refusal(start) != "rejected":
                 raise UpstreamError(
-                    "Session stopped but the pod is still terminating. "
-                    "Wait a few seconds then call start_af_session to complete the restart."
+                    "Session stopped but the pod is still terminating. Wait for "
+                    "get_session_status to report no active session, then call "
+                    f"{start_call} to complete the restart."
                 )
             raise UserError(
                 "Session was stopped, but JupyterHub rejected the restart options — "

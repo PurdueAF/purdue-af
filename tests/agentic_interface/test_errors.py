@@ -217,3 +217,39 @@ def test_prom_scalar_and_vector_tolerate_malformed_rows():
     assert shared.prom_vector(
         [{"value": [0, "nope"]}, {"metric": {"a": "b"}, "value": [0, "1"]}]
     ) == [({"a": "b"}, 1.0)]
+
+
+@respx.mock
+async def test_prom_value_and_samples_pass_the_problem_through():
+    async with httpx.AsyncClient() as client:
+        route = respx.get(f"{PROM}/api/v1/query")
+
+        route.respond(500)
+        assert await shared.prom_value(client, PROM, "up") == (
+            None,
+            "returned HTTP 500",
+        )
+        assert await shared.prom_samples(client, PROM, "up") == (
+            [],
+            "returned HTTP 500",
+        )
+
+        route.respond(200, json={"data": {"result": []}})
+        assert await shared.prom_value(client, PROM, "up") == (None, None)
+
+        route.respond(
+            200,
+            json={
+                "data": {
+                    "result": [
+                        {"metric": {"a": "1"}, "value": [0, "1.5"]},
+                        {"metric": {}, "value": [0, "x"]},
+                    ]
+                }
+            },
+        )
+        assert await shared.prom_value(client, PROM, "up") == (1.5, None)
+        assert await shared.prom_samples(client, PROM, "up") == (
+            [({"a": "1"}, 1.5)],
+            None,
+        )

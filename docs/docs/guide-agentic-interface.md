@@ -101,7 +101,7 @@ clusters, storage and logs without leaving the notebook.
     ```json
     {
       "mcpServers": {
-        "purdue-af": {
+        "purdue-af-agentic-interface": {
           "type": "http",
           "url": "https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp",
           "headers": { "Authorization": "Bearer YOUR_TOKEN" }
@@ -115,7 +115,7 @@ clusters, storage and logs without leaving the notebook.
     always the same. If your agent expands environment variables in its config,
     use `Bearer ${JUPYTERHUB_TOKEN}` instead of pasting the token.
 
-For **Claude Code**, the one-time setup at the top of the
+For **Claude Code**, the one-time setup at the end of the
 [skill](#installing-the-skill-recommended) stores the token in a file and
 registers the server at user scope.
 

@@ -3,46 +3,32 @@
 Registered with JupyterHub as a service; accessible at
   https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp
 
-Auth: incoming JupyterHub Bearer tokens are validated against the Hub API
-through the MCP SDK's TokenVerifier protocol (auth.HubTokenVerifier). The
-resolved user identity (username) is stored in a ContextVar so tool
-functions can scope their queries per-request.
+Auth: the middleware validates incoming JupyterHub Bearer tokens against the
+Hub API and binds the user to a ContextVar, so tool functions scope their
+queries per request.
 """
 
 import json
 import logging
 import re
+from collections.abc import Iterable
 
 import uvicorn
-from auth import HubTokenVerifier, HubUnavailable
-from config import (
-    NAMESPACE,
-    SERVICE_PREFIX,
-    SKILL_PATH,
-    STATELESS_HTTP,
-    TOKEN_URL,
-)
+from auth import HubUnavailable, resolve_user
+from config import SERVICE_PREFIX, SKILL_PATH, STATELESS_HTTP, TOKEN_URL
 from context import current_user
-from metrics import (
-    InstrumentedMCPServer,
-    metrics_body,
-    metrics_content_type,
-    record_request,
-)
+from metrics import InstrumentedMCPServer, record_request
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from tools import dask, health, logs, metrics, profiles, prompts, ray, session, storage
 
 logger = logging.getLogger(__name__)
 
 # ── authentication failures ───────────────────────────────────────────────────
-#
-# An MCP client that is refused here shows the user nothing but the HTTP
-# status and (at best) this body, so the body must carry the whole diagnosis:
-# what was wrong with the credential and what to do about it. Nothing else
-# documents these messages — they are the single source of truth.
 
-# What a client sends when the token it was configured with was never filled
-# in: an unexpanded ${VAR}/$VAR/%VAR%, or a placeholder copied from the docs.
+# A refused client shows only the status and this body, so it holds the diagnosis.
+
+# A token that was never filled in: an unexpanded variable, a docs placeholder.
 _PLACEHOLDER_RE = re.compile(
     r"^(?:\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|%[A-Za-z_][A-Za-z0-9_]*%|<[^>]*>"
     r"|YOUR[_-]?(?:API[_-]?)?TOKEN(?:[_-]?HERE)?|\.\.\.)$",
@@ -73,17 +59,8 @@ _HINT_UNAVAILABLE = (
 )
 
 
-# Module-level so tests can substitute a verifier.
-verify_token = HubTokenVerifier().verify_token
-
-
 def _token_problem(token: str) -> tuple[str, str] | None:
-    """Reject credentials that cannot be a token before asking the Hub.
-
-    Returns ``(error, hint)`` or None. Catching these here turns a generic
-    "invalid token" into the actual mistake: an unset variable, a placeholder
-    that was never replaced.
-    """
+    """``(error, hint)`` for a credential that cannot be a token, else None."""
     if not token:
         return "Empty Bearer token", _HINT_EMPTY
     if _PLACEHOLDER_RE.match(token):
@@ -97,6 +74,27 @@ def _token_problem(token: str) -> tuple[str, str] | None:
     return None
 
 
+async def _send(
+    send: Send,
+    status: int,
+    body: bytes,
+    content_type: bytes,
+    headers: Iterable[tuple[bytes, bytes]] = (),
+) -> None:
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [
+                (b"content-type", content_type),
+                (b"content-length", str(len(body)).encode()),
+                *headers,
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
+
+
 class _AuthMiddleware:
     """Validate JupyterHub Bearer tokens and populate the current_user ContextVar."""
 
@@ -104,9 +102,6 @@ class _AuthMiddleware:
         self._app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        # Streamable HTTP never uses websockets — refuse the handshake outright
-        # rather than fall through to HTTP route logic (whose _respond would
-        # send http.response messages on a websocket scope).
         if scope["type"] == "websocket":
             await send({"type": "websocket.close"})
             return
@@ -115,24 +110,31 @@ class _AuthMiddleware:
             await self._app(scope, receive, send)
             return
 
-        path = scope.get("path", "")
-        route = self._route_for(path)
+        route = self._route_for(scope.get("path", ""))
+        status = 500
 
-        # Unauthenticated liveness/readiness probe. The kubelet hits the pod
-        # directly at /health (no JupyterHub service prefix); accept the
-        # prefixed form too in case it is probed through the proxy.
+        async def recording_send(message: Message) -> None:
+            nonlocal status
+            if message["type"] == "http.response.start":
+                status = message["status"]
+            await send(message)
+
+        try:
+            await self._dispatch(route, scope, receive, recording_send)
+        finally:
+            record_request(route, status)
+
+    async def _dispatch(
+        self, route: str, scope: Scope, receive: Receive, send: Send
+    ) -> None:
         if route == "health":
-            await self._ok(send)
-            record_request(route, 200)
+            await _send(send, 200, b"ok", b"text/plain")
             return
 
-        # Unauthenticated Prometheus scrape endpoint.
         if route == "metrics":
-            await self._metrics(send)
-            record_request(route, 200)
+            await _send(send, 200, generate_latest(), CONTENT_TYPE_LATEST.encode())
             return
 
-        # Only serve the MCP endpoint; return 404 for anything else.
         if route != "mcp":
             await self._respond(
                 send,
@@ -140,14 +142,13 @@ class _AuthMiddleware:
                 "not found",
                 hint=f"The MCP endpoint is {SERVICE_PREFIX}/mcp.",
             )
-            record_request(route, 404)
             return
 
         headers = {k.lower(): v for k, v in scope.get("headers", [])}
         auth = headers.get(b"authorization", b"").decode(errors="replace").strip()
 
         if not auth:
-            await self._reject(send, route, "Missing Bearer token", _HINT_MISSING)
+            await self._reject(send, "Missing Bearer token", _HINT_MISSING)
             return
 
         scheme, _, token = auth.partition(" ")
@@ -155,7 +156,6 @@ class _AuthMiddleware:
         if scheme.lower() != "bearer":
             await self._reject(
                 send,
-                route,
                 "Unsupported Authorization scheme",
                 f"The Authorization header used the scheme {scheme!r}; this "
                 "service expects 'Authorization: Bearer <JupyterHub API token>'. "
@@ -166,11 +166,11 @@ class _AuthMiddleware:
 
         problem = _token_problem(token)
         if problem is not None:
-            await self._reject(send, route, *problem, invalid=True)
+            await self._reject(send, *problem, invalid=True)
             return
 
         try:
-            access = await verify_token(token)
+            user = await resolve_user(token)
         except HubUnavailable as exc:
             logger.warning("token validation impossible: %s", exc.detail)
             await self._respond(
@@ -180,91 +180,40 @@ class _AuthMiddleware:
                 hint=_HINT_UNAVAILABLE.format(detail=exc.detail),
                 extra_headers=[(b"retry-after", b"10")],
             )
-            record_request(route, 503)
             return
 
-        if access is None:
+        if user is None:
             await self._reject(
-                send, route, "Invalid JupyterHub token", _HINT_INVALID, invalid=True
+                send, "Invalid JupyterHub token", _HINT_INVALID, invalid=True
             )
             return
-        user_info = {
-            "username": access.client_id,
-            "namespace": NAMESPACE,
-            "token": access.token,
-        }
 
-        # Rewrite Host → localhost:8888 to satisfy the MCP SDK's DNS-rebinding
-        # protection.  Our own token check above is the real auth gate.
+        # The SDK's DNS-rebinding protection wants this Host; the token check is the gate.
         new_headers = [
             (b"host", b"localhost:8888") if k.lower() == b"host" else (k, v)
             for k, v in scope.get("headers", [])
         ]
 
-        # Bind user context for the duration of this request so tool functions
-        # can call current_user.get() without needing extra arguments.
-        status = 500
-
-        async def counting_send(message: Message) -> None:
-            nonlocal status
-            if message["type"] == "http.response.start":
-                status = message["status"]
-            await send(message)
-
-        ctx_token = current_user.set(user_info)
+        ctx_token = current_user.set(user.copy())
         try:
-            await self._app({**scope, "headers": new_headers}, receive, counting_send)
+            await self._app({**scope, "headers": new_headers}, receive, send)
         finally:
             current_user.reset(ctx_token)
-            record_request(route, status)
 
     @staticmethod
     def _route_for(path: str) -> str:
         if path in ("/health", f"{SERVICE_PREFIX}/health"):
             return "health"
-        # Prometheus scrapes the pod directly (Service label scrape-metrics,
-        # unprefixed path). The proxied ${SERVICE_PREFIX}/metrics form would be
-        # publicly reachable and the metric families carry username labels, so
-        # only the exact unprefixed path is served; the prefixed form is 404.
+        # Only unprefixed: the proxied form is public and the metrics carry usernames.
         if path == "/metrics":
             return "metrics"
         if path.startswith(f"{SERVICE_PREFIX}/mcp"):
             return "mcp"
         return "other"
 
-    @staticmethod
-    async def _ok(send: Send) -> None:
-        body = b"ok"
-        await send(
-            {
-                "type": "http.response.start",
-                "status": 200,
-                "headers": [
-                    (b"content-type", b"text/plain"),
-                    (b"content-length", str(len(body)).encode()),
-                ],
-            }
-        )
-        await send({"type": "http.response.body", "body": body})
-
-    @staticmethod
-    async def _metrics(send: Send) -> None:
-        body = metrics_body()
-        await send(
-            {
-                "type": "http.response.start",
-                "status": 200,
-                "headers": [
-                    (b"content-type", metrics_content_type().encode()),
-                    (b"content-length", str(len(body)).encode()),
-                ],
-            }
-        )
-        await send({"type": "http.response.body", "body": body})
-
     @classmethod
     async def _reject(
-        cls, send: Send, route: str, error: str, hint: str, *, invalid: bool = False
+        cls, send: Send, error: str, hint: str, *, invalid: bool = False
     ) -> None:
         """401 with the diagnosis in the body and an RFC 6750 challenge header.
 
@@ -284,7 +233,6 @@ class _AuthMiddleware:
             hint=hint,
             extra_headers=[(b"www-authenticate", challenge.encode())],
         )
-        record_request(route, 401)
 
     @staticmethod
     async def _respond(
@@ -298,19 +246,13 @@ class _AuthMiddleware:
         payload: dict[str, str] = {"error": detail}
         if hint:
             payload["hint"] = hint
-        body = json.dumps(payload).encode()
-        await send(
-            {
-                "type": "http.response.start",
-                "status": status,
-                "headers": [
-                    (b"content-type", b"application/json"),
-                    (b"content-length", str(len(body)).encode()),
-                    *(extra_headers or []),
-                ],
-            }
+        await _send(
+            send,
+            status,
+            json.dumps(payload).encode(),
+            b"application/json",
+            extra_headers or (),
         )
-        await send({"type": "http.response.body", "body": body})
 
 
 class _McpAccessFilter(logging.Filter):
@@ -376,11 +318,8 @@ prompts.register(mcp)
 
 
 def build_app() -> ASGIApp:
-    """Bearer-token validation in front of the MCP app.
-
-    JupyterHub's proxy passes the full path (including the service prefix) to
-    the service, so the MCP app is told to serve exactly that path.
-    """
+    """Bearer-token validation in front of the MCP app, which serves the full
+    path JupyterHub's proxy passes on, service prefix included."""
     return _AuthMiddleware(
         mcp.streamable_http_app(
             streamable_http_path=f"{SERVICE_PREFIX}/mcp",

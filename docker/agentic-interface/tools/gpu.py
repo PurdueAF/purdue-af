@@ -1,27 +1,24 @@
 """Live GPU availability for the session profile picker.
 
-Runs the very queries the JupyterHub profile form runs (gpu_queries.py, shared
-with apps/jupyterhub/.../extraFiles/gpu-availability.py and copied into this
-image) so counts shown in the agentic "GPUs" question match what the Hub
-would show, and the Hub's modify_pod_hook still gates the actual spawn.
-Fail-open: if Prometheus is unreachable the count is unknown and no choice
-is hidden.
+Counts are Prometheus' allocatable minus requested (gpu_queries.py, the queries
+the JupyterHub profile form runs), without the Hub's in-flight reservations; its
+modify_pod_hook still gates the actual spawn. Fail-open: if the count is unknown
+no choice is hidden.
 """
 
+import asyncio
 from typing import Optional
 
 import httpx
 from cachetools import TTLCache
-from config import PROMETHEUS_URL
-from errors import describe_exception, response_detail
+from config import PROMETHEUS_NAME, PROMETHEUS_URL
 from gpu_queries import ALLOC_QUERY as _ALLOC_QUERY
 from gpu_queries import GPU_METRICS
 from gpu_queries import USED_QUERY as _USED_QUERY
-from shared import shared_client
+from shared import prom_query, prom_vector, shared_client
 
 _CACHE_TTL = 30.0
-# "free" → {resource: count} or None (unknown); both outcomes are cached so
-# a broken Prometheus is not re-asked on every profile question.
+# {resource: count} or None (unknown); a broken Prometheus is not re-asked either.
 _cache: TTLCache[str, Optional[dict[str, int]]] = TTLCache(1, _CACHE_TTL)
 # Why availability is unknown, for the tools that show it. None when known.
 _last_error: Optional[str] = None
@@ -32,15 +29,18 @@ def gpu_error() -> Optional[str]:
     return _last_error
 
 
-async def _prom_query(client: httpx.AsyncClient, query: str) -> dict[str, float]:
-    resp = await client.get(
-        f"{PROMETHEUS_URL}/api/v1/query", params={"query": query}, timeout=5.0
-    )
-    resp.raise_for_status()
-    return {
-        sample["metric"].get("resource"): float(sample["value"][1])
-        for sample in resp.json()["data"]["result"]
-    }
+async def _resource_counts(
+    client: httpx.AsyncClient, query: str
+) -> tuple[dict[str, float], Optional[str]]:
+    """{metric resource label: value} and the problem, as prom_query reports it.
+
+    A row prom_vector skips is a problem: its flavor would read as none free.
+    """
+    rows, problem = await prom_query(client, PROMETHEUS_URL, query, timeout=5.0)
+    samples = prom_vector(rows)
+    if len(samples) < len(rows):
+        problem = problem or "returned GPU metrics in an unexpected shape"
+    return {labels.get("resource", ""): value for labels, value in samples}, problem
 
 
 async def free_gpus() -> Optional[dict[str, int]]:
@@ -49,36 +49,27 @@ async def free_gpus() -> Optional[dict[str, int]]:
     if "free" in _cache:
         return _cache["free"]
 
+    client = shared_client("prometheus")
+    (allocatable, problem), (used, used_problem) = await asyncio.gather(
+        _resource_counts(client, _ALLOC_QUERY),
+        _resource_counts(client, _USED_QUERY),
+    )
+    problem = problem or used_problem
+
     free: Optional[dict[str, int]] = None
-    try:
-        client = shared_client("prometheus")
-        allocatable = await _prom_query(client, _ALLOC_QUERY)
-        used = await _prom_query(client, _USED_QUERY)
-        if allocatable:  # empty => kube-state-metrics missing => unknown, not zero
-            free = {
-                resource: max(int(allocatable.get(m, 0) - used.get(m, 0)), 0)
-                for resource, m in GPU_METRICS.items()
-            }
-            _last_error = None
-        else:
-            _last_error = (
-                "the monitoring system has no GPU capacity metrics "
-                "(kube-state-metrics may be down)"
-            )
-    except httpx.HTTPStatusError as exc:
-        detail = response_detail(exc.response, limit=120)
-        _last_error = f"Prometheus returned HTTP {exc.response.status_code}" + (
-            f" — {detail}" if detail else ""
-        )
-        free = None
-    except httpx.HTTPError as exc:
-        _last_error = f"Prometheus unreachable — {describe_exception(exc)}"
-        free = None
-    except (KeyError, ValueError, TypeError):
+    if problem:
+        _last_error = f"{PROMETHEUS_NAME} {problem}"
+    elif not allocatable:  # kube-state-metrics missing => unknown, not zero
         _last_error = (
-            "the monitoring system returned GPU metrics in an unexpected shape"
+            f"{PROMETHEUS_NAME} has no GPU capacity metrics "
+            "(kube-state-metrics may be down)"
         )
-        free = None
+    else:
+        free = {
+            resource: max(int(allocatable.get(m, 0) - used.get(m, 0)), 0)
+            for resource, m in GPU_METRICS.items()
+        }
+        _last_error = None
 
     _cache["free"] = free
     return free

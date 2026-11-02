@@ -14,6 +14,7 @@ from agentic_helpers import (
     needs_choices,
     register_tools,
 )
+from errors import AuthError, UpstreamError
 from httpx import ConnectError
 from tools import profiles, session
 
@@ -43,11 +44,13 @@ WITH_OPTIONS = {
     "options": {
         "3-interface": {
             "display_name": "Interface",
-            "choices": {"1": "JupyterLab (default)", "2": "VS Code"},
+            "choices": {"1": "JupyterLab", "2": "VS Code"},
+            "default": "1",
         },
         "0-cpu": {
             "display_name": "CPU cores",
-            "choices": {"1": "1 (default)", "2": "4", "3": "8"},
+            "choices": {"1": "1", "2": "4", "3": "8"},
+            "default": "1",
         },
     },
 }
@@ -441,12 +444,119 @@ async def test_restart_when_not_running_starts_fresh(user_ctx):
 async def test_restart_pod_still_terminating(user_ctx, no_sleep):
     respx.get(USER_URL).respond(200, json=server_payload())
     respx.delete(SERVER_URL).respond(204)
-    respx.post(SERVER_URL).respond(400, text="pod still terminating")
+    respx.post(SERVER_URL).respond(400, json={"message": "alice is pending stop"})
 
     tools = register_tools(session).tools
     out = await failure(tools["restart_af_session"]())
     assert "still terminating" in out
     assert "start_af_session" in out  # recovery hint
+
+
+# ── a stop that outlasts the Hub's slow_stop_timeout ──────────────────────────
+
+
+@respx.mock
+async def test_restart_waits_for_a_slow_stop_with_the_prior_options(
+    user_ctx, monkeypatch
+):
+    clock = _fake_clock(monkeypatch)
+    answers = [
+        server_payload(options={"0-cpu": "2", "profile": "stable"}),
+        server_payload(ready=False, pending="stop"),
+        {"name": "alice", "servers": {}},
+    ]
+    respx.get(USER_URL).mock(
+        side_effect=lambda _r: httpx.Response(200, json=answers.pop(0))
+    )
+    respx.delete(SERVER_URL).respond(202)
+    start = respx.post(SERVER_URL).respond(201)
+
+    out = await register_tools(session).tools["restart_af_session"]()
+
+    assert "Session restarting with 0-cpu=2, profile=stable" in out
+    assert json.loads(start.calls.last.request.content) == {
+        "0-cpu": "2",
+        "profile": "stable",
+    }
+    assert clock["t"] == session._POLL_INTERVAL
+
+
+@respx.mock
+async def test_restart_polls_through_a_hub_blip_during_a_slow_stop(
+    user_ctx, monkeypatch
+):
+    _fake_clock(monkeypatch)
+    answers = [
+        httpx.Response(200, json=server_payload()),
+        httpx.Response(502),
+        httpx.Response(200, json={"name": "alice", "servers": {}}),
+    ]
+    respx.get(USER_URL).mock(side_effect=lambda _r: answers.pop(0))
+    respx.delete(SERVER_URL).respond(202)
+    respx.post(SERVER_URL).respond(201)
+
+    out = await register_tools(session).tools["restart_af_session"]()
+
+    assert "Session restarting" in out
+    assert not answers
+
+
+@respx.mock
+async def test_restart_gives_up_on_a_stop_that_never_ends_with_a_way_forward(
+    user_ctx, monkeypatch
+):
+    clock = _fake_clock(monkeypatch)
+    answers = [server_payload(options={"0-cpu": "2", "profile": "stable"})]
+    stopping = server_payload(ready=False, pending="stop")
+    respx.get(USER_URL).mock(
+        side_effect=lambda _r: httpx.Response(
+            200, json=answers.pop(0) if answers else stopping
+        )
+    )
+    respx.delete(SERVER_URL).respond(202)
+    respx.post(SERVER_URL).respond(400, json={"message": "alice is pending stop"})
+
+    out = await failure(register_tools(session).tools["restart_af_session"]())
+
+    assert "still terminating" in out
+    assert "start_af_session(profile_name='stable', user_options={'0-cpu': '2'})" in out
+    assert clock["t"] == session._STOP_WAIT
+
+
+@pytest.mark.parametrize(
+    ("opts", "call"),
+    [
+        ({}, "start_af_session"),
+        ({"profile": "stable"}, "start_af_session(profile_name='stable')"),
+        ({"0-cpu": "2"}, "start_af_session(user_options={'0-cpu': '2'})"),
+    ],
+)
+def test_start_call(opts, call):
+    assert session._start_call(opts) == call
+
+
+def test_spawn_refusal_reads_the_hubs_own_texts():
+    assert (
+        session._spawn_refusal(httpx.Response(400, text="a is already running"))
+        == "running"
+    )
+    assert (
+        session._spawn_refusal(httpx.Response(400, text="a is pending stop"))
+        == "stopping"
+    )
+    assert (
+        session._spawn_refusal(httpx.Response(400, text="bad option: running"))
+        == "rejected"
+    )
+
+
+@respx.mock
+async def test_start_during_a_stop_says_so_not_that_the_options_are_wrong(user_ctx):
+    respx.post(SERVER_URL).respond(400, json={"message": "alice is pending stop"})
+    out = await failure(register_tools(session).tools["start_af_session"](FakeCtx()))
+    assert "still stopping" in out
+    assert "get_session_status" in out
+    assert "rejected" not in out
 
 
 # ── remaining error / edge paths ──────────────────────────────────────────────
@@ -461,9 +571,6 @@ def test_default_profile_helpers():
         == "b"
     )
     assert session._default_profile([{"slug": "only"}])["slug"] == "only"
-    assert session._default_choice_key({"1": "A", "2": "B (default)"}) == "2"
-    assert session._default_choice_key({"1": "A", "2": "B"}) == "1"
-    assert session._default_choice_key({}) is None
 
 
 @respx.mock
@@ -483,7 +590,8 @@ async def test_start_skips_empty_choices_and_option_cancel(user_ctx, monkeypatch
                 "empty": {"display_name": "Empty", "choices": {}},
                 "0-cpu": {
                     "display_name": "CPU cores",
-                    "choices": {"1": "1 (default)", "2": "4"},
+                    "choices": {"1": "1", "2": "4"},
+                    "default": "1",
                 },
             },
         },
@@ -590,8 +698,8 @@ async def test_restart_unknown_profile_when_list_empty(user_ctx, monkeypatch):
     respx.get(USER_URL).respond(200, json=server_payload())
     tools = register_tools(session).tools
     out = await failure(tools["restart_af_session"](profile_name="ghost"))
-    assert "Unknown profile" in out
-    assert "unavailable" in out
+    assert out.startswith("Error: cannot check profile 'ghost'")
+    assert "restart_af_session without profile_name" in out
 
 
 @respx.mock
@@ -613,12 +721,41 @@ async def test_restart_with_named_profile(user_ctx, monkeypatch, no_sleep):
 # ── servers-key visibility ────────────────────────────────────────────────────
 
 
+def _servers_of(payload):
+    return session._servers(httpx.Response(200, json=payload), "alice")
+
+
 def test_missing_servers_key_is_unknown_not_absent():
-    """The Hub omits `servers` when the token lacks read:servers. Reading that
-    as "no session" told users inside a running session that it did not exist."""
-    assert session._servers({"name": "alice"}) is None
-    assert session._servers({"name": "alice", "servers": {}}) == {}
-    assert session._servers({"servers": {"": {"ready": True}}}) == {"": {"ready": True}}
+    """The Hub omits `servers` when the token lacks read:servers, as a session's
+    own token can, and that session must not read as nonexistent."""
+    with pytest.raises(AuthError, match="cannot read session state"):
+        _servers_of({"name": "alice"})
+    assert _servers_of({"name": "alice", "servers": {}}) == {}
+    assert _servers_of({"servers": {"": {"ready": True}}}) == {"": {"ready": True}}
+
+
+@pytest.mark.parametrize("payload", [["alice"], {"servers": "none"}])
+def test_a_malformed_user_record_is_reported(payload):
+    with pytest.raises(UpstreamError, match="was not a user record"):
+        _servers_of(payload)
+
+
+@respx.mock
+async def test_restart_with_a_token_that_cannot_see_servers_stops_nothing(user_ctx):
+    respx.get(USER_URL).respond(200, json={"name": "alice"})
+    delete = respx.delete(SERVER_URL).respond(204)
+    out = await failure(register_tools(session).tools["restart_af_session"]())
+    assert out.startswith("Error: cannot read session state")
+    assert delete.call_count == 0
+
+
+@respx.mock
+async def test_restart_reports_a_malformed_user_record(user_ctx, no_sleep):
+    respx.get(USER_URL).respond(200, json=["alice"])
+    respx.delete(SERVER_URL).respond(204)
+    respx.post(SERVER_URL).respond(201)
+    out = await register_tools(session).tools["restart_af_session"]()
+    assert "the previous options could not be read" in out
 
 
 @respx.mock

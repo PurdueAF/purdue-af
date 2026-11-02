@@ -1,7 +1,6 @@
 """Tests for tools/dask.py — cluster operations against Dask Gateway."""
 
 import json
-import pathlib
 import re
 
 import httpx
@@ -782,29 +781,11 @@ def test_stats_empty_and_base_env_skips_none():
     assert "DROP" not in env
 
 
-def test_build_options_rejects_nonpositive_resources():
-    from errors import UserError
-
-    with pytest.raises(UserError, match="worker_cores"):
-        dask._build_cluster_options(
-            username="alice",
-            pixi_project="/p",
-            pixi_env="default",
-            conda_env=None,
-            worker_cores=0,
-            worker_memory=1,
-            env=None,
-        )
-    with pytest.raises(UserError, match="worker_memory"):
-        dask._build_cluster_options(
-            username="alice",
-            pixi_project="/p",
-            pixi_env="default",
-            conda_env=None,
-            worker_cores=1,
-            worker_memory=0,
-            env=None,
-        )
+@respx.mock
+async def test_worker_count_rejects_a_malformed_record(user_ctx):
+    respx.get(f"{GATEWAY}/api/v1/clusters/c1").respond(200, json=["c1"])
+    out = await failure(register_tools(dask).tools["get_dask_worker_count"]("c1"))
+    assert "was not a cluster record" in out
 
 
 @respx.mock
@@ -814,55 +795,6 @@ async def test_cluster_status_rejects_a_malformed_record(user_ctx):
     respx.get(f"{GATEWAY}/api/v1/clusters/c1").respond(200, json=["c1"])
     with pytest.raises(UpstreamError, match="was not a cluster record"):
         await dask._cluster_status("c1")
-
-
-@respx.mock
-async def test_prom_helpers_report_problems_separately_from_no_data():
-    async with httpx.AsyncClient() as client:
-        respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").mock(
-            side_effect=ConnectError("down")
-        )
-        value, problem = await dask._prom_scalar(client, dask.PROMETHEUS_URL, "up")
-        assert value is None and problem.startswith("is unreachable")
-        rows, problem = await dask._prom_vector(client, dask.PROMETHEUS_URL, "up")
-        assert rows == [] and problem.startswith("is unreachable")
-
-        respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").respond(500)
-        value, problem = await dask._prom_scalar(client, dask.PROMETHEUS_URL, "up")
-        assert value is None and problem == "returned HTTP 500"
-        rows, problem = await dask._prom_vector(client, dask.PROMETHEUS_URL, "up")
-        assert rows == [] and problem == "returned HTTP 500"
-
-        respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").respond(
-            200, json={"data": {"result": []}}
-        )
-        assert await dask._prom_scalar(client, dask.PROMETHEUS_URL, "up") == (
-            None,
-            None,
-        )
-
-        respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").respond(
-            200, json={"data": {"result": [{"value": [0, "bad"]}]}}
-        )
-        assert await dask._prom_scalar(client, dask.PROMETHEUS_URL, "up") == (
-            None,
-            None,
-        )
-
-        respx.get(f"{dask.PROMETHEUS_URL}/api/v1/query").respond(
-            200,
-            json={
-                "data": {
-                    "result": [
-                        {"metric": {"a": "1"}, "value": [0, "1.5"]},
-                        {"metric": {}, "value": [0, "x"]},
-                    ]
-                }
-            },
-        )
-        rows, problem = await dask._prom_vector(client, dask.PROMETHEUS_URL, "up")
-        assert rows == [({"a": "1"}, 1.5)]
-        assert problem is None
 
 
 @respx.mock
@@ -994,77 +926,73 @@ async def test_malformed_cluster_name_rejected_everywhere(user_ctx, bad):
 
 
 @respx.mock
-async def test_create_rejects_elicited_count_over_cap(user_ctx):
-    tools = register_tools(dask).tools
-    ctx = FakeCtx(
-        accept(dask._EnvChoice(env_source="global")),
-        default_size(),
-        count("custom"),
-        accept(dask._CustomCount(n_workers=dask.MAX_WORKERS + 1)),
+async def test_create_relays_the_gateways_size_refusal(user_ctx):
+    """The gateway owns the per-worker limits; its reason reaches the user."""
+    respx.post(CLUSTERS).respond(
+        422, text="422: worker_cores must be <= 64.000000, got 65.0"
     )
-    out = await failure(tools["create_dask_cluster"](ctx))
-    assert f"≤ {dask.MAX_WORKERS}" in out
-    assert not respx.calls
-
-
-@respx.mock
-@pytest.mark.parametrize(
-    ("cores", "memory", "fragment"),
-    [
-        (65, 4, "worker_cores must be between 0.1 and 64"),
-        (0.05, 4, "worker_cores must be between 0.1 and 64"),
-        (1, 65, "worker_memory must be between 0.1 and 64"),
-        (1, 0.05, "worker_memory must be between 0.1 and 64"),
-    ],
-)
-async def test_create_rejects_size_beyond_gateway_limits(
-    user_ctx, cores, memory, fragment
-):
-    """Per-worker size caps mirror the gateway config (see _WORKER_CORES)."""
-    tools = register_tools(dask).tools
     out = await failure(
-        tools["create_dask_cluster"](
-            FakeCtx(),
-            conda_env="/depot/cms/alice/env",
-            worker_cores=cores,
-            worker_memory=memory,
-            n_workers=0,
+        register_tools(dask).tools["create_dask_cluster"](
+            FakeCtx(), conda_env="/e", worker_cores=65, worker_memory=4, n_workers=0
         )
     )
-    assert fragment in out
-    assert not respx.calls  # rejected before anything left the process
+    assert "Dask Gateway rejected the request to create the cluster" in out
+    assert "worker_cores must be <= 64.000000, got 65.0" in out
+
+
+CLAMPED = {
+    "ok": False,
+    "msg": "Scale request of 2000 workers would exceed resource limit of 1000 "
+    "workers. Scaling to 1000 instead.",
+}
+
+
+def _running_cluster(name="cms.c1"):
+    respx.get(f"{GATEWAY}/api/v1/clusters/{name}").respond(
+        200, json={"name": name, "status": "RUNNING"}
+    )
+    return respx.post(f"{GATEWAY}/api/v1/clusters/{name}/scale")
 
 
 @respx.mock
-async def test_create_rejects_elicited_size_beyond_limits(user_ctx):
-    """The elicited custom-size path goes through the same gateway limits."""
-    tools = register_tools(dask).tools
-    ctx = FakeCtx(
-        accept(dask._EnvChoice(env_source="global")),
-        accept(dask._SizeChoice(size="custom")),
-        accept(dask._CustomSize(worker_cores=128, worker_memory=4)),
-        count("0"),
+async def test_scale_relays_the_gateways_clamp(user_ctx):
+    _running_cluster().respond(200, json=CLAMPED)
+    out = await register_tools(dask).tools["scale_dask_cluster"]("cms.c1", 2000)
+    assert CLAMPED["msg"] in out
+    assert "scaling to 2000" not in out
+
+
+@respx.mock
+async def test_create_relays_the_gateways_clamp(user_ctx):
+    respx.post(CLUSTERS).respond(201, json={"name": "cms.c1"})
+    _running_cluster().respond(200, json=CLAMPED)
+    out = await register_tools(dask).tools["create_dask_cluster"](
+        FakeCtx(), conda_env="/e", worker_cores=1, worker_memory=4, n_workers=2000
     )
-    out = await failure(tools["create_dask_cluster"](ctx))
-    assert "worker_cores must be between 0.1 and 64" in out
-    assert not respx.calls
+    assert CLAMPED["msg"] in out
+    assert "Scaling to 2000" not in out
 
 
-def test_limits_match_gateway_config():
-    """MAX_WORKERS and the per-worker bounds mirror the gateway values."""
-    values = (
-        pathlib.Path(__file__).resolve().parents[2] / "apps/dask-gateway/values.yaml"
-    ).read_text()
-    m = re.search(r"cluster_max_workers\s*=\s*(\d+)", values)
-    assert m, "cluster_max_workers not found in gateway values"
-    assert dask.MAX_WORKERS == int(m.group(1))
-    for option, bounds in (
-        ("worker_cores", dask._WORKER_CORES),
-        ("worker_memory", dask._WORKER_MEMORY),
-    ):
-        m = re.search(rf'Float\("{option}",[^)]*\bmin=([\d.]+),\s*max=([\d.]+)', values)
-        assert m, f"{option} option not found in gateway values"
-        assert bounds == (float(m.group(1)), float(m.group(2)))
+@respx.mock
+async def test_a_refused_scale_without_a_reason_is_still_reported(user_ctx):
+    _running_cluster().respond(200, json={"ok": False, "msg": None})
+    out = await register_tools(dask).tools["scale_dask_cluster"]("cms.c1", 5)
+    assert "did not take that worker count" in out
+
+
+@respx.mock
+@pytest.mark.parametrize("body", [{"ok": True, "msg": None}, None])
+async def test_a_taken_count_reads_as_scaling(user_ctx, body):
+    _running_cluster().respond(200, json=body)
+    out = await register_tools(dask).tools["scale_dask_cluster"]("cms.c1", 5)
+    assert "scaling to 5 worker(s)" in out
+
+
+@respx.mock
+async def test_scale_allows_the_gateway_time_to_forward(user_ctx):
+    route = _running_cluster().respond(200, json={"ok": True, "msg": None})
+    await register_tools(dask).tools["scale_dask_cluster"]("cms.c1", 5)
+    assert route.calls[0].request.extensions["timeout"]["read"] == 30.0
 
 
 @respx.mock
@@ -1205,9 +1133,7 @@ GATEWAY_FAILURES = [
 REJECTED_ARGUMENTS = [
     # tool, arguments, message fragment — refused before anything leaves the process
     ("scale_dask_cluster", {"cluster_name": "c1", "n_workers": -1}, "must be ≥ 0"),
-    ("scale_dask_cluster", {"cluster_name": "c1", "n_workers": dask.MAX_WORKERS + 1}, f"≤ {dask.MAX_WORKERS}"),
     ("create_dask_cluster", {"n_workers": -1}, "n_workers"),
-    ("create_dask_cluster", {"n_workers": dask.MAX_WORKERS + 1}, f"≤ {dask.MAX_WORKERS}"),
     ("create_dask_cluster", {"worker_cores": 0, "pixi_project": "/p"}, "worker_cores"),
     ("create_dask_cluster", {"worker_memory": -1, "pixi_project": "/p"}, "worker_memory"),
     ("create_dask_cluster", {**CREATE, "pixi_project": None, "env_source": "weird"}, "unknown env_source"),
