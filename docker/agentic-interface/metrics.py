@@ -1,18 +1,6 @@
 """Prometheus metrics for the agentic interface HTTP server.
 
-Metric families:
-  purdue_af_mcp_api_calls_total          HTTP requests by route/status
-  purdue_af_mcp_tool_calls_total         tool invocations by tool/outcome/username
-                                         (success | needs_input | user_error |
-                                          auth_error | upstream_error |
-                                          exception — the errors.Failure
-                                          subclass raised)
-  purdue_af_mcp_tool_duration_seconds    tool invocation latency by tool
-  purdue_af_mcp_upstream_requests_total  outbound backend requests by target/outcome
-  purdue_af_mcp_upstream_duration_seconds  outbound backend latency by target
-  purdue_af_mcp_auth_total               token validation results
-
-The username label exists for ad-hoc per-user queries in Prometheus;
+The tool-call username label exists for ad-hoc per-user queries in Prometheus;
 dashboards aggregate over it.
 """
 
@@ -27,12 +15,7 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError, UrlElicitationRequiredError
 from mcp.types import CallToolResult, InputRequiredResult, TextContent
-from prometheus_client import (
-    CONTENT_TYPE_LATEST,
-    Counter,
-    Histogram,
-    generate_latest,
-)
+from prometheus_client import Counter, Histogram
 from pydantic import ValidationError
 from tools.elicitation import NeedsChoices
 
@@ -73,7 +56,6 @@ UPSTREAM_DURATION = Histogram(
 AUTH_TOTAL = Counter(
     "purdue_af_mcp_auth_total",
     "Bearer-token validation results",
-    # cache_hit | neg_cache_hit | validated | invalid_token | hub_unreachable
     ["result"],
 )
 
@@ -97,17 +79,15 @@ def record_auth(result: str) -> None:
 
 def _username() -> str:
     user = current_user.get(None)
-    return (user or {}).get("username") or "unknown"
+    return user["username"] if user else "unknown"
 
 
 def _translate(name: str, username: str, exc: ToolError) -> tuple[ToolError, str]:
     """Decide what a tool's exception means: ``(exception to raise, outcome)``.
 
-    Tools raise errors.Failure subclasses, which the SDK wraps in a generic
-    ToolError ("Error executing tool X: …") on the way out; unwrap those so
-    the user reads our message. Anything else is either the caller's
-    arguments (pydantic) or a fault in this service — the one place that sees
-    the original exception, so it is logged with its traceback here.
+    The SDK wraps a tool's errors.Failure in a generic ToolError ("Error
+    executing tool X: …"); unwrap it so the user reads our message. Anything
+    else is the caller's arguments (pydantic) or a fault in this service.
     """
     cause = exc.__cause__ or exc
     if isinstance(cause, Failure):
@@ -130,13 +110,8 @@ def _needs_input_result(text: str) -> CallToolResult:
     """Package NeedsChoices help text as an ordinary (non-error) tool result.
 
     Every tool is annotated ``-> str``, so the SDK declares an output schema
-    for it ({"result": <string>}), and a successful result must then carry
-    structured content that conforms to it — clients reject one that does
-    not, and the agent never reads the instruction it needed. So return both
-    halves in the shape the normal dispatch path produces.
-
-    test_mcp_contract keeps the assumed ``{"result": <string>}`` output shape
-    honest across the whole tool surface.
+    ``{"result": <string>}`` for it, and clients reject a successful result
+    without structured content that conforms, so both halves are returned.
     """
     return CallToolResult(
         content=[TextContent(type="text", text=text)],
@@ -145,14 +120,9 @@ def _needs_input_result(text: str) -> CallToolResult:
 
 
 class InstrumentedMCPServer(MCPServer):
-    """MCPServer that records metrics and a structured log line per tool call.
-
-    ``call_tool`` is the SDK's public dispatch entry point (the low-level
-    server calls it for every tools/call), so overriding it here needs no
-    private attributes. It is also where a tool's NeedsChoices becomes an
-    ordinary result: the help text is an instruction to the agent, not an
-    error.
-    """
+    """MCPServer that records metrics and a structured log line per tool call,
+    and turns a tool's NeedsChoices into an ordinary result: the help text is
+    an instruction to the agent, not an error."""
 
     async def call_tool(
         self, name: str, arguments: dict[str, Any], context: Context | None = None
@@ -225,11 +195,3 @@ def instrumented_transport(target: str, **kwargs: Any) -> httpx.AsyncBaseTranspo
     httpx.AsyncHTTPTransport.
     """
     return _InstrumentedTransport(target, **kwargs)
-
-
-def metrics_body() -> bytes:
-    return generate_latest()
-
-
-def metrics_content_type() -> str:
-    return CONTENT_TYPE_LATEST

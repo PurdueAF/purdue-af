@@ -1,46 +1,42 @@
 """Facility health tool — reads the alerts Prometheus is already evaluating.
 
-Thresholds AND wording live in apps/monitoring/prometheus/values.yaml, not
-here: each rule's ``annotations.summary`` is what a user sees, so adding or
-rewording an alert improves this tool with no code change, and there is only
-ever one definition of "unhealthy" and one sentence describing it.
+Thresholds and wording live in apps/monitoring/prometheus/values.yaml: each
+rule's ``annotations.summary`` is what a user sees.
 
-Three rules shape the output:
-
-* Only ``error``/``critical`` alerts make the facility **Degraded**. Warnings
-  that still affect users (failed or slow data access, monitor gaps) yield
-  **Impaired** — between healthy and broken — so the headline stays honest
-  without crying wolf over transient storage blips.
-* A signal that could not be collected is ``unknown``, never ``ok``.
+* Only ``error``/``critical`` alerts make the facility **Degraded**; warnings
+  yield **Impaired**.
+* A signal that could not be collected is ``unknown``, never ``ok``, and a read
+  that failed draws no conclusion.
 * Every firing alert a user may see is listed under its component; "Normal"
   only covers components with nothing firing at all.
+* A rule labelled ``audience: operators`` is not shown to users.
+* A user's own quota alert is about them, not the facility: it leaves the
+  headline alone and shows in the quota line. No other user's is shown.
 
 Rows of the public dashboard's Components panel that no alert covers count too,
 so that this tool and the dashboard cannot disagree: a row at zero is down and
 makes the facility **Degraded**, a row in between makes it **Impaired**.
-
-Output is for the calling user: their own quota is reported, no other user's.
 """
 
+import asyncio
 import re
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, NamedTuple, Optional
 from zoneinfo import ZoneInfo
 
 import httpx
-from config import PROMETHEUS_URL
+from config import PROMETHEUS_NAME, PROMETHEUS_URL
 from context import require_user
-from errors import UpstreamError, describe_exception, json_body, response_detail
+from errors import http_error, json_body, malformed_response, unreachable
 from mcp.server.mcpserver import MCPServer
-from shared import prom_query, prom_scalar, quote_label, shared_client
+from shared import prom_samples, prom_value, quote_label, shared_client
 
 from tools.metrics import component_problems
 from tools.storage import dir_reading_query
 
 EASTERN = ZoneInfo("America/New_York")
 
-# component label -> the heading a user sees. Anything not listed still shows
-# up, under its raw component name, so a new alert is never silently dropped.
+# component label -> the heading a user sees; others show under their raw name.
 COMPONENT_TITLES = {
     "access": "Facility access",
     "compute": "Compute capacity",
@@ -48,17 +44,26 @@ COMPONENT_TITLES = {
     "scale-out": "Scale-out",
     "environment": "Software environment",
     "storage": "User storage",
+    "observability": "Logs and monitoring",
 }
 BLOCKING = ("error", "critical")
-# The facility is also monitored on dev hardware, which runs no user sessions.
-# Those alerts exist for operators; a user asking "is the AF healthy" should
-# never see them, and they must not affect the verdict. So too for delivery: a
-# failed release leaves the workloads running as they were.
+HEALTHY = "**Healthy**"
+DEGRADED = "**Degraded**"
+# Dev hardware runs no sessions; a failed release leaves the workloads running.
 HIDDEN_COMPONENTS = {"dev", "delivery"}
-# Per-user quota warnings are already reported as a percent figure below; they
-# must not flip the facility headline to Impaired.
-SKIP_IMPAIR_PREFIXES = ("AFHomeDir",)
+# The value of a rule's ``audience`` label that keeps it from users.
+OPERATORS = "operators"
 _FRACTION_RE = re.compile(r"\.(\d{6})\d+")
+# username="": on the label, so that no later alert about one person can leak.
+_HISTORY_QUERY = (
+    'count by (alertname) (count_over_time(ALERTS{alertstate="firing",'
+    f'component!~"{"|".join(sorted(HIDDEN_COMPONENTS))}",audience!="{OPERATORS}",'
+    'username="",node_pool!="dev"}[6h]))'
+)
+_UNKNOWN = (
+    "I cannot tell you whether the facility is healthy. This is a monitoring "
+    "problem, not necessarily a facility problem — try your work and see."
+)
 
 
 def _et(ts: float) -> str:
@@ -86,28 +91,20 @@ async def _firing_alerts(client: httpx.AsyncClient) -> list[dict[str, Any]]:
     try:
         resp = await client.get(f"{PROMETHEUS_URL}/api/v1/alerts", timeout=10.0)
     except httpx.RequestError as exc:
-        raise UpstreamError(
-            f"Error: the monitoring system is unreachable — {describe_exception(exc)}, "
-            "so I cannot tell you whether the facility is healthy. This is a "
-            "monitoring problem, not necessarily a facility problem — try your "
-            "work and see."
-        )
+        raise unreachable(PROMETHEUS_NAME, exc, next_step=_UNKNOWN)
     if resp.status_code != 200:
-        detail = response_detail(resp, limit=160)
-        raise UpstreamError(
-            f"Error: the monitoring system returned HTTP {resp.status_code}"
-            + (f" — {detail}" if detail else "")
-            + ", so I cannot tell you whether the facility is healthy. This is a "
-            "monitoring problem, not necessarily a facility problem — try your "
-            "work and see."
+        raise http_error(
+            PROMETHEUS_NAME,
+            resp,
+            action="read the firing alerts",
+            next_step=_UNKNOWN,
         )
     payload = json_body(resp)
     data = payload.get("data") if isinstance(payload, dict) else None
     alerts = data.get("alerts") if isinstance(data, dict) else None
     if not isinstance(alerts, list):
-        raise UpstreamError(
-            "Error: the monitoring system returned HTTP 200 but no alert list, so "
-            "I cannot tell you whether the facility is healthy."
+        raise malformed_response(
+            PROMETHEUS_NAME, resp, "an alert list", next_step=_UNKNOWN
         )
     return [a for a in alerts if isinstance(a, dict) and a.get("state") == "firing"]
 
@@ -120,6 +117,159 @@ def _nodes(alerts: list[dict[str, Any]]) -> set[str]:
         for a in alerts
     }
     return names - {""}
+
+
+class _Alerts(NamedTuple):
+    """The firing alerts as this user sees them."""
+
+    by_component: dict[str, dict[str, list[dict[str, Any]]]]
+    severities: dict[str, str]
+    # Every firing name, hidden ones too: those have not resolved.
+    names: set[str]
+    own_quota_alert: bool = False
+
+
+def _visible_alerts(firing: list[dict[str, Any]], username: str) -> _Alerts:
+    """Group what this user may see by component, then by alert name."""
+    seen = _Alerts({}, {}, set())
+    own_quota_alert = False
+    for alert in firing:
+        labels = alert.get("labels") or {}
+        alert["labels"] = labels
+        name = labels.get("alertname", "unknown")
+        seen.names.add(name)
+        # On the label, so a later alert cannot leak under an unknown component.
+        owner = labels.get("username")
+        if owner and owner != username:
+            continue
+        if labels.get("component") in HIDDEN_COMPONENTS:
+            continue
+        if labels.get("audience") == OPERATORS or labels.get("node_pool") == "dev":
+            continue
+        component = labels.get("component", "other")
+        if component == "storage" and owner:
+            own_quota_alert = True  # one person's quota, not the facility's state
+            continue
+        seen.by_component.setdefault(component, {}).setdefault(name, []).append(alert)
+        seen.severities[name] = labels.get("severity", "warning")
+    return seen._replace(own_quota_alert=own_quota_alert)
+
+
+def _uncovered_rows(
+    problems: dict[str, float], by_component: dict[str, dict[str, list[dict[str, Any]]]]
+) -> dict[str, float]:
+    """The Components rows in trouble that no shown alert already mentions."""
+    summaries = " ".join(
+        str((alert.get("annotations") or {}).get("summary"))
+        for alerts in by_component.values()
+        for matched in alerts.values()
+        for alert in matched
+    )
+    return {name: value for name, value in problems.items() if name not in summaries}
+
+
+def _verdict(
+    severities: dict[str, str], rows: dict[str, float], unread: list[str]
+) -> str:
+    down = any(value <= 0 for value in rows.values())
+    partial = any(value > 0 for value in rows.values())
+    # Warnings users feel; the unknown case has its own verdict.
+    impaired = any(
+        sev not in BLOCKING and name != "AFMountHealthUnknown"
+        for name, sev in severities.items()
+    )
+    if down or any(sev in BLOCKING for sev in severities.values()):
+        return DEGRADED
+    if unread or "AFMountHealthUnknown" in severities:
+        return "**Partly unknown**"
+    if impaired or partial:
+        return "**Impaired**"
+    return HEALTHY
+
+
+def _row_lines(rows: dict[str, float], unread: list[str]) -> list[str]:
+    lines = [
+        f"! **{name}** is down on the facility dashboard."
+        for name, value in rows.items()
+        if value <= 0
+    ]
+    lines += [
+        f"- **{name}** is at {value * 100:.0f}% on the facility dashboard."
+        for name, value in rows.items()
+        if value > 0
+    ]
+    if unread:
+        lines.append(f"- Could not read: {', '.join(unread)}.")
+    return lines
+
+
+def _alert_lines(alerts: _Alerts) -> list[str]:
+    lines = []
+    for component, named in sorted(alerts.by_component.items()):
+        title = COMPONENT_TITLES.get(component, component)
+        for name, matched in sorted(named.items()):
+            mark = "!" if alerts.severities[name] in BLOCKING else "-"
+            # The first instance's rendered summary; the rest are counted.
+            summary = (matched[0].get("annotations") or {}).get("summary") or name
+            scale = ""
+            if len(matched) > 1:
+                nodes = _nodes(matched)
+                scale = f" (and {len(matched) - 1} more"
+                scale += f", {len(nodes)} nodes affected)" if nodes else ")"
+            starts = [t for t in map(_active_at, matched) if t is not None]
+            when = f" Since {_et(min(starts))}." if starts else ""
+            lines.append(f"{mark} **{title}**: {summary}{scale}.{when}")
+    return lines
+
+
+def _normal_line(by_component: dict[str, Any]) -> str:
+    clean = [
+        title
+        for component, title in sorted(COMPONENT_TITLES.items())
+        if component not in by_component
+        and component != "storage"
+        and component not in HIDDEN_COMPONENTS
+    ]
+    return f"\nNormal: {', '.join(clean).lower()}." if clean else ""
+
+
+def _quota_line(
+    util: Optional[float],
+    size_kb: Optional[float],
+    problem: Optional[str],
+    near_limit: bool,
+) -> str:
+    note = (
+        "  Approaching the limit — a full home directory stops sessions from starting."
+        if near_limit
+        else ""
+    )
+    if util is not None:
+        quota = "quota" if size_kb is None else f"{size_kb / 1024 / 1024:.0f} GB quota"
+        return f"\nYour home directory is at {util * 100:.0f}% of its {quota}.{note}"
+    if problem:
+        return (
+            "\nYour home directory quota could not be read just now "
+            f"(query_storage_usage tries again).{note}"
+        )
+    return (
+        "\nNo reading of your home directory quota right now — it is "
+        "reported by your running session, so this is expected while no "
+        f"session is running (query_storage_usage has the details).{note}"
+    )
+
+
+def _history_line(settled: list[str], problem: Optional[str], blocking: bool) -> str:
+    if problem:
+        return "\nThe last 6 hours of alert history could not be read."
+    if settled:
+        return (
+            f"\nIn the last 6 hours, {len(settled)} issue"
+            f"{'s' if len(settled) != 1 else ''} came and went."
+        )
+    if blocking:
+        return "\nThis has been steady for the last 6 hours, not intermittent."
+    return ""
 
 
 def register(mcp: MCPServer) -> None:
@@ -135,163 +285,48 @@ def register(mcp: MCPServer) -> None:
         Use this for "is the AF healthy / is something broken / why is my
         session slow" questions before investigating anything specific.
         """
-        user = require_user()
-        username = user["username"]
-        quoted = quote_label(username)
+        username = require_user()["username"]
+        selector = f'username="{quote_label(username)}"'
 
         client = shared_client("prometheus")
         firing = await _firing_alerts(client)
-        # An alert that came and went in the window is a different situation
-        # from something steadily broken.
-        recent, _ = await prom_query(
-            client,
-            PROMETHEUS_URL,
-            "count by (alertname) (changes(ALERTS_FOR_STATE[6h]) > 0)",
-            timeout=10.0,
+        (
+            (recent, history_problem),
+            (home_util, util_problem),
+            (home_size, _),
+        ) = await asyncio.gather(
+            prom_samples(client, PROMETHEUS_URL, _HISTORY_QUERY, timeout=10.0),
+            prom_value(
+                client, PROMETHEUS_URL, dir_reading_query("home", "util", selector)
+            ),
+            prom_value(
+                client,
+                PROMETHEUS_URL,
+                dir_reading_query("home", "size_kb", selector),
+            ),
         )
-        selector = f'username="{quoted}"'
-        home_rows, _ = await prom_query(
-            client, PROMETHEUS_URL, dir_reading_query("home", "util", selector)
-        )
-        size_rows, _ = await prom_query(
-            client, PROMETHEUS_URL, dir_reading_query("home", "size_kb", selector)
-        )
-        home_util = prom_scalar(home_rows)
-        home_size = prom_scalar(size_rows)
 
-        # group firing alerts by component, then by alert name
-        by_component: dict[str, dict[str, list[dict[str, Any]]]] = {}
-        severities: dict[str, str] = {}
-        # every firing name, including ones hidden below — used to tell a
-        # resolved alert apart from one that is simply not shown to this user
-        firing_names: set[str] = set()
-        for alert in firing:
-            labels = alert.get("labels") or {}
-            alert["labels"] = labels
-            name = labels.get("alertname", "unknown")
-            firing_names.add(name)
-            # Never surface another user's alert. Checked on the label rather
-            # than the component so an alert added later cannot leak by being
-            # filed under a component this tool does not know about.
-            owner = labels.get("username")
-            if owner and owner != username:
-                continue
-            if labels.get("component") in HIDDEN_COMPONENTS:
-                continue
-            if labels.get("node_pool") == "dev":
-                continue
-            component = labels.get("component", "other")
-            by_component.setdefault(component, {}).setdefault(name, []).append(alert)
-            severities[name] = labels.get("severity", "warning")
-
-        blocking = [n for n, sev in severities.items() if sev in BLOCKING]
-        unknown = "AFMountHealthUnknown" in severities
-        # Warnings users feel (slow mounts, stale checks) — not quiet quota
-        # notices, and not the unknown case which already has its own verdict.
-        impaired = [
-            n
-            for n, sev in severities.items()
-            if sev not in BLOCKING
-            and n != "AFMountHealthUnknown"
-            and not n.startswith(SKIP_IMPAIR_PREFIXES)
-        ]
-
+        alerts = _visible_alerts(firing, username)
         problems, unread = await component_problems()
-        summaries = " ".join(
-            str((alert.get("annotations") or {}).get("summary"))
-            for alerts in by_component.values()
-            for matched in alerts.values()
-            for alert in matched
-        )
-        rows = {n: v for n, v in problems.items() if n not in summaries}
-        down = [name for name, value in rows.items() if value <= 0]
-        partial = [name for name, value in rows.items() if value > 0]
-
-        if blocking or down:
-            verdict = "**Degraded**"
-        elif unknown or unread:
-            verdict = "**Partly unknown**"
-        elif impaired or partial:
-            verdict = "**Impaired**"
-        else:
-            verdict = "**Healthy**"
+        rows = _uncovered_rows(problems, alerts.by_component)
+        verdict = _verdict(alerts.severities, rows, unread)
 
         lines = [f"{verdict} — Purdue Analysis Facility\n"]
-
-        trouble = rows or unread
-        if not blocking and not unknown and not impaired and not trouble:
+        if verdict == HEALTHY:
             lines.append("Nothing is failing across the facility.")
-
-        lines += [f"! **{name}** is down on the facility dashboard." for name in down]
-        lines += [
-            f"- **{name}** is at {rows[name] * 100:.0f}% on the facility dashboard."
-            for name in partial
-        ]
-        if unread:
-            lines.append(f"- Could not read: {', '.join(unread)}.")
-
-        for component, alerts in sorted(by_component.items()):
-            title = COMPONENT_TITLES.get(component, component)
-            if component == "storage":
-                continue  # per-user, reported separately below
-            for name, matched in sorted(alerts.items()):
-                mark = "!" if severities[name] in BLOCKING else "-"
-                # The rule's own summary, rendered by Prometheus for the first
-                # instance; the rest are counted so scale is never lost.
-                summary = (matched[0].get("annotations") or {}).get("summary") or name
-                scale = ""
-                if len(matched) > 1:
-                    nodes = _nodes(matched)
-                    scale = f" (and {len(matched) - 1} more"
-                    scale += f", {len(nodes)} nodes affected)" if nodes else ")"
-                starts = [t for t in map(_active_at, matched) if t is not None]
-                when = f" Since {_et(min(starts))}." if starts else ""
-                lines.append(f"{mark} **{title}**: {summary}{scale}.{when}")
-
-        clean = [
-            title
-            for component, title in sorted(COMPONENT_TITLES.items())
-            if component not in by_component
-            and component != "storage"
-            and component not in HIDDEN_COMPONENTS
-        ]
-        if clean and not trouble:
-            lines.append(f"\nNormal: {', '.join(clean).lower()}.")
-
-        if home_util is not None:
-            quota_gb = (home_size or 0) / 1024 / 1024
-            note = (
-                "  Approaching the limit — a full home directory stops sessions "
-                "from starting."
-                if home_util >= 0.9
-                else ""
-            )
-            lines.append(
-                f"\nYour home directory is at {home_util * 100:.0f}% "
-                f"of its {quota_gb:.0f} GB quota.{note}"
-            )
-        else:
-            lines.append(
-                "\nNo reading of your home directory quota right now — it is "
-                "reported by your running session, so this is expected while no "
-                "session is running (query_storage_usage has the details)."
-            )
-
-        # "came and went" means resolved — an alert still firing is reported
-        # above, and counting it again here reads as extra trouble.
+        lines += _row_lines(rows, unread)
+        lines += _alert_lines(alerts)
+        if not rows and not unread:
+            lines.append(_normal_line(alerts.by_component))
+        lines.append(
+            _quota_line(home_util, home_size, util_problem, alerts.own_quota_alert)
+        )
+        # "came and went" means resolved: a firing alert is reported above.
         settled = [
-            r["metric"].get("alertname")
-            for r in recent
-            if r.get("metric", {}).get("alertname") not in firing_names
+            str(labels.get("alertname"))
+            for labels, _ in recent
+            if labels.get("alertname") not in alerts.names
         ]
-        if settled:
-            lines.append(
-                f"\nIn the last 6 hours, {len(settled)} issue"
-                f"{'s' if len(settled) != 1 else ''} came and went."
-            )
-        elif blocking:
-            lines.append(
-                "\nThis has been steady for the last 6 hours, not intermittent."
-            )
-
-        return "\n".join(lines) + "\n"
+        blocking = any(sev in BLOCKING for sev in alerts.severities.values())
+        lines.append(_history_line(settled, history_problem, blocking))
+        return "\n".join(line for line in lines if line) + "\n"

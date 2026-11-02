@@ -14,15 +14,9 @@ COPY docker/agentic-interface/pyproject.toml docker/agentic-interface/uv.lock ./
 RUN uv sync --frozen --no-dev
 ENV PATH="/app/.venv/bin:$PATH"
 
-COPY docker/agentic-interface/config.py .
-COPY docker/agentic-interface/context.py .
-COPY docker/agentic-interface/errors.py .
-COPY docker/agentic-interface/shared.py .
-COPY docker/agentic-interface/auth.py .
-COPY docker/agentic-interface/metrics.py .
-COPY docker/agentic-interface/server.py .
+COPY docker/agentic-interface/*.py ./
 COPY docker/agentic-interface/tools/ ./tools/
-# Shared with the Hub's profile form so both report the same GPU numbers.
+# The GPU counts: Prometheus' allocatable minus requested, as on the Hub's profile form.
 COPY apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py .
 COPY .claude/skills/purdue-af-agentic-interface/SKILL.md .
 

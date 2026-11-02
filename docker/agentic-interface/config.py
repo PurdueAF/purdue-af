@@ -1,14 +1,11 @@
-"""Deployment configuration, read from the environment in one place.
+"""Deployment configuration: where each backend lives, in one place.
 
-Every URL the service talks to is defined here so that no two modules can
-disagree about where a backend lives; apps/agentic-interface/deployment.yaml
-sets the environment.
+The defaults are the facility's own addresses; the environment overrides them.
 """
 
 import os
 
-# JupyterHub registers this service under a prefix; the MCP endpoint is
-# ``{SERVICE_PREFIX}/mcp``.
+# The MCP endpoint is ``{SERVICE_PREFIX}/mcp``.
 SERVICE_PREFIX = os.environ.get(
     "JUPYTERHUB_SERVICE_PREFIX", "/services/agentic-interface"
 ).rstrip("/")
@@ -22,14 +19,15 @@ PUBLIC_URL = os.environ.get(
 # Where a user mints an API token — every authentication failure points here.
 TOKEN_URL = f"{PUBLIC_URL}/hub/token"
 
-# The AF Prometheus (dask-gateway-monitor, af-pod-monitor, alert rules) …
+# The AF Prometheus (dask-gateway-monitor, af-pod-monitor, alert rules), and …
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
-# … and the cluster (Rancher) Prometheus, which is where cadvisor / kubelet
-# container_* metrics live.
+PROMETHEUS_NAME = "Prometheus"
+# … the cluster (Rancher) Prometheus, with container_*; messages name them apart.
 CLUSTER_PROMETHEUS_URL = os.environ.get(
     "CLUSTER_PROMETHEUS_URL",
     "http://rancher-monitoring-prometheus.cattle-monitoring-system.svc.cluster.local:9090",
 )
+CLUSTER_PROMETHEUS_NAME = "the monitoring system"
 LOKI_URL = os.environ.get("LOKI_URL", "http://loki.cms.svc.cluster.local:3100")
 
 DASK_GATEWAY_URL = os.environ.get(
@@ -47,9 +45,7 @@ DASHBOARD_PATH = os.environ.get("DASHBOARD_PATH", "/dashboards/default.json")
 # The agent skill, bundled so the server can announce its current version.
 SKILL_PATH = os.environ.get("SKILL_PATH", "/app/SKILL.md")
 
-# Stateful streamable-HTTP sessions are required for server→client requests
-# such as elicitation. Stateless mode keeps one-shot POSTs working (handy for
-# curl) but disables elicitation; the deployment (single replica) sets false.
+# Elicitation needs stateful sessions; stateless keeps one-shot POSTs working.
 STATELESS_HTTP = os.environ.get("MCP_STATELESS_HTTP", "true").lower() in (
     "1",
     "true",

@@ -123,7 +123,7 @@ tests:
       - expr: ALERTS{alertname="AFMountInvalidDev",alertstate="firing"}
         eval_time: 35m
         exp_samples:
-          - labels: 'ALERTS{alertname="AFMountInvalidDev",alertstate="firing",component="dev",mount_name="depot",node="dev-failed",node_pool="dev",severity="warning"}'
+          - labels: 'ALERTS{alertname="AFMountInvalidDev",alertstate="firing",audience="operators",component="dev",mount_name="depot",node="dev-failed",node_pool="dev",severity="warning"}'
             value: 1
 
   - name: half the nodes failing one fresh mount is an outage; cvmfs has its own rule

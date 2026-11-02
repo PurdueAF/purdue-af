@@ -1,21 +1,6 @@
-"""Cross-tool helpers: pooled HTTP clients and query-label escaping.
-
-``shared_client`` keeps one pooled client per backend target (auth.py keeps
-its own). Clients live for the process — never ``async with`` them closed at a
-call site.
-
-Every pooled client serves all users, so ``upstream_transport`` drops the
-cookies a backend sets: the caller's token is the only identity a request
-carries.
-
-``quote_label`` escapes a value for interpolation inside a PromQL/LogQL label
-matcher (``{label="<value>"}``). Usernames come from the Hub and are the only
-dynamic values we interpolate, but escaping centrally removes the injection
-class outright.
-
-``prom_query`` is the one way tools ask Prometheus, so that "Prometheus is
-down" and "there is no such series" can never be confused (see errors.py).
-"""
+"""Cross-tool helpers: pooled HTTP clients, query-label escaping, and asking
+Prometheus so that "Prometheus is down" and "there is no such series" can never
+be confused (see errors.py)."""
 
 from typing import Any, Optional
 
@@ -44,15 +29,16 @@ class _CookielessTransport(httpx.AsyncBaseTransport):
 
 
 def upstream_transport(name: str, **transport_kwargs: Any) -> httpx.AsyncBaseTransport:
-    """The transport for a client shared between users: metered, cookieless."""
+    """The transport for a client shared between users: metered, and it drops
+    the cookies a backend sets, so the caller's token is a request's only identity."""
     return _CookielessTransport(instrumented_transport(name, **transport_kwargs))
 
 
 def shared_client(name: str, **transport_kwargs: Any) -> httpx.AsyncClient:
     """Return the process-wide pooled client for ``name``, creating it once.
 
-    ``name`` is also the upstream-metrics target label. ``transport_kwargs``
-    (e.g. ``verify=``) apply only on first creation.
+    Never close one at a call site. ``name`` is also the upstream-metrics target
+    label. ``transport_kwargs`` (e.g. ``verify=``) apply only on first creation.
     """
     client = _clients.get(name)
     if client is None or client.is_closed:
@@ -64,7 +50,7 @@ def shared_client(name: str, **transport_kwargs: Any) -> httpx.AsyncClient:
 
 
 def quote_label(value: str) -> str:
-    """Escape a string for use inside a double-quoted PromQL/LogQL label value."""
+    """Escape a value for a double-quoted PromQL/LogQL label matcher."""
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
@@ -83,9 +69,7 @@ async def prom_query(
     ``problem`` is None whenever Prometheus answered the query — an empty
     ``rows`` then genuinely means "no such series", which every caller must
     keep distinct from "could not ask". When set it is a predicate the
-    caller completes with the backend's name in the user's terms
-    ("Prometheus is unreachable — …", "the monitoring system returned HTTP
-    503 — …").
+    caller completes with the backend's name in the user's terms.
     """
     try:
         resp = await client.get(
@@ -105,6 +89,30 @@ async def prom_query(
     return (
         [r for r in result if isinstance(r, dict)] if isinstance(result, list) else []
     ), None
+
+
+async def prom_value(
+    client: httpx.AsyncClient,
+    base_url: str,
+    query: str,
+    *,
+    timeout: float = 8.0,
+) -> tuple[Optional[float], Optional[str]]:
+    """``prom_query`` for one number → ``(first value or None, problem)``."""
+    rows, problem = await prom_query(client, base_url, query, timeout=timeout)
+    return prom_scalar(rows), problem
+
+
+async def prom_samples(
+    client: httpx.AsyncClient,
+    base_url: str,
+    query: str,
+    *,
+    timeout: float = 8.0,
+) -> tuple[list[tuple[dict[str, Any], float]], Optional[str]]:
+    """``prom_query`` for a vector → ``([(labels, value), …], problem)``."""
+    rows, problem = await prom_query(client, base_url, query, timeout=timeout)
+    return prom_vector(rows), problem
 
 
 def prom_scalar(rows: list[dict[str, Any]]) -> Optional[float]:

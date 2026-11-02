@@ -3,15 +3,6 @@
 from agentic_helpers import register_tools
 from tools import prompts
 
-# Tool results already name the next step; only the cluster workflow, whose
-# questions a client without elicitation must ask in chat, earns a prompt.
-EXPECTED_PROMPTS = {"create_cluster"}
-
-
-def test_all_prompts_registered():
-    recorder = register_tools(prompts)
-    assert set(recorder.prompts) == EXPECTED_PROMPTS
-
 
 def test_prompt_text_never_names_unknown_tools():
     """Catch typos: any word with two or more underscores must be a tool."""

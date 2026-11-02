@@ -142,22 +142,12 @@ async def test_full_stack_handshake_and_auth(monkeypatch, accept_token):
 
 # ── a declined elicitation must still be readable by the agent ────────────────
 #
-# Tools that ask the user for choices raise NeedsChoices when the client cannot
-# (or will not) render the prompt, and metrics.InstrumentedMCPServer turns that
-# into an ordinary result carrying the help text. Because every tool is `-> str`
-# the SDK declares an output schema for it, and clients reject a successful
-# result without conforming structured content — so the help text only
-# survives the round trip if it is returned in both halves. These tests pin
-# that down: the shape assumption, and the round trip through the real server
-# for a client on each protocol era.
+# The shape metrics._needs_input_result assumes, and the round trip through the
+# real server for a client on each protocol era.
 
 
 async def test_every_tool_declares_a_wrapped_string_output_schema():
-    """metrics._needs_input_result hard-codes {"result": <string>}.
-
-    If a tool ever returns something other than a plain string, that helper has
-    to learn the new shape or the NeedsChoices path silently regresses.
-    """
+    """metrics._needs_input_result hard-codes {"result": <string>}."""
     for tool in await server.mcp.list_tools():
         schema = tool.output_schema
         assert schema is not None, f"{tool.name} declares no output schema"

@@ -23,7 +23,6 @@ import auth  # noqa: E402
 import server  # noqa: E402
 from agentic_helpers import USER  # noqa: E402
 from context import current_user  # noqa: E402
-from mcp.server.auth.provider import AccessToken  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -56,12 +55,11 @@ def no_sleep(monkeypatch):
 
 @pytest.fixture
 def accept_token(monkeypatch):
-    """server.verify_token takes "good" as alice; returns the user that binds."""
+    """server.resolve_user takes "good" as alice; returns the user that binds."""
+    alice = {"username": "alice", "token": "good"}
 
-    async def verify(token):
-        if token != "good":
-            return None
-        return AccessToken(token=token, client_id="alice", scopes=[])
+    async def resolve(token):
+        return alice if token == "good" else None
 
-    monkeypatch.setattr(server, "verify_token", verify)
-    return {"username": "alice", "namespace": server.NAMESPACE, "token": "good"}
+    monkeypatch.setattr(server, "resolve_user", resolve)
+    return alice

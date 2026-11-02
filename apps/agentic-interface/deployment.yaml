@@ -35,29 +35,13 @@ spec:
           ports:
             - containerPort: 8888
           env:
-            - name: JUPYTERHUB_SERVICE_PREFIX
-              value: "/services/agentic-interface"
             # Stateful sessions (single replica), so tools can use MCP elicitation.
             - name: MCP_STATELESS_HTTP
               value: "false"
-            - name: JUPYTERHUB_API_URL
-              value: "http://hub:8081/hub/api"
-            - name: LOKI_URL
-              value: "http://loki.cms.svc.cluster.local:3100"
-            - name: PROMETHEUS_URL
-              value: "http://prometheus-server:9090"
-            - name: CLUSTER_PROMETHEUS_URL
-              value: "http://rancher-monitoring-prometheus.cattle-monitoring-system.svc.cluster.local:9090"
             - name: NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            - name: DASK_GATEWAY_URL
-              value: "http://api-dask-gateway.cms.svc.cluster.local:8000"
-            - name: DASHBOARD_PATH
-              value: /dashboards/default.json
-            - name: RAY_GATEWAY_URL
-              value: "http://ray-train-gateway.cms.svc.cluster.local:8265"
           resources:
             requests:
               cpu: "100m"

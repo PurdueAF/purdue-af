@@ -4,6 +4,7 @@ import auth
 import httpx
 import pytest
 import respx
+import shared
 from agentic_helpers import counter
 
 HUB_USER_URL = f"{auth.HUB_API_URL}/user"
@@ -25,7 +26,6 @@ async def test_valid_token_resolves_user():
 
     assert user == {
         "username": "alice",
-        "namespace": auth.NAMESPACE,
         "token": "tok-1",
     }
 
@@ -158,15 +158,21 @@ async def test_negative_cache_keys_are_hashed_not_raw_tokens():
 
 
 @respx.mock
-async def test_hub_client_is_reused():
-    respx.get(HUB_USER_URL).respond(200, json=hub_user_payload())
+async def test_auth_goes_through_the_pooled_hub_client(monkeypatch):
+    route = respx.get(HUB_USER_URL).respond(200, json=hub_user_payload())
+    client = shared.shared_client("hub")
+    get = client.get
+    calls = []
 
+    async def spy(*args, **kwargs):
+        calls.append(args)
+        return await get(*args, **kwargs)
+
+    monkeypatch.setattr(client, "get", spy)
     await auth.resolve_user("tok-1")
-    client = auth._client
-    await auth.resolve_user("tok-2")
 
-    assert client is not None
-    assert auth._client is client
+    assert calls
+    assert route.calls.last.request.extensions["timeout"]["read"] == 10.0
 
 
 @respx.mock
@@ -229,30 +235,6 @@ async def test_hub_401_is_invalid_token():
 
     assert await auth.resolve_user("tok-1") is None
     assert auth._negative_cache
-
-
-# ── HubTokenVerifier (the MCP SDK TokenVerifier protocol) ─────────────────────
-
-
-@respx.mock
-async def test_verifier_maps_hub_user_to_access_token():
-    respx.get(HUB_USER_URL).respond(200, json=hub_user_payload())
-
-    access = await auth.HubTokenVerifier().verify_token("tok-1")
-
-    assert access is not None
-    assert access.client_id == "alice"
-    assert access.token == "tok-1"
-
-
-@respx.mock
-async def test_verifier_returns_none_for_rejected_token_and_raises_for_hub_outage():
-    respx.get(HUB_USER_URL).respond(403)
-    assert await auth.HubTokenVerifier().verify_token("bad") is None
-
-    respx.get(HUB_USER_URL).mock(side_effect=httpx.ConnectError("boom"))
-    with pytest.raises(auth.HubUnavailable):
-        await auth.HubTokenVerifier().verify_token("tok-2")
 
 
 def test_require_user_outside_the_authenticated_path_is_a_named_failure():

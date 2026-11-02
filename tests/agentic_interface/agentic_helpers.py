@@ -10,7 +10,6 @@ from tools import profiles
 
 USER = {
     "username": "alice",
-    "namespace": "cms",
     "token": "tok-alice",
 }
 

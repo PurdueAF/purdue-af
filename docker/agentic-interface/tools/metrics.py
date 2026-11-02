@@ -14,7 +14,7 @@ from typing import Any, Optional
 from config import CLUSTER_PROMETHEUS_URL, DASHBOARD_PATH, PROMETHEUS_URL
 from errors import Failure, UpstreamError
 from mcp.server.mcpserver import MCPServer
-from shared import prom_query, prom_vector, shared_client
+from shared import prom_query, prom_samples, prom_vector, shared_client
 
 # Grafana's datasource uid -> the shared client's name and the URL.
 DATASOURCES = {
@@ -89,10 +89,10 @@ async def component_problems() -> tuple[dict[str, float], list[str]]:
         if panel.get("title") != COMPONENTS_PANEL:
             continue
         for (client, url), query, legend in _queries(panel):
-            rows, problem = await prom_query(shared_client(client), url, query)
+            samples, problem = await prom_samples(shared_client(client), url, query)
             if problem:
                 unread.append(legend)
-            for _, value in prom_vector(rows):
+            for _, value in samples:
                 if value < 1:
                     problems[legend] = value
     return problems, unread

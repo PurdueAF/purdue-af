@@ -66,7 +66,11 @@ def test_parse_profiles_full():
     assert stable["default"] is True
     assert stable["slug"] == "purdue-af-0-12-4-stable"
     assert stable["description"] == "Recommended. Stable image."  # HTML stripped
-    assert stable["options"]["0-cpu"]["choices"]["1"] == "4 cores (default)"
+    assert stable["options"]["0-cpu"]["choices"]["1"] == "4 cores"
+    assert stable["options"]["0-cpu"]["default"] == "1"
+    assert profiles.labelled_choices(stable["options"]["0-cpu"])["1"] == (
+        "4 cores (default)"
+    )
     assert stable["options"]["3-interface"]["choices"]["2"] == "VS Code"
 
     assert parsed[1]["default"] is False
@@ -287,7 +291,7 @@ async def test_list_profiles_tool_shows_gpu_availability(monkeypatch):
 # least report), never a bare "misconfigured".
 
 CM_URL = (
-    f"{profiles._K8S_API}/api/v1/namespaces/{profiles._NAMESPACE}"
+    f"{profiles._K8S_API}/api/v1/namespaces/{profiles.NAMESPACE}"
     f"/configmaps/{profiles._CONFIGMAP}"
 )
 
