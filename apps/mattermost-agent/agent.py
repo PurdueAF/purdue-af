@@ -71,7 +71,7 @@ PERSONAL_TOOLS = {
     "start_ray_cluster",
     "stop_ray_cluster",
 }
-MAX_TURNS = 6
+MAX_TURNS = 10
 MAX_THREAD_POSTS = 20
 MAX_POST_CHARS = 4_000
 MAX_TOOL_CHARS = 24_000
@@ -110,8 +110,9 @@ PERSONAL_MODE = (
     "You are acting on the account of the person who wrote this message, who asked "
     "about their own things. Answer only what they asked, with only the detail it "
     "needs, as others may read this. Start, stop, restart, scale or delete only what "
-    "they explicitly asked for, and say what you did. You have no way to reach anyone "
-    "else's account; say so if asked."
+    "they explicitly asked for, once, and say what you did. After an action, reply: do "
+    "not wait or poll for it, since workers and sessions take minutes to start. You "
+    "have no way to reach anyone else's account; say so if asked."
 )
 # Refreshed this early, so that a poll never races the expiry.
 EXPIRY_MARGIN_SECONDS = 300.0
@@ -143,6 +144,11 @@ CODE_PAGE = (
     "within 10 minutes:\n\n{code}\n\nIf you did not ask for this, close this page "
     "and do not send the code to anyone: it would let them use your account."
 )
+ACTED = (
+    "I ran {tools} for you but could not write up the result. Please check the outcome "
+    "before asking again, so that nothing is done twice."
+)
+FINISH = "Reply now in plain text with what was done and what is left. Call no tools."
 BAD_CODE = "That code did not work. Send `link` to start again."
 UNLINKED = "Unlinked. I no longer use your account."
 NOT_LINKED = "You are not linked."
@@ -895,12 +901,19 @@ class Agent:
             tools = [read_doc_tool()] + [
                 openai_tool(t) for t in listed.tools if t.name in allowed
             ]
+            ran: list[str] = []
             for turn in range(MAX_TURNS):
                 last = turn == MAX_TURNS - 1
+                if last:
+                    messages.append({"role": "user", "content": FINISH})
                 reply = await self.complete(messages, [] if last else tools, root)
-                calls = reply.get("tool_calls")
+                # The last turn runs nothing: it offered no tools.
+                calls = None if last else reply.get("tool_calls")
                 if not calls:
-                    return str(reply.get("content") or "")
+                    text = str(reply.get("content") or "")
+                    if text.strip():
+                        return text
+                    break
                 messages.append(
                     {
                         "role": "assistant",
@@ -910,6 +923,9 @@ class Agent:
                 )
                 for call in calls:
                     function = call["function"]
+                    if function["name"] in PERSONAL_TOOLS:
+                        ran.append(function["name"])
+                    log.info("post %s: tool %s", post["id"], function["name"])
                     content = await self.call(
                         session,
                         function["name"],
@@ -919,7 +935,8 @@ class Agent:
                     messages.append(
                         {"role": "tool", "tool_call_id": call["id"], "content": content}
                     )
-        return ""
+        log.warning("post %s: no text after %d tools", post["id"], len(ran))
+        return ACTED.format(tools=", ".join(dict.fromkeys(ran))) if ran else ""
 
     def alive(self) -> bool:
         """Not stuck: polling recently, or waiting for the login."""
