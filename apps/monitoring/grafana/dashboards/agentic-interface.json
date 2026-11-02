@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "Use of the Purdue AF agentic interface (MCP server): who is using it, what they use it for, and whether it works. Private instance \u2014 panels name individual users.",
+  "description": "Use of the Purdue AF agentic interface (MCP server): who is using it, what they use it for, and whether it works. Private instance — panels name individual users.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -46,7 +46,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
+        "w": 3,
         "x": 0,
         "y": 1
       },
@@ -103,8 +103,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 4,
+        "w": 3,
+        "x": 3,
         "y": 1
       },
       "id": 3,
@@ -160,8 +160,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 8,
+        "w": 3,
+        "x": 6,
         "y": 1
       },
       "id": 4,
@@ -197,7 +197,7 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "Share of tool calls that returned a result. needs_input counts as success \u2014 the agent was told what to ask for.",
+      "description": "Share of tool calls that returned a result. needs_input counts as success — the agent was told what to ask for.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -227,7 +227,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 12,
+        "x": 9,
         "y": 1
       },
       "id": 5,
@@ -263,7 +263,7 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "Tool calls that failed because a backend did \u2014 the facility's fault, not the caller's.",
+      "description": "Tool calls that failed because a backend did — the facility's fault, not the caller's.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -288,7 +288,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 16,
+        "x": 13,
         "y": 1
       },
       "id": 6,
@@ -346,7 +346,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 20,
+        "x": 17,
         "y": 1
       },
       "id": 7,
@@ -375,6 +375,63 @@
         }
       ],
       "title": "p95 latency",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
+      },
+      "description": "Mattermost accounts linked to a Hub account right now, through PurdueAF Agent.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 21,
+        "y": 1
+      },
+      "id": 26,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "max(purdue_af_mattermost_linked_accounts)",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Linked on Mattermost",
       "type": "stat"
     },
     {
@@ -1123,7 +1180,7 @@
         {
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", outcome!~\"success|needs_input\"}[$__rate_interval])) by (tool, outcome))",
-          "legendFormat": "{{tool}} \u00b7 {{outcome}}",
+          "legendFormat": "{{tool}} · {{outcome}}",
           "range": true,
           "refId": "A"
         }
@@ -1136,7 +1193,7 @@
         "type": "prometheus",
         "uid": "prometheus-rancher"
       },
-      "description": "Slow tools are usually waiting on a backend \u2014 compare with upstream latency.",
+      "description": "Slow tools are usually waiting on a backend — compare with upstream latency.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1236,7 +1293,7 @@
         {
           "editorMode": "code",
           "expr": "round(sum(increase(purdue_af_mcp_upstream_requests_total{outcome!=\"success\"}[$__rate_interval])) by (target, outcome))",
-          "legendFormat": "{{target}} \u00b7 {{outcome}}",
+          "legendFormat": "{{target}} · {{outcome}}",
           "range": true,
           "refId": "A"
         }

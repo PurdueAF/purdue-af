@@ -1256,6 +1256,22 @@ async def test_the_link_pages_go_through_the_hub_login(make):
     assert forged.status_code == 403
 
 
+async def test_the_metric_counts_live_links_and_names_nobody(make, monkeypatch):
+    bot, server, *_ = await make()
+    await ready(bot)
+    transport = httpx.ASGITransport(app=agent.web(bot, "http://mm"))
+    client = httpx.AsyncClient(base_url=PUBLIC, transport=transport)
+    await link(bot, server, "alice-login", "u1")
+    await link(bot, server, "bob-login", "u2")
+    page = await client.get("/metrics")
+    assert f"{agent.LINKED_METRIC} 2" in page.text
+    assert "alice" not in page.text and "u1" not in page.text
+    now = time.time()
+    monkeypatch.setattr(agent.time, "time", lambda: now + agent.TOKEN_SECONDS + 1)
+    page = await client.get("/metrics")
+    assert f"{agent.LINKED_METRIC} 0" in page.text
+
+
 def test_every_key_the_pod_reads_is_in_the_secret():
     deployment = yaml.safe_load((APP / "deployment.yaml").read_text())
     container = deployment["spec"]["template"]["spec"]["containers"][0]

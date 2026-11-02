@@ -1,4 +1,4 @@
-# Ingress from the Hub's proxy alone, for the logins; egress to the Hub, the agentic interface, the LLM proxy and Mattermost.
+# Ingress from the Hub's proxy, for the logins, and both Prometheus instances; egress to the Hub, the agentic interface, the LLM proxy and Mattermost.
 # Kubelet probes come from the node host IP, which NetworkPolicy does not block under Calico.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -17,6 +17,16 @@ spec:
             matchLabels:
               app: jupyterhub
               component: proxy
+        # Rancher Prometheus, via the scrape-metrics ServiceMonitor.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cattle-monitoring-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
       ports:
         - protocol: TCP
           port: 8080
