@@ -9,9 +9,10 @@ import re
 
 import yaml
 from common import REPO
+from dashboard_helpers import dashboard, panel
 
 VALUES = REPO / "apps/monitoring/prometheus/values.yaml"
-DASHBOARD = REPO / "apps/monitoring/grafana/dashboards/alerts.json"
+DASHBOARD = "alerts.json"
 SEVERITIES = {"warning", "error", "critical"}
 
 
@@ -295,36 +296,36 @@ def test_mount_slow_uses_a_rolling_average_on_prod():
 # --- the dashboard that turns alerts into a health answer -----------------
 
 
-def dashboard():
-    return json.loads(DASHBOARD.read_text())
-
-
-def panels_by_title():
-    return {p["title"]: p for p in dashboard()["panels"]}
-
-
-def test_health_panels_exist():
-    titles = panels_by_title()
-    assert "Facility health" in titles
-    assert "Firing alerts by component" in titles
-
-
-def test_health_stat_counts_only_actionable_severities():
-    """Warnings are routine; a headline that goes red on every warning stops
-    being read."""
-    expr = panels_by_title()["Facility health"]["targets"][0]["expr"]
-    assert 'alertstate="firing"' in expr
-    assert "error|critical" in expr
+def test_the_headline_rates_the_worst_firing_severity():
+    """Warnings are routine; a headline that changes colour on every warning
+    stops being read. Dev nodes never count."""
+    stat = panel("default.json", "Facility health")
+    expr = stat["targets"][0]["expr"]
     # `or vector(0)` keeps the panel green instead of "No data" when nothing
     # is firing — the common and most important case
-    assert "or vector(0)" in expr
+    assert expr.endswith(" or vector(0)"), expr
+    arms = expr.removesuffix(" or vector(0)").split(" or ")
+    for arm, severity in zip(arms, ("critical", "error", "warning"), strict=True):
+        assert f'severity="{severity}"' in arm
+        assert 'alertstate="firing"' in arm
+        assert 'component!="dev"' in arm
+        assert 'node_pool="dev"' in arm
+    assert arms[0].endswith("* 3") and arms[1].endswith("* 2") and "*" not in arms[2]
+    (mapping,) = stat["fieldConfig"]["defaults"]["mappings"]
+    colors = {rank: shown["color"] for rank, shown in mapping["options"].items()}
+    assert colors == {"0": "green", "1": "green", "2": "orange", "3": "red"}
+
+
+def test_the_alerts_page_has_no_headline_of_its_own():
+    """default.json's Facility health links here and stays the one definition."""
+    assert "stat" not in {p["type"] for p in dashboard(DASHBOARD)["panels"]}
 
 
 def test_component_table_groups_by_the_alert_labels():
-    panel = panels_by_title()["Firing alerts by component"]
-    expr = panel["targets"][0]["expr"]
+    table = panel(DASHBOARD, "Firing alerts by component")
+    expr = table["targets"][0]["expr"]
     assert re.search(r"count by \(component, severity\)", expr), expr
-    matrix = next(t for t in panel["transformations"] if t["id"] == "groupingToMatrix")
+    matrix = next(t for t in table["transformations"] if t["id"] == "groupingToMatrix")
     assert matrix["options"]["rowField"] == "component"
     assert matrix["options"]["columnField"] == "severity"
 
@@ -334,8 +335,8 @@ def test_dashboard_covers_every_component_that_has_alerts():
     hardcoded list, this catches the omission."""
     components = {r["labels"]["component"] for r in rules()}
     assert len(components) >= 3, components
-    panel = json.dumps(panels_by_title()["Firing alerts by component"])
-    hardcoded = [c for c in components if f'"{c}"' in panel]
+    table = json.dumps(panel(DASHBOARD, "Firing alerts by component"))
+    hardcoded = [c for c in components if f'"{c}"' in table]
     assert not hardcoded, f"table hardcodes components: {hardcoded}"
 
 
@@ -363,11 +364,10 @@ def test_a_stuck_session_alerts_before_the_hub_deletes_the_pod():
 def test_the_alert_lists_name_every_rule():
     """Most AF rules aggregate the namespace label away, so a filter on it hides
     them. The datasource keeps Rancher's cluster-wide alerts off the AF lists."""
-    panels = panels_by_title()
     for title in ("Errors", "Warnings"):
-        options = panels[title]["options"]
+        options = panel(DASHBOARD, title)["options"]
         assert options["datasource"] == "prometheus", title
         assert "namespace" not in options["alertInstanceLabelFilter"], title
-    rancher = panels["Rancher alerts in cms"]["options"]
+    rancher = panel(DASHBOARD, "Rancher alerts in cms")["options"]
     assert rancher["datasource"] == "prometheus-rancher"
     assert rancher["alertInstanceLabelFilter"] == 'namespace="cms"'

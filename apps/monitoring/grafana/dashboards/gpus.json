@@ -674,7 +674,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "DCGM_FI_PROF_GR_ENGINE_ACTIVE{\n  kubernetes_node=~\"(geddes-g000|geddes-g001|geddes-g002)\"\n}\n# DCGM_FI_DEV_GPU_UTIL{\n#   kubernetes_node=~\"(geddes-g000|geddes-g001|geddes-g002)\"\n# }",
+          "expr": "DCGM_FI_PROF_GR_ENGINE_ACTIVE{\n  kubernetes_node=~\"(geddes-g000|geddes-g001|geddes-g002)\"\n}",
           "legendFormat": "{{kubernetes_node}} - A100 - {{GPU_I_PROFILE}} - #{{gpu}}",
           "range": true,
           "refId": "A"

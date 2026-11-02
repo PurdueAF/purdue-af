@@ -1,68 +1,7 @@
 # Anonymous-viewer instance; admin-only dashboards live in values-private.yaml.
 
-# RWO block storage: SQLite needs file locks CephFS cannot provide.
-persistence:
-  enabled: true
-  type: pvc
-  size: 20Gi
-  storageClassName: ${singlenode_storage_class}
-  accessModes:
-    - ReadWriteOnce
-
-# No sidecar reads other namespaces, so the chart's ClusterRole would be empty.
-rbac:
-  namespaced: true
-
 ingress:
-  enabled: ${enable_ingresses}
-  ingressClassName: public
   path: /grafana
-  pathType: Prefix
-  hosts:
-    - cms.geddes.rcac.purdue.edu
-
-service:
-  type: ClusterIP
-  port: 80
-  targetPort: 3000
-
-securityContext:
-  runAsNonRoot: true
-  runAsUser: 472
-  fsGroup: 472
-  fsGroupChangePolicy: OnRootMismatch
-
-# Disable init chown; rely on fsGroup on RBD
-initChownData:
-  enabled: false
-
-# TRANSITIONAL: removes plugins this instance no longer installs, which stay on the PVC.
-extraInitContainers:
-  - name: remove-unused-plugins
-    image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/busybox:1.38
-    imagePullPolicy: IfNotPresent
-    command:
-      - sh
-      - -c
-      - >-
-        rm -rf /var/lib/grafana/plugins/marcusolsson-dynamictext-panel
-        /var/lib/grafana/plugins/yesoreyeram-infinity-datasource
-    securityContext:
-      runAsNonRoot: true
-      runAsUser: 472
-      allowPrivilegeEscalation: false
-      seccompProfile:
-        type: RuntimeDefault
-    resources:
-      requests:
-        cpu: 50m
-        memory: 64Mi
-      limits:
-        cpu: 200m
-        memory: 128Mi
-    volumeMounts:
-      - name: storage
-        mountPath: /var/lib/grafana
 
 resources:
   requests:
@@ -72,22 +11,13 @@ resources:
     cpu: 4000m
     memory: 8Gi
 
-# RWO + SQLite: never run two pods against the same DB.
-deploymentStrategy:
-  type: Recreate
-
 grafana.ini:
   server:
     root_url: https://cms.geddes.rcac.purdue.edu/grafana/
-    serve_from_sub_path: true
-  database:
-    wal: true
-    query_retries: 10
   dashboards:
     default_home_dashboard_path: /var/lib/grafana/dashboards/public/default.json
   auth.anonymous:
     enabled: true
-    org_name: "Main Org."
     org_role: Viewer
     hide_version: true
 
@@ -96,10 +26,8 @@ dashboardProviders:
     apiVersion: 1
     providers:
       - name: "public"
-        orgId: 1
         folder: "Public Dashboards"
         type: file
-        disableDeletion: false
         updateIntervalSeconds: 10
         allowUiUpdates: true
         options:
@@ -115,20 +43,7 @@ datasources:
     # Anonymous viewers can run any query against any datasource here; these must not exist on this instance.
     deleteDatasources:
       - name: loki
-        orgId: 1
       - name: tempo
-        orgId: 1
       - name: pyroscope
-        orgId: 1
       - name: prometheus-hammer
-        orgId: 1
       - name: Infinity
-        orgId: 1
-
-nodeSelector:
-  cms-af-prod: "true"
-tolerations:
-  - key: "hub.jupyter.org/dedicated"
-    operator: "Equal"
-    value: "cms-af"
-    effect: "NoSchedule"

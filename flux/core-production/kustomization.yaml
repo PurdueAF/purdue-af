@@ -84,6 +84,10 @@ configMapGenerator:
     files:
       - values.yaml=../../apps/jupyterhub/jupyterhub-ssh/values.yaml
 
+  - name: grafana-common-config
+    files:
+      - values.yaml=../../apps/monitoring/grafana/values-common.yaml
+
   - name: grafana-config
     files:
       - values.yaml=../../apps/monitoring/grafana/values.yaml

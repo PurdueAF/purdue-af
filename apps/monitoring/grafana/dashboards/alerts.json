@@ -21,104 +21,6 @@
   "links": [],
   "panels": [
     {
-      "type": "stat",
-      "title": "Facility health",
-      "description": "Firing alerts of severity error or critical. Anything above zero means some part of the facility is not serving users normally \u2014 the table beside this says which.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 0,
-        "y": 0
-      },
-      "id": 10,
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "count(ALERTS{alertstate=\"firing\", severity=~\"error|critical\"}) or vector(0)",
-          "instant": true,
-          "range": false,
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "value_and_name",
-        "wideLayout": true,
-        "showPercentChange": false,
-        "percentChangeColorMode": "standard"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "Healthy",
-                  "index": 0
-                }
-              }
-            },
-            {
-              "type": "range",
-              "options": {
-                "from": 1,
-                "to": 3,
-                "result": {
-                  "text": "Degraded",
-                  "index": 1
-                }
-              }
-            },
-            {
-              "type": "range",
-              "options": {
-                "from": 4,
-                "to": null,
-                "result": {
-                  "text": "Impaired",
-                  "index": 2
-                }
-              }
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 4
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          }
-        }
-      }
-    },
-    {
       "type": "table",
       "title": "Firing alerts by component",
       "description": "One row per component, one column per severity. Empty table means nothing is firing anywhere.",
@@ -128,8 +30,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 18,
-        "x": 6,
+        "w": 24,
+        "x": 0,
         "y": 0
       },
       "id": 11,

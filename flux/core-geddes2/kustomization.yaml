@@ -76,6 +76,10 @@ configMapGenerator:
       - ../../docker/af-node-monitor/probe_agent.py
       - ../../docker/af-node-monitor/job_runner.py
 
+  - name: grafana-common-config
+    files:
+      - values.yaml=../../apps/monitoring/grafana/values-common.yaml
+
   - name: grafana-config
     files:
       - values.yaml=../../apps/monitoring/grafana/values.yaml

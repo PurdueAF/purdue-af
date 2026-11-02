@@ -62,7 +62,15 @@
     ]
   },
   "templating": {
-    "list": []
+    "list": [
+      {
+        "name": "ray_pod_user",
+        "type": "constant",
+        "hide": 2,
+        "skipUrlSync": true,
+        "query": "group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\"))"
+      }
+    ]
   },
   "time": {
     "from": "now-6h",
@@ -292,7 +300,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max(up{job=\"jupyterhub\",instance=\"cms.geddes.rcac.purdue.edu\"}) or vector(0)",
+          "expr": "max(up{job=\"jupyterhub\"}) or vector(0)",
           "legendFormat": "JupyterHub",
           "datasource": {
             "type": "prometheus",
@@ -933,14 +941,6 @@
           "format": "table"
         },
         {
-          "refId": "B",
-          "expr": "sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\"))",
-          "legendFormat": "",
-          "range": false,
-          "instant": true,
-          "format": "table"
-        },
-        {
           "refId": "C",
           "expr": "sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\")) - sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\"))",
           "legendFormat": "",
@@ -1206,18 +1206,6 @@
         {
           "refId": "A",
           "expr": "(sum by (resource)(kube_node_status_allocatable{resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) > 0)",
-          "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true,
-          "format": "table"
-        },
-        {
-          "refId": "B",
-          "expr": "sum by (resource)(kube_pod_container_resource_requests{namespace=\"cms\",resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -2056,14 +2044,6 @@
         {
           "refId": "I",
           "expr": "(sum by (node)(label_replace(1 - node_memory_MemAvailable_bytes{job=\"node-exporter\"} / node_memory_MemTotal_bytes{job=\"node-exporter\"}, \"node\", \"$1\", \"instance\", \"([^.]+)\\\\..*\"))) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
-          "legendFormat": "",
-          "range": false,
-          "instant": true,
-          "format": "table"
-        },
-        {
-          "refId": "J",
-          "expr": "(sum by (node)(kube_pod_container_resource_requests{namespace=\"cms\",resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) and on(node) group by (node)(af_node_mount_result_fresh{node_pool=~\"prod|dev\"})",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -3038,28 +3018,6 @@
                 }
               }
             ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "capacity"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#6E6E6E"
-                }
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "fill": "dot",
-                  "dash": [2, 4]
-                }
-              }
-            ]
           }
         ]
       },
@@ -3351,28 +3309,6 @@
                 }
               }
             ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "capacity"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#6E6E6E"
-                }
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "fill": "dot",
-                  "dash": [2, 4]
-                }
-              }
-            ]
           }
         ]
       },
@@ -3602,28 +3538,6 @@
                 "value": {
                   "fill": "dash",
                   "dash": [6, 4]
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "capacity"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#6E6E6E"
-                }
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "fill": "dot",
-                  "dash": [2, 4]
                 }
               }
             ]
@@ -5456,8 +5370,8 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus-rancher"
       },
       "description": "Maximum near 100% means workers are about to be killed for memory. Legend hidden: series are cluster ids, see the table above; hover for values.",
       "fieldConfig": {
@@ -5499,23 +5413,15 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
           "editorMode": "code",
-          "expr": "max by (cluster_name) (\n  sum by (pod, cluster_name) (\n    label_replace(\n      container_memory_working_set_bytes{pod=~\"dask-worker-.*\", container=\"dask-worker\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n  /\n  sum by (pod, cluster_name) (\n    label_replace(\n      kube_pod_container_resource_limits{pod=~\"dask-worker-.*\", resource=\"memory\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n)\n",
+          "expr": "max by (cluster_name) (\n  sum by (pod, cluster_name) (\n    label_replace(\n      container_memory_working_set_bytes{namespace=\"cms\",pod=~\"dask-worker-.*\", container=\"dask-worker\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n  /\n  sum by (pod, cluster_name) (\n    label_replace(\n      kube_pod_container_resource_limits{namespace=\"cms\",pod=~\"dask-worker-.*\", resource=\"memory\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n)\n",
           "legendFormat": "Max: {{ cluster_name }}",
           "range": true,
           "refId": "A"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
-          "expr": "avg by (cluster_name) (\n  sum by (pod, cluster_name) (\n    label_replace(\n      container_memory_working_set_bytes{pod=~\"dask-worker-.*\", container=\"dask-worker\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n  /\n  sum by (pod, cluster_name) (\n    label_replace(\n      kube_pod_container_resource_limits{pod=~\"dask-worker-.*\", resource=\"memory\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n)\n",
+          "expr": "avg by (cluster_name) (\n  sum by (pod, cluster_name) (\n    label_replace(\n      container_memory_working_set_bytes{namespace=\"cms\",pod=~\"dask-worker-.*\", container=\"dask-worker\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n  /\n  sum by (pod, cluster_name) (\n    label_replace(\n      kube_pod_container_resource_limits{namespace=\"cms\",pod=~\"dask-worker-.*\", resource=\"memory\"},\n      \"cluster_name\",\n      \"$1\",\n      \"pod\",\n      \"dask-worker-([0-9a-f]{32})-.*\"\n    )\n  )\n)\n",
           "hide": false,
           "legendFormat": "Avg: {{cluster_name}}",
           "range": true,
@@ -5609,7 +5515,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (user)((avg_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}[5m]) >= bool 0.01) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\"))) or on(user) (count by (user)(group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\"))) * 0)",
+          "expr": "max by (user)((avg_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}[5m]) >= bool 0.01) * on(pod) group_left(user) $${ray_pod_user:raw}) or on(user) (count by (user)($${ray_pod_user:raw}) * 0)",
           "legendFormat": "{{ user }}",
           "datasource": {
             "type": "prometheus",
@@ -5793,7 +5699,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (user)(sum_over_time((DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"} * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))[$__range:1m])) / 60 > 0",
+          "expr": "sum by (user)(sum_over_time((DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"} * on(pod) group_left(user) $${ray_pod_user:raw})[$__range:1m])) / 60 > 0",
           "legendFormat": "{{ user }}",
           "datasource": {
             "type": "prometheus",
@@ -6085,7 +5991,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (user)((time() - kube_pod_created{namespace=\"cms\",pod=~\"ray-(train|job)-.+-head-.+\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
+          "expr": "max by (user)((time() - kube_pod_created{namespace=\"cms\",pod=~\"ray-(train|job)-.+-head-.+\"}) * on(pod) group_left(user) $${ray_pod_user:raw})",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6109,7 +6015,7 @@
         },
         {
           "refId": "C",
-          "expr": "count by (user)((kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",phase=\"Pending\"} == 1) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
+          "expr": "count by (user)((kube_pod_status_phase{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",phase=\"Pending\"} == 1) * on(pod) group_left(user) $${ray_pod_user:raw})",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6121,7 +6027,7 @@
         },
         {
           "refId": "D",
-          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=\"nvidia_com_gpu\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
+          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=\"nvidia_com_gpu\"}) * on(pod) group_left(user) $${ray_pod_user:raw})",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6133,7 +6039,7 @@
         },
         {
           "refId": "E",
-          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=~\"nvidia_com_mig.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
+          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=~\"nvidia_com_mig.*\"}) * on(pod) group_left(user) $${ray_pod_user:raw})",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6157,7 +6063,7 @@
         },
         {
           "refId": "G",
-          "expr": "avg by (user)((DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
+          "expr": "avg by (user)((DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}) * on(pod) group_left(user) $${ray_pod_user:raw})",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6169,7 +6075,7 @@
         },
         {
           "refId": "H",
-          "expr": "sum by (user)((DCGM_FI_DEV_FB_USED{pod=~\"ray-(train|job)-.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\"))) / sum by (user)((DCGM_FI_DEV_FB_USED{pod=~\"ray-(train|job)-.*\"} + DCGM_FI_DEV_FB_FREE{pod=~\"ray-(train|job)-.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
+          "expr": "sum by (user)((DCGM_FI_DEV_FB_USED{pod=~\"ray-(train|job)-.*\"}) * on(pod) group_left(user) $${ray_pod_user:raw}) / sum by (user)((DCGM_FI_DEV_FB_USED{pod=~\"ray-(train|job)-.*\"} + DCGM_FI_DEV_FB_FREE{pod=~\"ray-(train|job)-.*\"}) * on(pod) group_left(user) $${ray_pod_user:raw})",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6181,7 +6087,7 @@
         },
         {
           "refId": "I",
-          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=\"cpu\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
+          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=\"cpu\"}) * on(pod) group_left(user) $${ray_pod_user:raw})",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6193,7 +6099,7 @@
         },
         {
           "refId": "J",
-          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=\"memory\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
+          "expr": "sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.*\",container=~\"ray-head|ray-worker\",resource=\"memory\"}) * on(pod) group_left(user) $${ray_pod_user:raw})",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6205,7 +6111,7 @@
         },
         {
           "refId": "K",
-          "expr": "max by (user)((avg_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}[5m]) >= bool 0.01) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
+          "expr": "max by (user)((avg_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}[5m]) >= bool 0.01) * on(pod) group_left(user) $${ray_pod_user:raw})",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -6356,7 +6262,7 @@
             "alias": "T4s",
             "reduce": {
               "reducer": "lastNotNull",
-              "include": ["Value #D", "Value #ND"]
+              "include": ["Value #D"]
             },
             "replaceFields": false
           }
@@ -6368,7 +6274,7 @@
             "alias": "A100 slices",
             "reduce": {
               "reducer": "lastNotNull",
-              "include": ["Value #E", "Value #NE"]
+              "include": ["Value #E"]
             },
             "replaceFields": false
           }
@@ -6380,7 +6286,7 @@
             "alias": "Preemptible GPUs",
             "reduce": {
               "reducer": "lastNotNull",
-              "include": ["Value #F", "Value #NF"]
+              "include": ["Value #F"]
             },
             "replaceFields": false
           }
@@ -6856,7 +6762,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (user)((DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
+          "expr": "avg by (user)((DCGM_FI_PROF_GR_ENGINE_ACTIVE{pod=~\"ray-(train|job)-.*\"}) * on(pod) group_left(user) $${ray_pod_user:raw})",
           "legendFormat": "{{ user }}",
           "datasource": {
             "type": "prometheus",
@@ -6991,7 +6897,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (user)((rate(container_cpu_usage_seconds_total{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",container=\"ray-worker\"}[5m])) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\"))) / sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",container=\"ray-worker\",resource=\"cpu\"}) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
+          "expr": "sum by (user)((rate(container_cpu_usage_seconds_total{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",container=\"ray-worker\"}[5m])) * on(pod) group_left(user) $${ray_pod_user:raw}) / sum by (user)((kube_pod_container_resource_requests{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",container=\"ray-worker\",resource=\"cpu\"}) * on(pod) group_left(user) $${ray_pod_user:raw})",
           "legendFormat": "{{ user }}",
           "datasource": {
             "type": "prometheus",
@@ -7064,7 +6970,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (user)((container_memory_working_set_bytes{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",container=\"ray-worker\"} / on(pod) group_left() sum by (pod)(kube_pod_container_resource_limits{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",container=\"ray-worker\",resource=\"memory\"})) * on(pod) group_left(user) group by (pod, user)(label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-train-.+\"}, \"user\", \"$1\", \"created_by_name\", \"ray-train-(.+)\") or label_replace(kube_pod_info{namespace=\"cms\",created_by_kind=\"RayCluster\",created_by_name=~\"ray-job-.+\"} * on(created_by_name) group_left(owner) label_replace(max by (ray_cluster, owner)(ray_train_job_owner), \"created_by_name\", \"$1\", \"ray_cluster\", \"(.+)\"), \"user\", \"$1\", \"owner\", \"ray-train-(.+)\")))",
+          "expr": "max by (user)((container_memory_working_set_bytes{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",container=\"ray-worker\"} / on(pod) group_left() sum by (pod)(kube_pod_container_resource_limits{namespace=\"cms\",pod=~\"ray-(train|job)-.+-worker-.+\",container=\"ray-worker\",resource=\"memory\"})) * on(pod) group_left(user) $${ray_pod_user:raw})",
           "legendFormat": "{{ user }}",
           "datasource": {
             "type": "prometheus",
@@ -8022,17 +7928,16 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Rebuild activity. Blue/red bars are completed syncs and failures per hour (idle stretches with zero bars are normal when the lock is unchanged). Yellow markers are the duration of a sync that finished in that hour \u2014 not a continuous line (the underlying gauge is sticky last-value).",
+      "description": "Rebuild activity, one point per hour. Blue and red points are completed syncs and failures in that hour (no points while the lock is unchanged is normal). Yellow points are the duration of a sync that finished in that hour.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "bars",
-            "lineInterpolation": "stepAfter",
+            "drawStyle": "points",
             "pointSize": 7,
-            "showPoints": "never"
+            "showPoints": "always"
           },
           "decimals": 0,
           "min": 0,
@@ -8060,10 +7965,6 @@
                   "fixedColor": "blue",
                   "mode": "fixed"
                 }
-              },
-              {
-                "id": "custom.drawStyle",
-                "value": "bars"
               }
             ]
           },
@@ -8079,14 +7980,6 @@
                   "fixedColor": "red",
                   "mode": "fixed"
                 }
-              },
-              {
-                "id": "custom.drawStyle",
-                "value": "bars"
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 40
               }
             ]
           },
@@ -8111,22 +8004,6 @@
               {
                 "id": "custom.axisLabel",
                 "value": "duration"
-              },
-              {
-                "id": "custom.drawStyle",
-                "value": "points"
-              },
-              {
-                "id": "custom.showPoints",
-                "value": "always"
-              },
-              {
-                "id": "custom.lineWidth",
-                "value": 0
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 0
               },
               {
                 "id": "color",
@@ -8162,17 +8039,20 @@
         {
           "expr": "max(increase(pixi_global_sync_syncs_total{job=\"pixi-global-sync\"}[1h]))",
           "legendFormat": "syncs / h",
-          "refId": "A"
+          "refId": "A",
+          "interval": "1h"
         },
         {
           "expr": "max(increase(pixi_global_sync_sync_failures_total{job=\"pixi-global-sync\"}[1h]))",
           "legendFormat": "failures / h",
-          "refId": "B"
+          "refId": "B",
+          "interval": "1h"
         },
         {
           "expr": "max(pixi_global_sync_last_sync_duration_seconds{job=\"pixi-global-sync\"}) and on() (max(increase(pixi_global_sync_syncs_total{job=\"pixi-global-sync\"}[1h])) > 0)",
           "legendFormat": "sync duration",
-          "refId": "C"
+          "refId": "C",
+          "interval": "1h"
         }
       ],
       "title": "Global pixi env \u2014 sync activity",
@@ -8233,7 +8113,7 @@
       },
       "targets": [
         {
-          "expr": "sum(\n  increase(\n    jupyterhub_request_duration_seconds_bucket{\n      job=\"jupyterhub\",\n      instance=\"cms.geddes.rcac.purdue.edu\",\n    }[2m]\n  )\n) by (code)\n",
+          "expr": "sum(\n  increase(\n    jupyterhub_request_duration_seconds_bucket{\n      job=\"jupyterhub\",\n    }[2m]\n  )\n) by (code)\n",
           "legendFormat": "{{ code }}",
           "refId": "A"
         }
@@ -8284,17 +8164,17 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(\n  0.99,\n  sum(\n    rate(\n      jupyterhub_request_duration_seconds_bucket{\n        job=\"jupyterhub\",\n        instance=\"cms.geddes.rcac.purdue.edu\",\n        handler!=\"jupyterhub.apihandlers.users.SpawnProgressAPIHandler\"\n      }[5m]\n    )\n  ) by (le))\n",
+          "expr": "histogram_quantile(\n  0.99,\n  sum(\n    rate(\n      jupyterhub_request_duration_seconds_bucket{\n        job=\"jupyterhub\",\n        handler!=\"jupyterhub.apihandlers.users.SpawnProgressAPIHandler\"\n      }[5m]\n    )\n  ) by (le))\n",
           "legendFormat": "99th percentile",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(\n  0.5,\n  sum(\n    rate(\n      jupyterhub_request_duration_seconds_bucket{\n        job=\"jupyterhub\",\n        instance=\"cms.geddes.rcac.purdue.edu\",\n        handler!=\"jupyterhub.apihandlers.users.SpawnProgressAPIHandler\"\n      }[5m]\n    )\n  ) by (le))\n",
+          "expr": "histogram_quantile(\n  0.5,\n  sum(\n    rate(\n      jupyterhub_request_duration_seconds_bucket{\n        job=\"jupyterhub\",\n        handler!=\"jupyterhub.apihandlers.users.SpawnProgressAPIHandler\"\n      }[5m]\n    )\n  ) by (le))\n",
           "legendFormat": "50th percentile",
           "refId": "B"
         },
         {
-          "expr": "histogram_quantile(\n  0.25,\n  sum(\n    rate(\n      jupyterhub_request_duration_seconds_bucket{\n        job=\"jupyterhub\",\n        instance=\"cms.geddes.rcac.purdue.edu\",\n        handler!=\"jupyterhub.apihandlers.users.SpawnProgressAPIHandler\"\n      }[5m]\n    )\n  ) by (le))\n",
+          "expr": "histogram_quantile(\n  0.25,\n  sum(\n    rate(\n      jupyterhub_request_duration_seconds_bucket{\n        job=\"jupyterhub\",\n        handler!=\"jupyterhub.apihandlers.users.SpawnProgressAPIHandler\"\n      }[5m]\n    )\n  ) by (le))\n",
           "legendFormat": "25th percentile",
           "refId": "C"
         }
@@ -8574,12 +8454,12 @@
     {
       "id": 57,
       "type": "bargauge",
-      "title": "Monitoring volumes",
+      "title": "Volumes",
       "gridPos": {
         "x": 0,
         "y": 155,
         "w": 8,
-        "h": 8
+        "h": 14
       },
       "datasource": {
         "type": "prometheus",
@@ -8588,36 +8468,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max(kubelet_volume_stats_used_bytes{namespace=\"cms\",persistentvolumeclaim=\"prometheus-data-pvc\"} / kubelet_volume_stats_capacity_bytes{namespace=\"cms\",persistentvolumeclaim=\"prometheus-data-pvc\"})",
-          "legendFormat": "Prometheus data",
-          "range": false,
-          "instant": true
-        },
-        {
-          "refId": "B",
-          "expr": "max(kubelet_volume_stats_used_bytes{namespace=\"cms\",persistentvolumeclaim=\"storage-loki-0\"} / kubelet_volume_stats_capacity_bytes{namespace=\"cms\",persistentvolumeclaim=\"storage-loki-0\"})",
-          "legendFormat": "Loki",
-          "range": false,
-          "instant": true
-        },
-        {
-          "refId": "C",
-          "expr": "max(kubelet_volume_stats_used_bytes{namespace=\"cms\",persistentvolumeclaim=\"grafana\"} / kubelet_volume_stats_capacity_bytes{namespace=\"cms\",persistentvolumeclaim=\"grafana\"})",
-          "legendFormat": "Grafana",
-          "range": false,
-          "instant": true
-        },
-        {
-          "refId": "D",
-          "expr": "max(kubelet_volume_stats_used_bytes{namespace=\"cms\",persistentvolumeclaim=\"hub-db-dir\"} / kubelet_volume_stats_capacity_bytes{namespace=\"cms\",persistentvolumeclaim=\"hub-db-dir\"})",
-          "legendFormat": "Hub database",
-          "range": false,
-          "instant": true
-        },
-        {
-          "refId": "E",
-          "expr": "max(kubelet_volume_stats_used_bytes{namespace=\"cms\",persistentvolumeclaim=\"pyroscope-data\"} / kubelet_volume_stats_capacity_bytes{namespace=\"cms\",persistentvolumeclaim=\"pyroscope-data\"})",
-          "legendFormat": "Pyroscope",
+          "expr": "max by (persistentvolumeclaim) (kubelet_volume_stats_used_bytes{namespace=\"cms\",persistentvolumeclaim!~\"claim-.*\"} / kubelet_volume_stats_capacity_bytes{namespace=\"cms\",persistentvolumeclaim!~\"claim-.*\"})",
+          "legendFormat": "{{persistentvolumeclaim}}",
           "range": false,
           "instant": true
         }

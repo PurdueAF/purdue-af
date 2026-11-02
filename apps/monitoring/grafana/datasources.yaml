@@ -1,13 +1,7 @@
-# Merged into both instances by a second valuesFrom entry on each HelmRelease.
+# The last valuesFrom entry on each HelmRelease.
 datasources:
   datasources.yaml:
     apiVersion: 1
-    deleteDatasources:
-      # thanos and tempo are not deployed; remove their provisioned rows.
-      - name: thanos
-        orgId: 1
-      - name: tempo
-        orgId: 1
     datasources:
       - name: prometheus
         uid: prometheus
@@ -20,11 +14,9 @@ datasources:
         type: prometheus
         url: http://rancher-monitoring-prometheus.cattle-monitoring-system:9090
         access: proxy
-        isDefault: false
       # NRP Nautilus's public Prometheus, for Ray jobs that run there (../../ray-train/README.md).
       - name: prometheus-nrp
         uid: prometheus-nrp
         type: prometheus
         url: https://prometheus.nrp-nautilus.io
         access: proxy
-        isDefault: false

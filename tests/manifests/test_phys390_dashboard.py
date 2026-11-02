@@ -4,25 +4,17 @@ Its panels are copies, so a panel edited on the default dashboard alone would
 leave the display showing the old one.
 """
 
-import json
-
-from common import REPO
-
-DASHBOARDS = REPO / "apps/monitoring/grafana/dashboards"
+from dashboard_helpers import dashboard
 
 # Shown without scrolling on a 1080p screen in kiosk mode.
 SCREEN_ROWS = 26
 NOT_SHOWN = {"Alerts"}
 
 
-def _panels(name):
-    return json.loads((DASHBOARDS / name).read_text())["panels"]
-
-
 def _facility_status():
     """The default dashboard's panels between the Facility status row and the next row."""
     section, inside = {}, False
-    for panel in _panels("default.json"):
+    for panel in dashboard("default.json")["panels"]:
         if panel["type"] == "row":
             inside = panel["title"] == "Facility status"
         elif inside:
@@ -38,7 +30,8 @@ def _content(panel):
 
 
 def test_display_shows_the_facility_status_panels_unchanged():
-    display = {p["title"]: p for p in _panels("phys390.json") if p["type"] != "row"}
+    panels = dashboard("phys390.json")["panels"]
+    display = {p["title"]: p for p in panels if p["type"] != "row"}
     section = _facility_status()
     assert set(display) == set(section) - NOT_SHOWN
     for title, panel in display.items():
@@ -46,6 +39,6 @@ def test_display_shows_the_facility_status_panels_unchanged():
 
 
 def test_display_fits_one_screen():
-    panels = _panels("phys390.json")
+    panels = dashboard("phys390.json")["panels"]
     assert max(p["gridPos"]["y"] + p["gridPos"]["h"] for p in panels) <= SCREEN_ROWS
     assert all(p["gridPos"]["x"] + p["gridPos"]["w"] <= 24 for p in panels)
