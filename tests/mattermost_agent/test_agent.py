@@ -1059,6 +1059,24 @@ async def test_others_text_stays_in_a_public_answers_context(make):
     assert texts == ["Is CVMFS down?", "is it?"]
 
 
+@pytest.mark.parametrize(
+    ("reply", "personal"),
+    [
+        ("yes", True),
+        ("Yes.", True),
+        ("**Yes**", True),
+        ("no", False),
+        ("No.", False),
+        ("yesterday", False),
+        ("", False),
+    ],
+)
+async def test_only_a_clear_yes_makes_a_question_personal(make, reply, personal):
+    bot, server, llm, _ = await make()
+    llm.personal = reply
+    assert await bot.asks_personal([post()], post()) is personal
+
+
 async def test_a_failed_check_is_a_public_question(make):
     bot, server, llm, facility = await make()
     await ready(bot)
