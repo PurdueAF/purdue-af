@@ -1,19 +1,13 @@
 """Tests for apps/ray — the KubeRay operator every ray.io resource in cms
 depends on."""
 
-import yaml
-from common import REPO
+from common import EXPERIMENTAL, REPO, generator, load_yaml
 
 RAY = REPO / "apps" / "ray"
-EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
-
-
-def load(path):
-    return yaml.safe_load(path.read_text())
 
 
 def test_flux_deploys_the_operator():
-    resources = load(EXPERIMENTAL)["resources"]
+    resources = load_yaml(EXPERIMENTAL)["resources"]
     for resource in (
         "../../apps/ray/helmrepo.yaml",
         "../../apps/ray/operator/helmrelease.yaml",
@@ -23,19 +17,15 @@ def test_flux_deploys_the_operator():
 
 def test_values_reach_the_operator():
     """A valuesFrom ConfigMap nobody generates leaves a release on chart defaults."""
-    generated = {
-        cm["name"]: cm["files"] for cm in load(EXPERIMENTAL)["configMapGenerator"]
-    }
-    hr = load(RAY / "operator" / "helmrelease.yaml")
+    config = generator(load_yaml(EXPERIMENTAL), "kuberay-operator-config")
+    hr = load_yaml(RAY / "operator" / "helmrelease.yaml")
     assert [v["name"] for v in hr["spec"]["valuesFrom"]] == ["kuberay-operator-config"]
-    assert generated["kuberay-operator-config"] == [
-        "values.yaml=../../apps/ray/operator/values.yaml"
-    ]
+    assert config["files"] == ["values.yaml=../../apps/ray/operator/values.yaml"]
 
 
 def test_operator_upgrades_its_crds_and_watches_cms_only():
-    operator = load(RAY / "operator" / "helmrelease.yaml")
+    operator = load_yaml(RAY / "operator" / "helmrelease.yaml")
     # Flux installs a chart's CRDs by default, but upgrades them only when told to.
     assert operator["spec"]["upgrade"]["crds"] == "CreateReplace"
     # singleNamespaceInstall keeps the watch and the RBAC inside cms.
-    assert load(RAY / "operator" / "values.yaml")["singleNamespaceInstall"] is True
+    assert load_yaml(RAY / "operator" / "values.yaml")["singleNamespaceInstall"] is True

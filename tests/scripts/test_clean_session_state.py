@@ -6,6 +6,7 @@ it must survive a home it cannot fully clean."""
 
 import os
 import subprocess
+from pathlib import Path
 
 import pytest
 from common import REPO
@@ -194,16 +195,16 @@ def test_undeletable_path_does_not_kill_the_session(run_hook, home):
     )
 
 
-def test_the_hook_is_installed_and_runs_before_the_others(run_hook):
+def test_the_hook_is_installed_and_runs_before_the_others():
     """It has to be in before-notebook.d to run at all, and run-hooks sources
     that directory in sorted order — the name puts it ahead of config-agents.sh
     so the previous session's locks are gone before anything reads them."""
     dockerfile = (REPO / "docker" / "purdue-af" / "Dockerfile").read_text()
-    assert "scripts/clean-session-state.sh" in dockerfile
-    hooks = [
-        "clean-session-state.sh",
-        "config-agents.sh",
-        "config-extensions.sh",
-        "run-as-root.sh",
+    (copy,) = [
+        line.split()
+        for line in dockerfile.replace("\\\n", " ").splitlines()
+        if line.startswith("COPY") and line.endswith("/before-notebook.d/")
     ]
-    assert hooks == sorted(hooks), "the hook must sort first"
+    hooks = sorted(Path(word).name for word in copy[1:-1] if word.endswith(".sh"))
+    assert hooks[0] == "clean-session-state.sh"
+    assert "config-agents.sh" in hooks

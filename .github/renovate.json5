@@ -308,10 +308,13 @@
       automerge: false,
     },
     {
-      // A PostgreSQL major needs a dump and restore, not a tag bump.
+      // A PostgreSQL major needs a dump and restore, not a tag bump. Merged by hand:
+      // a bump restarts flyte-postgres under any Flyte run in progress.
       matchDatasources: ['docker'],
       matchPackageNames: ['docker.io/library/postgres'],
       allowedVersions: '/^16([.-]|$)/',
+      groupName: 'flyte-postgres',
+      automerge: false,
     },
     {
       // ServiceX's PostgreSQL and RabbitMQ: versions belong to the chart's

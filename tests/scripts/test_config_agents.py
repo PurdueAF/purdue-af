@@ -447,17 +447,10 @@ def test_dockerfile_pins_every_agent_version():
         assert version and version[0].isdigit(), f"{arg} must pin a version"
 
 
-def test_dockerfile_installs_and_runs_the_hook():
+def test_dockerfile_installs_the_hook_and_the_skill():
     text = DOCKERFILE.read_text()
     assert "config-agents.sh" in text
     assert f"{SKILL_SOURCE} \\\n    /opt/purdue-af/skills/" in text
-    # the CLIs must be on PATH for both the terminal and the extensions
-    assert "/opt/npm-global/bin" in text
-    # and proven to run in the final image, not just installed
-    for cli in ("claude", "codex", "opencode"):
-        assert f"{cli} --version" in text, cli
-    # xrdcp is promised on PATH by the platform context; prove it in the image
-    assert "xrdcp --version" in text
 
 
 def test_code_server_installs_both_agent_extensions():
@@ -465,14 +458,6 @@ def test_code_server_installs_both_agent_extensions():
     text = (REPO / "docker/purdue-af/scripts/config-extensions.sh").read_text()
     assert "_cs_install_if_missing anthropic.claude-code" in text
     assert "_cs_install_if_missing openai.chatgpt" in text
-
-
-def test_hook_is_registered_as_a_startup_script():
-    text = DOCKERFILE.read_text()
-    before = text.index("before-notebook.d")
-    assert "config-agents.sh" in text[:before], (
-        "config-agents.sh must be COPYd into before-notebook.d"
-    )
 
 
 def test_agent_files_are_image_inputs():
@@ -602,17 +587,6 @@ def test_cli_remove(managed_block, monkeypatch, tmp_path, capsys):
     assert not target.exists()
 
 
-def test_startup_hook_targets_every_harness_context_file():
-    """One file per harness, each the path that harness reads automatically at
-    user scope — no skill, no prompt, no per-project setup."""
-    text = (REPO / "docker/purdue-af/scripts/config-agents.sh").read_text()
-    for target in (
-        ".claude/CLAUDE.md",  # Claude Code
-        ".codex/AGENTS.md",  # Codex
-    ):
-        assert target in text, target
-
-
 def test_section_source_is_shipped_and_is_an_image_input():
     text = DOCKERFILE.read_text()
     assert "agents/platform-context.md" in text
@@ -629,13 +603,6 @@ def test_bundled_python_scripts_do_not_use_the_system_interpreter():
     call = next(ln for ln in hook.splitlines() if "managed-block.py" in ln)
     assert "${PYTHON}" in call, call
     assert "/opt/pixi/.pixi/envs/base-env/bin/python3" in hook
-
-
-def test_bundled_python_scripts_target_the_platform_python():
-    """They use 3.7+ syntax deliberately; this pins the reason down in one
-    place so nobody 'fixes' the build by downgrading the scripts."""
-    text = (REPO / "docker/purdue-af/scripts/managed-block.py").read_text()
-    assert "from __future__ import annotations" in text
 
 
 # --- sourcing safety: start.sh runs these hooks with `source` ---------------

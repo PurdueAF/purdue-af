@@ -331,9 +331,12 @@ async def test_new_code_ends_the_service_for_the_hub_to_start_it_again(
 def test_default_namespace_reads_service_account(tmp_path, monkeypatch):
     mod = culler()
     ns_file = tmp_path / "namespace"
-    ns_file.write_text("cms\n")
+    ns_file.write_text("cms-other\n")
+    assert str(mod.NAMESPACE_FILE) == (
+        "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+    )
     monkeypatch.setattr(mod, "NAMESPACE_FILE", ns_file)
-    assert mod.default_namespace() == "cms"
+    assert mod.default_namespace() == "cms-other"
 
 
 async def test_cull_failure_is_logged(monkeypatch, caplog):

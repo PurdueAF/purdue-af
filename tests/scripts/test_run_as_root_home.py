@@ -144,3 +144,56 @@ def test_the_shared_helper_is_shipped_and_sourced():
         body = (REPO / "docker" / "purdue-af" / "scripts" / hook).read_text()
         assert "source /usr/local/bin/af-as-user.sh" in body, hook
         assert "af_as_user " in body, hook
+
+
+SESSION_ENV = {
+    "NB_USER": "alice",
+    "NB_UID": "1234",
+    "NB_GID": "5678",
+    "PYROSCOPE_SERVER": "http://pyroscope:4040",
+    "DASK_GATEWAY__ADDRESS": "http://gateway",
+}
+
+
+def bashrc_af(tmp_path, **env):
+    """The file the hook writes, from the environment the hub gives the hook."""
+    body = SCRIPT.read_text()
+    start = body.index('bashrc_af_file="$NEW_HOME/.bashrc_af"')
+    writer = body[start : body.index("\nEOF\n", start) + len("\nEOF\n")]
+    subprocess.run(
+        ["bash", "-c", f'NEW_HOME="{tmp_path}"\n{writer}'],
+        env={"PATH": os.environ["PATH"], **env},
+        check=True,
+    )
+    return tmp_path / ".bashrc_af"
+
+
+def clean_shell(command):
+    """A shell started the way sshd starts one: nothing from the pod's environment."""
+    result = subprocess.run(
+        ["/usr/bin/env", "-i", "bash", "--norc", "--noprofile", "-c", command],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.splitlines()
+
+
+def test_a_shell_without_the_pod_env_gets_the_session_values(tmp_path):
+    source = bashrc_af(tmp_path, **SESSION_ENV)
+    lines = clean_shell(f"source {source} >/dev/null; env")
+    env = dict(line.split("=", 1) for line in lines)
+
+    assert {key: env[key] for key in SESSION_ENV} == SESSION_ENV
+    assert "PYROSCOPE_APP" not in env
+    assert env["PIXI_HOME"] == "/work/users/alice/.pixi-home"
+    assert env["PIXI_CACHE_DIR"] == "/work/users/alice/.pixi-cache/"
+    assert env["PATH"].startswith("/usr/local/bin:/opt/npm-global/bin:")
+
+
+def test_a_nested_shell_leaves_path_alone(tmp_path):
+    source = bashrc_af(tmp_path, **SESSION_ENV)
+    first, second = clean_shell(
+        f'source {source} >/dev/null; echo "$PATH"; source {source} >/dev/null; echo "$PATH"'
+    )
+    assert first == second

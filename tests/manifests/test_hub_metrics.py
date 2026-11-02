@@ -4,19 +4,18 @@ and apps/monitoring/prometheus.
 /hub/metrics answers only a token with read:metrics. z2jh generates each hub
 service's token and keeps it in the `hub` Secret as hub.services.<name>.apiToken."""
 
-import yaml
-from common import REPO
+from common import REPO, load_yaml
 
 HUB = REPO / "apps/jupyterhub/jupyterhub"
 PROMETHEUS = REPO / "apps/monitoring/prometheus/values.yaml"
 
 
 def hub_values():
-    return yaml.safe_load((HUB / "values.yaml").read_text())["hub"]
+    return load_yaml(HUB / "values.yaml")["hub"]
 
 
 def prometheus_values():
-    return yaml.safe_load(PROMETHEUS.read_text())
+    return load_yaml(PROMETHEUS)
 
 
 def hub_job():

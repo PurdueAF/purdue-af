@@ -141,9 +141,7 @@ async def test_full_stack_handshake_and_auth(monkeypatch, accept_token):
 
 
 # ── a declined elicitation must still be readable by the agent ────────────────
-#
-# The shape metrics._needs_input_result assumes, and the round trip through the
-# real server for a client on each protocol era.
+# The metrics._needs_input_result docstring states the output-schema constraint.
 
 
 async def test_every_tool_declares_a_wrapped_string_output_schema():

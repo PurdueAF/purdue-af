@@ -4,9 +4,11 @@ import logging
 import types
 from pathlib import Path
 
+import prometheus_client
 import pytest
 from common import ConfigSink
 from hub_helpers import load_snippet
+from prometheus_client import CollectorRegistry
 
 SLICE = "nvidia.com/mig-1g.5gb"
 FULL = "nvidia.com/mig-7g.40gb"
@@ -61,6 +63,7 @@ def gpu_profiles():
 
 
 def load(monkeypatch, profile_list=...):
+    monkeypatch.setattr(prometheus_client, "REGISTRY", CollectorRegistry())
     sink = ConfigSink()
     sink.KubeSpawner.profile_list = (
         gpu_profiles() if profile_list is ... else profile_list
@@ -101,11 +104,9 @@ def fake_spawner(user="someone"):
 
 
 def refusals(ns, resource, reason):
-    """Current value of the refusal counter (process-wide; compare deltas)."""
-    from prometheus_client import REGISTRY
-
+    """Current value of the refusal counter."""
     return (
-        REGISTRY.get_sample_value(
+        ns["REGISTRY"].get_sample_value(
             "purdue_af_hub_gpu_spawn_refused_total",
             {"resource": resource, "reason": reason},
         )

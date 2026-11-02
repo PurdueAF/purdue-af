@@ -12,11 +12,11 @@ only what those do not say.
 ## Hard rules
 
 - Namespace `cms`, always. Never create or inspect objects in another namespace.
-- Never change what Flux manages. `kubectl edit|patch|scale|apply|rollout restart`
-  and `flux suspend` of a HelmRelease are reverted on the next reconcile; fix
-  the manifest. Never suspend a root Kustomization: that is not reverted, and
-  every later merge silently stops deploying. The one sanctioned live write is
-  deleting a component's pod to restart it.
+- Never change what Flux manages, and never suspend a HelmRelease or a root
+  Kustomization; fix the manifest. A live edit is reverted on the next reconcile
+  or, on a Helm-rendered object, stays unrecorded until an upgrade. A suspend may
+  not be reverted, and every later merge silently stops deploying. The one
+  sanctioned live write is deleting a component's pod to restart it.
 - Never restart, delete or evict a user's session pod (`purdue-af-<id>`) or
   their Dask cluster. They hold long-running kernels — someone's work.
 - Never move a tag or a branch by hand; [RELEASING.md](RELEASING.md) names the

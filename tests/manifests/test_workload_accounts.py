@@ -2,8 +2,7 @@
 declaration is in the af-accounts ConfigMap of the Flux root that deploys both
 gateways, beside the volume and the token Secret of its app."""
 
-import yaml
-from common import REPO, load_all
+from common import REPO, load_all, load_yaml
 
 APPS = REPO / "apps"
 FLUX = REPO / "flux"
@@ -16,16 +15,14 @@ def listed(path):
 
 def declarations():
     """Each apps/<app>/account.yaml, and the account it declares."""
-    return {
-        path: yaml.safe_load(path.read_text()) for path in APPS.rglob("account.yaml")
-    }
+    return {path: load_yaml(path) for path in APPS.rglob("account.yaml")}
 
 
 def accounts_root():
     """The kustomization of the one Flux root that generates af-accounts, and that generator."""
     found = []
     for path in sorted(FLUX.glob("*/kustomization.yaml")):
-        kustomization = yaml.safe_load(path.read_text())
+        kustomization = load_yaml(path)
         for generator in kustomization.get("configMapGenerator") or []:
             if generator["name"] == "af-accounts":
                 found.append((kustomization, generator))

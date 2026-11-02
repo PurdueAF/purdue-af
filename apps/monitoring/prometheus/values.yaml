@@ -227,9 +227,9 @@ serverFiles:
           - source_labels: [__meta_kubernetes_service_label_scrape_metrics]
             action: keep
             regex: "true"
-          # Dedicated static jobs own these Services.
+          # A dedicated static job owns this Service.
           - source_labels: [__meta_kubernetes_service_name]
-            regex: "pixi-global-sync|af-node-monitor-service"
+            regex: "pixi-global-sync"
             action: drop
           - source_labels: [__meta_kubernetes_pod_container_name]
             regex: "^chp$"

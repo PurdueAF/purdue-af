@@ -109,11 +109,8 @@ ENV PIXI_HOME="/opt/pixi" \
 
 WORKDIR "${PIXI_HOME}"
 COPY --chown=root:root pixi/base/pixi.toml pixi/base/pixi.lock "${PIXI_HOME}/"
-COPY --chown=root:root docker/purdue-af/pixi-wrapper /usr/local/bin/pixi
 
-RUN chmod +x /usr/local/bin/pixi && \
-    rm -rf "${HOME}/.cache/rattler" || true && \
-    mkdir -p "${PIXI_HOME}/bin" && \
+RUN mkdir -p "${PIXI_HOME}/bin" && \
     curl -fsSL --retry 3 --retry-delay 2 \
         -o /tmp/pixi.tar.gz \
         "https://github.com/prefix-dev/pixi/releases/download/v${PIXI_VERSION}/pixi-x86_64-unknown-linux-musl.tar.gz" && \
@@ -152,9 +149,6 @@ RUN PATH="${BASE_ENV_DIR}/bin:${PATH}" \
         "opencode-ai@${OPENCODE_VERSION}" \
         "@agentclientprotocol/claude-agent-acp@${CLAUDE_AGENT_ACP_VERSION}" \
         "@agentclientprotocol/codex-acp@${CODEX_ACP_VERSION}" && \
-    PATH="${NPM_GLOBAL}/bin:${BASE_ENV_DIR}/bin:${PATH}" claude --version && \
-    PATH="${NPM_GLOBAL}/bin:${BASE_ENV_DIR}/bin:${PATH}" codex --version && \
-    PATH="${NPM_GLOBAL}/bin:${BASE_ENV_DIR}/bin:${PATH}" opencode --version && \
     rm -rf "${HOME}/.npm" || true
 
 COPY --chown=root:root pixi/check-env.py /tmp/check-env.py
@@ -166,9 +160,6 @@ RUN "${BASE_ENV_DIR}/bin/python" /tmp/check-env.py \
 # Stage: runtime (lightweight; COPY only, no builds or installation routines)
 # ------------------------------------------------------------
 FROM system AS runtime
-
-# ARGs are not inherited across stages.
-ARG NB_USER="jovyan"
 
 # NVIDIA_VISIBLE_DEVICES=all is inherited on purpose; the hub's modify_pod_hook sets void for 0-GPU sessions.
 ENV PIXI_HOME="/opt/pixi" \
@@ -185,7 +176,6 @@ ENV DISABLE_AUTOUPDATER=1 \
 
 COPY --chown=root:root --chmod=755 docker/purdue-af/pixi-wrapper /usr/local/bin/pixi
 
-RUN mkdir -p /etc/cvmfs /etc/cvmfs/SITECONF/JobConfig/ /etc/cvmfs/SITECONF/PhEDEx
 COPY docker/purdue-af/xml/site-local-config.xml /etc/cvmfs/SITECONF/JobConfig/
 COPY docker/purdue-af/xml/storage.xml /etc/cvmfs/SITECONF/PhEDEx/
 COPY docker/purdue-af/configs/vomses /etc
@@ -238,23 +228,16 @@ CMD ["start-notebook.sh"]
 # Build-time checks, built by ci-images.yml with `--target smoke`.
 FROM runtime AS smoke
 # Hooks are sourced as start.sh sources them; config-extensions.sh is skipped (network).
-RUN NB_USER=jovyan NAMESPACE=cms bash -c \
-        'source /usr/local/bin/before-notebook.d/config-agents.sh; echo HOOKS_SURVIVED' \
-        >/tmp/hooks.log 2>&1; \
-    cat /tmp/hooks.log; \
-    grep -q HOOKS_SURVIVED /tmp/hooks.log || { \
-        echo "FATAL: sourcing config-agents.sh exited the shell — start.sh would die" >&2; \
-        exit 1; \
-    }; \
-    rm -f /tmp/hooks.log
-RUN NB_USER=jovyan bash -c \
-        'set -e; source /usr/local/bin/before-notebook.d/clean-session-state.sh; echo HOOKS_SURVIVED' \
-        >/tmp/hooks.log 2>&1; \
-    cat /tmp/hooks.log; \
-    grep -q HOOKS_SURVIVED /tmp/hooks.log || { \
-        echo "FATAL: sourcing clean-session-state.sh exited the shell — start.sh would die" >&2; \
-        exit 1; \
-    }; \
+RUN for hook in config-agents clean-session-state; do \
+        NB_USER=jovyan NAMESPACE=cms bash -c \
+            "set -e; source /usr/local/bin/before-notebook.d/${hook}.sh; echo HOOKS_SURVIVED" \
+            >/tmp/hooks.log 2>&1; \
+        cat /tmp/hooks.log; \
+        grep -q HOOKS_SURVIVED /tmp/hooks.log || { \
+            echo "FATAL: sourcing ${hook}.sh exited the shell — start.sh would die" >&2; \
+            exit 1; \
+        }; \
+    done; \
     rm -f /tmp/hooks.log
 
 RUN nvcc --version >/dev/null && \

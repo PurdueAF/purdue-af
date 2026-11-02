@@ -1,14 +1,12 @@
 """Tests for apps/flyte wiring."""
 
-import yaml
-from common import REPO
+from common import EXPERIMENTAL, REPO, load_all, load_yaml
 
 FLYTE = REPO / "apps" / "flyte"
-EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
 
 
 def test_flux_deploys_flyte():
-    resources = yaml.safe_load(EXPERIMENTAL.read_text())["resources"]
+    resources = load_yaml(EXPERIMENTAL)["resources"]
     for name in (
         "helmrepo",
         "helmrelease",
@@ -21,8 +19,8 @@ def test_flux_deploys_flyte():
 
 
 def test_task_pods_use_the_pod_template_in_cms():
-    values = yaml.safe_load((FLYTE / "values.yaml").read_text())
-    template = yaml.safe_load((FLYTE / "podtemplate.yaml").read_text())
+    values = load_yaml(FLYTE / "values.yaml")
+    template = load_yaml(FLYTE / "podtemplate.yaml")
     k8s = values["configuration"]["inline"]["plugins"]["k8s"]
     assert k8s["default-pod-template-name"] == template["metadata"]["name"]
     assert (
@@ -33,11 +31,11 @@ def test_task_pods_use_the_pod_template_in_cms():
 
 
 def test_backends_match_their_services():
-    values = yaml.safe_load((FLYTE / "values.yaml").read_text())
-    postgres = [d for d in yaml.safe_load_all((FLYTE / "postgres.yaml").read_text())]
-    minio = [d for d in yaml.safe_load_all((FLYTE / "minio.yaml").read_text())]
+    values = load_yaml(FLYTE / "values.yaml")
     services = {
-        d["metadata"]["name"] for d in postgres + minio if d["kind"] == "Service"
+        d["metadata"]["name"]
+        for d in load_all(FLYTE / "postgres.yaml") + load_all(FLYTE / "minio.yaml")
+        if d["kind"] == "Service"
     }
     assert values["configuration"]["database"]["postgres"]["host"] in services
     endpoint = values["configuration"]["storage"]["providerConfig"]["s3"]["endpoint"]
@@ -51,7 +49,7 @@ def test_backends_match_their_services():
 
 
 def test_console_is_served_behind_basic_auth_on_one_host():
-    values = yaml.safe_load((FLYTE / "values.yaml").read_text())
+    values = load_yaml(FLYTE / "values.yaml")
     assert values["console"]["image"]["tag"] != "latest"
     ingress = values["ingress"]
     assert ingress["create"] == "${enable_ingresses}"
@@ -60,9 +58,5 @@ def test_console_is_served_behind_basic_auth_on_one_host():
     assert annotations["nginx.ingress.kubernetes.io/auth-type"] == "basic"
     secret_name = annotations["nginx.ingress.kubernetes.io/auth-secret"]
 
-    (secret,) = [
-        d
-        for d in yaml.safe_load_all((FLYTE / "secret-console-auth.yaml").read_text())
-        if d
-    ]
+    (secret,) = load_all(FLYTE / "secret-console-auth.yaml")
     assert secret["metadata"]["name"] == secret_name

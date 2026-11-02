@@ -14,9 +14,9 @@ app:
     limits:
       cpu: 4
       memory: 4Gi
-  nodeSelector:
+  nodeSelector: &af-nodes
     cms-af-prod: "true"
-  tolerations:
+  tolerations: &af-tolerations
     - key: "hub.jupyter.org/dedicated"
       operator: "Equal"
       value: "cms-af"
@@ -42,13 +42,8 @@ postgresql:
         memory: 128Mi
     persistence:
       enabled: false
-    nodeSelector:
-      cms-af-prod: "true"
-    tolerations:
-      - key: "hub.jupyter.org/dedicated"
-        operator: "Equal"
-        value: "cms-af"
-        effect: "NoSchedule"
+    nodeSelector: *af-nodes
+    tolerations: *af-tolerations
 
 # Transformers write root://<host>/<pathPrefix>/<request id>/ with the x509 proxy.
 objectStore:
@@ -70,13 +65,8 @@ codeGen:
     defaultScienceContainerTag: 5.7.2-6.38.04
     compressionAlgorithm: ZSTD
     compressionLevel: 5
-    nodeSelector:
-      cms-af-prod: "true"
-    tolerations:
-      - key: "hub.jupyter.org/dedicated"
-        operator: "Equal"
-        value: "cms-af"
-        effect: "NoSchedule"
+    nodeSelector: *af-nodes
+    tolerations: *af-tolerations
   rdataframe:
     enabled: false
   uproot:
@@ -90,13 +80,8 @@ codeGen:
     compressionAlgorithm: ZLIB
     # A string: the chart reads a numeric 0 as unset and falls back to 5.
     compressionLevel: "0"
-    nodeSelector:
-      cms-af-prod: "true"
-    tolerations:
-      - key: "hub.jupyter.org/dedicated"
-        operator: "Equal"
-        value: "cms-af"
-        effect: "NoSchedule"
+    nodeSelector: *af-nodes
+    tolerations: *af-tolerations
   atlasr21:
     enabled: false
   atlasr22:
@@ -117,13 +102,8 @@ transformer:
   memoryRequest: 2Gi
   cpuLimit: 1
   memoryLimit: 4Gi
-  nodeSelector:
-    cms-af-prod: "true"
-  tolerations:
-    - key: "hub.jupyter.org/dedicated"
-      operator: "Equal"
-      value: "cms-af"
-      effect: "NoSchedule"
+  nodeSelector: *af-nodes
+  tolerations: *af-tolerations
 
 rabbitmq:
   image:
@@ -139,13 +119,8 @@ rabbitmq:
     limits:
       cpu: 2
       memory: 4Gi
-  nodeSelector:
-    cms-af-prod: "true"
-  tolerations:
-    - key: "hub.jupyter.org/dedicated"
-      operator: "Equal"
-      value: "cms-af"
-      effect: "NoSchedule"
+  nodeSelector: *af-nodes
+  tolerations: *af-tolerations
 # The chart's default ships the logs of the app and the DID finders to a Logstash outside the facility.
 logging:
   logstash:
@@ -157,18 +132,11 @@ didFinder:
   xrootd:
     enabled: true
     tag: "v1.8.6"
-    nodeSelector:
-      cms-af-prod: "true"
-    tolerations:
-      - key: "hub.jupyter.org/dedicated"
-        operator: "Equal"
-        value: "cms-af"
-        effect: "NoSchedule"
+    nodeSelector: *af-nodes
+    tolerations: *af-tolerations
   CERNOpenData:
     enabled: false
   atlasopenmagic:
-    enabled: false
-  servicex:
     enabled: false
 x509Secrets:
   image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/sslhep/x509-secrets
@@ -176,23 +144,13 @@ x509Secrets:
   initImage: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/alpine:3.24
   pullPolicy: Always
   vomsOrg: cms
-  nodeSelector:
-    cms-af-prod: "true"
-  tolerations:
-    - key: "hub.jupyter.org/dedicated"
-      operator: "Equal"
-      value: "cms-af"
-      effect: "NoSchedule"
+  nodeSelector: *af-nodes
+  tolerations: *af-tolerations
 
 scheduledTasks:
   image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/python
-  tag: "3.12"
-  nodeSelector:
-    cms-af-prod: "true"
-  tolerations:
-    - key: "hub.jupyter.org/dedicated"
-      operator: "Equal"
-      value: "cms-af"
-      effect: "NoSchedule"
+  tag: "3.12.16"
+  nodeSelector: *af-nodes
+  tolerations: *af-tolerations
 
 secrets: servicex-secrets-eos
