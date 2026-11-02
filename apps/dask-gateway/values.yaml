@@ -20,9 +20,6 @@ gateway:
     requests:
       cpu: 2
       memory: 4Gi
-  service:
-    annotations:
-      metallb.universe.tf/address-pool: geddes-public-pool
   backend:
     # The Hub's image puller holds this image: prePuller.extraImages in apps/jupyterhub.
     image:
@@ -100,10 +97,6 @@ gateway:
           # Silence coffea FutureWarnings on every worker import; other modules are unaffected.
           - name: PYTHONWARNINGS
             value: "ignore::FutureWarning:coffea"
-          - name: DASK_DISTRIBUTED__WORKER__PRELOAD
-            value: '["/work/projects/purdue-af/dask_pyroscope_preload.py"]'
-          - name: DASK_DISTRIBUTED__WORKER__PRELOAD_ARGV
-            value: "[[]]"
           - name: DASK_DISTRIBUTED__WORKER__PROFILE__INTERVAL
             value: "1000000000"
         volumeMounts:
@@ -159,6 +152,7 @@ gateway:
       import hashlib
       import hmac
       import ipaddress
+      import json
       import logging
       import os.path
       import re
@@ -186,7 +180,7 @@ gateway:
       TOKEN_SHA256 = re.compile(r"[0-9a-f]{64}")
       # The variables a client's environment names its user by.
       USER_VARIABLES = ("USER", "LOGNAME", "NB_USER", "JUPYTERHUB_USER")
-      # cms pods are in 10.5.0.0/17 (Services in 10.5.128.0/17), from .2 of each node's /24: .0 and .1 are the node's, which LoadBalancer traffic is masqueraded to.
+      # cms pods are in 10.5.0.0/17 (Services in 10.5.128.0/17), from .2 of each node's /24: .0 and .1 are the node's, the source of the traffic it masquerades.
       POD_NETWORK = ipaddress.ip_network("10.5.0.0/17")
       FORWARDED = ("X-Forwarded-For", "Forwarded", "X-Real-Ip")
       log = logging.getLogger("DaskGateway")
@@ -271,16 +265,18 @@ gateway:
       def under(path, root):
           return path == root or path.startswith(root + "/")
 
-      def account_env(options, account):
-          """The environment of an account's cluster, on the storage its pods mount."""
-          roots = ("/" + account["name"], "/cvmfs")
-          project = (getattr(options, 'pixi_project', None) or "").strip()
-          conda_env = (getattr(options, 'conda_env', None) or "").strip()
+      def requested_env(options, roots=()):
+          """The environment a request names; given `roots`, normalized and on one of them."""
+          project = options.pixi_project.strip()
+          conda_env = options.conda_env.strip()
           if project and conda_env:
               raise ValueError("pixi-env and conda-env are mutually exclusive. Please specify only one.")
           if not (project or conda_env):
               raise ValueError("Either conda_env or pixi_project must be specified")
-          env = os.path.normpath(os.path.join(project, ".pixi", "envs", getattr(options, 'pixi_env', 'default')) if project else conda_env)
+          env = os.path.join(project, ".pixi", "envs", options.pixi_env) if project else conda_env
+          if not roots:
+              return env
+          env = os.path.normpath(env)
           if not any(under(env, root) for root in roots):
               raise ValueError(f"{env} is not on the storage the cluster mounts: {', '.join(roots)}.")
           return env
@@ -298,8 +294,6 @@ gateway:
               }
               cluster[f"{role}_extra_container_config"] = {
                   **container,
-                  # The worker preload is on /work.
-                  "env": [e for e in container.get("env", []) if not e["name"].startswith("DASK_DISTRIBUTED__WORKER__PRELOAD")],
                   "volumeMounts": [m for m in container.get("volumeMounts", []) if m["name"] == "cvmfs"]
                   + [{"name": name, "mountPath": "/" + name}],
               }
@@ -311,11 +305,9 @@ gateway:
               raise ids
           if account is not None:
               uid, gid = account["uid"], account["gid"]
-          elif user.name=="jovyan":
-            uid, gid = 1000, 1000
           elif is_external(user):
               if not options.env:
-                raise ValueError("'env' must be specified in new_cluster(), for example env=dict(os.environ)")
+                  raise ValueError("'env' must be specified in new_cluster(), for example env=dict(os.environ)")
               if ("NB_UID" not in options.env) or ("NB_GID" not in options.env):
                   raise ValueError(
                       "NB_UID and NB_GID variables must exist in 'env'"
@@ -329,40 +321,20 @@ gateway:
           # Kubernetes rejects a pod with an invalid env var name, such as the BASH_FUNC_which%% a terminal exports.
           for name in [k for k in options.env if not re.fullmatch(r"[-._a-zA-Z][-._a-zA-Z0-9]*", k)]:
               del options.env[name]
-          
-          conda_env = None
-          
-          pixi_project = getattr(options, 'pixi_project', None)
+
           if account is not None:
-              conda_env = account_env(options, account)
+              conda_env = requested_env(options, ("/" + account["name"], "/cvmfs"))
               options.env.update(dict.fromkeys(USER_VARIABLES, account["name"]))
-          elif pixi_project and pixi_project.strip():
-              user_conda_env = getattr(options, 'conda_env', None)
-              if user_conda_env and user_conda_env.strip():
-                  raise ValueError("pixi-env and conda-env are mutually exclusive. Please specify only one.")
-              
-              pixi_project_dir = pixi_project.strip()
-              pixi_project_name = getattr(options, 'pixi_env', 'default')
-              
-              pixi_toml_path = os.path.join(pixi_project_dir, 'pixi.toml')
-              if not os.path.exists(pixi_toml_path):
-                  raise ValueError(f"pixi.toml not found in {pixi_project_dir}. Please provide a valid pixi project directory.")
-              
-              env_path = os.path.join(pixi_project_dir, '.pixi', 'envs', pixi_project_name)
-              if not os.path.exists(env_path):
-                  raise ValueError(f"Pixi environment 'default' not found at {env_path}. Please build the environment first by running 'pixi install' in {pixi_project_dir}.")
-              
-              bin_python = os.path.join(env_path, 'bin', 'python')
-              bin_python3 = os.path.join(env_path, 'bin', 'python3')
-              if not (os.path.exists(bin_python) or os.path.exists(bin_python3)):
-                  raise ValueError(f"Environment at {env_path} does not appear to be a valid conda environment.")
-              
-              conda_env = env_path
           else:
-              user_conda_env = getattr(options, 'conda_env', None)
-              if not user_conda_env or not user_conda_env.strip():
-                  raise ValueError("Either conda_env or pixi_project must be specified")
-              conda_env = user_conda_env.strip()
+              conda_env = requested_env(options)
+              project = options.pixi_project.strip()
+              if project:
+                  if not os.path.exists(os.path.join(project, "pixi.toml")):
+                      raise ValueError(f"pixi.toml not found in {project}. Please provide a valid pixi project directory.")
+                  if not os.path.exists(conda_env):
+                      raise ValueError(f"Pixi environment '{options.pixi_env}' not found at {conda_env}. Please build the environment first by running 'pixi install' in {project}.")
+                  if not any(os.path.exists(os.path.join(conda_env, "bin", name)) for name in ("python", "python3")):
+                      raise ValueError(f"Environment at {conda_env} does not appear to be a valid conda environment.")
 
           # Without it the scheduler serves no metrics and the monitoring does not see the cluster; this pod does not mount an account's volume.
           unseen = account is not None and under(conda_env, "/" + account["name"])
@@ -373,6 +345,8 @@ gateway:
                   "then create the cluster again."
               )
 
+          if "PATH" not in options.env:
+              raise ValueError("'env' must include PATH, for example env=dict(os.environ)")
           options.env["PATH"]=f"{conda_env}/bin/:"+options.env.pop("PATH")
           options.env["CPLUS_INCLUDE_PATH"]=f"{conda_env}/x86_64-conda-linux-gnu/sysroot/usr/include"
           options.env["XRD_REQUESTTIMEOUT"]="300"
@@ -414,7 +388,7 @@ gateway:
               account = accounts().get(user.name[len(ACCOUNT_USER):])
               if account is None:
                   ids = ValueError("This workload account is not declared.")
-          elif user.name != "jovyan" and not is_external(user):
+          elif not is_external(user):
               try:
                   ids = await asyncio.to_thread(ldap_lookup, user.name)
               except Exception as exc:

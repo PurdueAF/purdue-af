@@ -5,7 +5,6 @@ resources:
   - ../../apps/dask-gateway/helmrelease.yaml
   - ../../apps/dask-gateway/rbac.yaml
   - ../../apps/dask-gateway/ingress.yaml
-  - ../../apps/dask-gateway/aliases.yaml
 
   - ../../apps/monitoring/helmrepo-grafana.yaml
   - ../../apps/monitoring/pyroscope/helmrelease.yaml

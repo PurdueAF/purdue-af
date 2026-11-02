@@ -7,6 +7,7 @@ import enum
 import json
 import logging
 import re
+import shutil
 import sys
 import types
 
@@ -198,6 +199,11 @@ def conda_env(tmp_path) -> str:
     return str(build_environment(tmp_path, "distributed", "prometheus_client"))
 
 
+def person_cluster(options_handler, options):
+    """The cluster of a user whose LDAP entry holds uid and gid 1000."""
+    return options_handler(options, types.SimpleNamespace(name="someone"), (1000, 1000))
+
+
 def test_env_names_kubernetes_rejects_are_dropped(options_handler, conda_env):
     options = types.SimpleNamespace(
         env={
@@ -213,8 +219,7 @@ def test_env_names_kubernetes_rejects_are_dropped(options_handler, conda_env):
         worker_cores=1,
         worker_memory=4,
     )
-    config = options_handler(options, types.SimpleNamespace(name="jovyan"))
-    environment = config["environment"]
+    environment = person_cluster(options_handler, options)["environment"]
     assert "BASH_FUNC_which%%" not in environment
     assert "1_LEADING_DIGIT" not in environment
     assert environment["X509_USER_PROXY"] == "/work/users/someone/x509up"
@@ -240,20 +245,56 @@ def test_environment_without_prometheus_client_is_refused(
     named = {"conda_env": prefix, "pixi_project": tmp_path}[option]
     options = request_options(**{option: str(named)})
     with pytest.raises(ValueError, match="prometheus_client is not installed"):
-        options_handler(options, types.SimpleNamespace(name="jovyan"))
+        person_cluster(options_handler, options)
+
+
+@pytest.mark.parametrize(
+    "conda_env, project, removed, error",
+    [
+        ("/env", ".", None, "mutually exclusive"),
+        ("", "", None, "must be specified"),
+        (" ", "", None, "must be specified"),
+        ("", ".", "pixi.toml", "pixi.toml not found"),
+        ("", ".", ".pixi", "Pixi environment 'default' not found"),
+        ("", ".", ".pixi/envs/default/bin/python", "valid conda environment"),
+    ],
+)
+def test_a_user_names_one_environment_that_is_built(
+    options_handler, tmp_path, conda_env, project, removed, error
+):
+    build_environment(tmp_path, "distributed", "prometheus_client")
+    if removed:
+        path = tmp_path / removed
+        shutil.rmtree(path) if path.is_dir() else path.unlink()
+    options = request_options(conda_env, str(tmp_path / project) if project else "")
+    with pytest.raises(ValueError, match=error):
+        person_cluster(options_handler, options)
+
+
+def test_a_missing_environment_is_named_as_asked(options_handler, tmp_path):
+    build_environment(tmp_path)
+    options = request_options(pixi_project=str(tmp_path))
+    options.pixi_env = "gpu"
+    with pytest.raises(ValueError, match="Pixi environment 'gpu' not found"):
+        person_cluster(options_handler, options)
+
+
+def test_a_request_without_path_is_refused(options_handler, conda_env):
+    options = request_options(conda_env)
+    del options.env["PATH"]
+    with pytest.raises(ValueError, match="'env' must include PATH"):
+        person_cluster(options_handler, options)
 
 
 def test_pixi_project_runs_its_environment(options_handler, tmp_path):
     prefix = build_environment(tmp_path, "distributed", "prometheus_client")
     options = request_options(pixi_project=str(tmp_path))
-    cluster = options_handler(options, types.SimpleNamespace(name="jovyan"))
+    cluster = person_cluster(options_handler, options)
     assert cluster["scheduler_cmd"][:2] == [f"{prefix}/bin/dask", "scheduler"]
 
 
 def test_idle_schedulers_shut_themselves_down(options_handler, conda_env):
-    cluster = options_handler(
-        request_options(conda_env=conda_env), types.SimpleNamespace(name="jovyan")
-    )
+    cluster = person_cluster(options_handler, request_options(conda_env))
     cmd = cluster["scheduler_cmd"]
     assert "--idle-timeout" in cmd
 
@@ -325,17 +366,14 @@ async def test_failed_lookup_fails_the_cluster_not_the_options_listing(
         handler(request_options(conda_env), user)
 
 
-@pytest.mark.parametrize("username", ["jovyan", "someone-cern", "someone-fnal"])
+@pytest.mark.parametrize("username", ["someone-cern", "someone-fnal"])
 async def test_accounts_outside_purdue_ldap_are_not_looked_up(
     config, conda_env, username
 ):
     handler, user, threads = await cluster_handler(config, username, None)
     cluster = handler(request_options(conda_env, NB_UID="4001", NB_GID="4002"), user)
     assert threads == []
-    expected = 1000 if username == "jovyan" else 4001
-    assert (
-        cluster["worker_extra_pod_config"]["securityContext"]["runAsUser"] == expected
-    )
+    assert cluster["worker_extra_pod_config"]["securityContext"]["runAsUser"] == 4001
 
 
 # --- workload accounts ---
@@ -595,21 +633,13 @@ async def test_an_accounts_cluster_runs_as_it_on_cvmfs_and_its_own_volume(
         }
         chart_container = chart_config[f"{role}_extra_container_config"]
         assert container.get("command") == chart_container.get("command")
-        assert container["env"] == [
-            e
-            for e in chart_container["env"]
-            if not e["name"].startswith("DASK_DISTRIBUTED__WORKER__PRELOAD")
-        ]
+        assert container["env"] == chart_container["env"]
         labels = cluster[f"{role}_extra_pod_labels"]
         assert labels == {
             "user": "demo-workload",
             "app.kubernetes.io/part-of": "demo-workload",
         }
         assert all(len(v) <= 63 and LABEL_VALUE.fullmatch(v) for v in labels.values())
-    assert not any(
-        e["name"].startswith("DASK_DISTRIBUTED__WORKER__PRELOAD")
-        for e in cluster["worker_extra_container_config"]["env"]
-    )
     assert dict(config["c"].KubeClusterConfig) == chart_config
 
 
@@ -687,21 +717,19 @@ async def test_an_accounts_environment_on_cvmfs_needs_prometheus_client(
         await account_cluster(config, request_options("/cvmfs/none.invalid/env"))
 
 
-@pytest.mark.parametrize("username", ["jovyan", "someone-cern"])
+@pytest.mark.parametrize("username", ["someone", "someone-cern"])
 def test_a_user_naming_an_accounts_volume_gets_the_prometheus_client_check(
     options_handler, username
 ):
     options = request_options("/demo-workload/env", NB_UID="4001", NB_GID="4002")
     with pytest.raises(ValueError, match="prometheus_client is not installed"):
-        options_handler(options, types.SimpleNamespace(name=username))
+        options_handler(options, types.SimpleNamespace(name=username), (1000, 1000))
 
 
 def test_a_users_cluster_has_no_account_storage_or_labels(
     config, chart_config, conda_env
 ):
-    cluster = config["options_handler"](
-        request_options(conda_env), types.SimpleNamespace(name="jovyan")
-    )
+    cluster = person_cluster(config["options_handler"], request_options(conda_env))
     assert cluster.keys() == {
         "worker_cores",
         "worker_cores_limit",
@@ -720,7 +748,7 @@ def test_a_users_cluster_has_no_account_storage_or_labels(
             **chart_config[f"{role}_extra_pod_config"],
             "securityContext": {"runAsUser": 1000, "runAsGroup": 1000},
         }
-        assert cluster[f"{role}_extra_pod_labels"] == {"user": "jovyan"}
+        assert cluster[f"{role}_extra_pod_labels"] == {"user": "someone"}
     assert (
         not {"USER", "LOGNAME", "NB_USER", "JUPYTERHUB_USER"}
         & cluster["environment"].keys()
@@ -805,39 +833,34 @@ def test_committed_declarations_keep_the_rules(config):
         config["checked_account"](yaml.safe_load(path.read_text()))
 
 
-def test_the_gateway_mounts_the_registry_it_reads(config):
-    """kubelet never updates a subPath mount."""
+def api_patches():
+    """The API Deployment's patches, parsed: the strategic merge, then the JSON ops."""
     release = yaml.safe_load(RELEASE.read_text())
-    (patch,) = [
-        p
+    return [
+        yaml.safe_load(p["patch"])
         for p in release["spec"]["postRenderers"][0]["kustomize"]["patches"]
         if p["target"] == {"kind": "Deployment", "name": "api-.*"}
     ]
-    ops = yaml.safe_load(patch["patch"])
-    volumes = [o["value"] for o in ops if o["path"] == "/spec/template/spec/volumes/-"]
-    mounts = [
-        o["value"]
-        for o in ops
-        if o["path"] == "/spec/template/spec/containers/0/volumeMounts/-"
-    ]
+
+
+def test_the_gateway_mounts_the_registry_it_reads(config):
+    """kubelet never updates a subPath mount."""
+    merged, _ = api_patches()
+    pod = merged["spec"]["template"]["spec"]
+    (container,) = pod["containers"]
+    assert container["name"] == "gateway"
     (volume,) = [
-        v for v in volumes if v.get("configMap", {}).get("name") == "af-accounts"
+        v for v in pod["volumes"] if v.get("configMap", {}).get("name") == "af-accounts"
     ]
     assert volume["configMap"]["optional"] is True
-    (mount,) = [m for m in mounts if m["name"] == volume["name"]]
+    (mount,) = [m for m in container["volumeMounts"] if m["name"] == volume["name"]]
     assert "subPath" not in mount
     assert mount["mountPath"] == config["ACCOUNTS_DIR"]
 
 
 def test_the_api_pod_installs_ldap3_with_its_own_image_where_python_finds_it():
     """A bad path here fails only at reconcile: no check applies postRenderers."""
-    release = yaml.safe_load(RELEASE.read_text())
-    (patch,) = [
-        p
-        for p in release["spec"]["postRenderers"][0]["kustomize"]["patches"]
-        if p["target"] == {"kind": "Deployment", "name": "api-.*"}
-    ]
-    ops = yaml.safe_load(patch["patch"])
+    _, ops = api_patches()
     (init,) = [o for o in ops if o["path"] == "/spec/template/spec/initContainers"]
     (copied,) = [o for o in ops if o["op"] == "copy"]
     assert copied["from"] == "/spec/template/spec/containers/0/image"
@@ -898,7 +921,6 @@ def test_lookup_reads_the_account_at_its_dn(config, monkeypatch, entries):
         BASE="BASE", Connection=Connection, Server=lambda **kw: kw
     )
     monkeypatch.setitem(sys.modules, "ldap3", fake)
-    monkeypatch.setitem(config, "json", json)
     ray = yaml.safe_load(RAY_CONFIG.read_text())
 
     if entries:

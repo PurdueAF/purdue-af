@@ -13,7 +13,6 @@ as them. How users create and size one:
 | `values.yaml`      | The chart's values: the schedulers' and workers' pods, and in `gateway.extraConfig` who a request is, the options a cluster takes, whom it runs as, and the cap on a user's active clusters                                                                                                          |
 | `rbac.yaml`        | The controller's read of the namespace's ResourceQuotas                                                                                                                                                                                                                                              |
 | `ingress.yaml`     | `dask-gateway.geddes.rcac.purdue.edu`, through the chart's Traefik                                                                                                                                                                                                                                   |
-| `aliases.yaml`     | The same gateway at `dask-gateway-k8s.geddes.rcac.purdue.edu`, for sessions whose `DASK_GATEWAY__*` variables name it                                                                                                                                                                                |
 
 ## Workload accounts
 
@@ -51,8 +50,7 @@ read-write, and CVMFS, and no other storage, and carry the label
 `app.kubernetes.io/part-of: <name>`. A cluster's environment is under
 `/<name>` or `/cvmfs`; this gateway checks one on CVMFS for
 `prometheus_client`, and not one under `/<name>`, which its API pod does not
-mount. The account's Dask workers run without the worker preload, which is on
-`/work`.
+mount.
 
 The monitoring and the logs see the account as the user `<name>`: its Dask
 pods carry the label `user: <name>` and have `USER`, `LOGNAME`, `NB_USER` and

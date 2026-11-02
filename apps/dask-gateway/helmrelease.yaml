@@ -29,57 +29,49 @@ spec:
               kind: Deployment
               name: "api-.*"
             patch: |
-              - op: add
-                path: /spec/template/spec/volumes/-
-                value:
-                  name: depot
-                  nfs:
-                    server: datadepot.rcac.purdue.edu
-                    path: /depot/cms
-              - op: add
-                path: /spec/template/spec/volumes/-
-                value:
-                  name: work
-                  persistentVolumeClaim:
-                    claimName: af-shared-storage
-              - op: add
-                path: /spec/template/spec/volumes/-
-                value:
-                  name: cvmfs
-                  persistentVolumeClaim:
-                    claimName: cvmfs
-              - op: add
-                path: /spec/template/spec/containers/0/volumeMounts/-
-                value:
-                  name: depot
-                  mountPath: /depot/cms
-                  mountPropagation: HostToContainer
-              - op: add
-                path: /spec/template/spec/containers/0/volumeMounts/-
-                value:
-                  name: work
-                  mountPath: /work/
-                  mountPropagation: HostToContainer
-              - op: add
-                path: /spec/template/spec/containers/0/volumeMounts/-
-                value:
-                  name: cvmfs
-                  mountPath: /cvmfs
-                  mountPropagation: HostToContainer
-              # Workload accounts' declarations (README.md#workload-accounts), which kubelet updates in place.
-              - op: add
-                path: /spec/template/spec/volumes/-
-                value:
-                  name: af-accounts
-                  configMap:
-                    name: af-accounts
-                    optional: true
-              - op: add
-                path: /spec/template/spec/containers/0/volumeMounts/-
-                value:
-                  name: af-accounts
-                  mountPath: /etc/af-accounts
-                  readOnly: true
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: doesNotMatter
+              spec:
+                template:
+                  spec:
+                    volumes:
+                      - name: depot
+                        nfs:
+                          server: datadepot.rcac.purdue.edu
+                          path: /depot/cms
+                      - name: work
+                        persistentVolumeClaim:
+                          claimName: af-shared-storage
+                      - name: cvmfs
+                        persistentVolumeClaim:
+                          claimName: cvmfs
+                      # Workload accounts' declarations (README.md#workload-accounts), which kubelet updates in place.
+                      - name: af-accounts
+                        configMap:
+                          name: af-accounts
+                          optional: true
+                    containers:
+                      - name: gateway
+                        volumeMounts:
+                          - name: depot
+                            mountPath: /depot/cms
+                            mountPropagation: HostToContainer
+                          - name: work
+                            mountPath: /work/
+                            mountPropagation: HostToContainer
+                          - name: cvmfs
+                            mountPath: /cvmfs
+                            mountPropagation: HostToContainer
+                          - name: af-accounts
+                            mountPath: /etc/af-accounts
+                            readOnly: true
+          # A `copy` from the container's image has no strategic form.
+          - target:
+              kind: Deployment
+              name: "api-.*"
+            patch: |
               # ldap3, in the chart's own server image, whose Python imports it from PYTHONPATH (values.yaml).
               - op: add
                 path: /spec/template/spec/volumes/-
@@ -102,13 +94,6 @@ spec:
               - op: copy
                 from: /spec/template/spec/containers/0/image
                 path: /spec/template/spec/initContainers/0/image
-          - target:
-              kind: Service
-              name: "api-.*"
-            patch: |
-              - op: add
-                path: /spec/type
-                value: LoadBalancer
           # The chart has no controller extraConfig or probes.
           - target:
               kind: Deployment
