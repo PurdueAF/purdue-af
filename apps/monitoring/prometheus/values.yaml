@@ -925,7 +925,7 @@ serverFiles:
                 target's state is on prometheus-server's targets page.
           - alert: AFNodesWithoutLogShipper
             expr: >
-              count(group by (node) (af_node_mount_result_fresh))
+              count(group by (node) (af_node_mount_probe_up == 1))
               - on () kube_daemonset_status_number_ready{namespace="cms",daemonset="alloy"}
               > 0
             for: 15m

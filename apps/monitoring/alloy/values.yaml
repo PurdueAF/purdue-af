@@ -1,10 +1,10 @@
 controller:
   type: daemonset
-  # Roll up to 3 nodes at a time; the default of 1 is too slow.
+  # Helm waits 5 minutes for a roll, and a batch takes about a minute.
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 3
+      maxUnavailable: 6
   volumes:
     extra:
       - name: alloy-storage
