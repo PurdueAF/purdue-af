@@ -1,5 +1,4 @@
-# The root of the agentic-analysis volume. A new CephFS volume's root is
-# root's, and CephFS ignores fsGroup: hand it to the task image's user.
+# CephFS ignores fsGroup, so this hands the agentic-analysis volume's root to the task image's user.
 apiVersion: batch/v1
 kind: Job
 metadata:

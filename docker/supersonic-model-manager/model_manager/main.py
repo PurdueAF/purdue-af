@@ -195,24 +195,6 @@ async def delete_model(name: str) -> dict:
 # --------------------------------------------------------------------------
 
 
-async def _spool_to_disk(upload: UploadFile, destination: Path, limit: int) -> int:
-    """Stream an upload straight onto the PVC so large models never buffer in RAM."""
-    written = 0
-    with open(destination, "wb") as out:
-        while True:
-            chunk = await upload.read(4 * 1024 * 1024)
-            if not chunk:
-                break
-            written += len(chunk)
-            if written > limit:
-                raise repository.RepositoryError(
-                    "Upload exceeds the configured size limit "
-                    f"({limit / (1024**3):.1f} GiB)."
-                )
-            out.write(chunk)
-    return written
-
-
 @app.post("/api/upload")
 async def upload(
     files: list[UploadFile],
@@ -242,7 +224,9 @@ async def upload(
                 / f"incoming-{uuid.uuid4().hex}-{Path(upload_file.filename).name}"
             )
             try:
-                await _spool_to_disk(upload_file, tmp, settings.max_upload_bytes)
+                await asyncio.to_thread(
+                    repository.copy_with_limit, upload_file.file, tmp
+                )
                 result = await asyncio.to_thread(
                     repository.install_archive,
                     tmp,

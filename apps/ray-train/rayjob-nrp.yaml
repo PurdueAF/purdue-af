@@ -24,7 +24,7 @@ spec:
               cpu: "1"
               memory: 1Gi
   rayClusterSpec:
-    # The Ray of pixi/global, which the image installs.
+    # Read only by NRP's KubeRay, for its version gates; the Ray that runs is the image's.
     rayVersion: "2.58.0"
     headGroupSpec:
       rayStartParams:

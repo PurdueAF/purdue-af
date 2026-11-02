@@ -21,6 +21,11 @@ import yaml
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
 from nrp_gpus import Node
 
+# Whose a job is: at Purdue the name of their own cluster, on NRP its hash.
+OWNER_LABEL = "purdue-af/ray-owner"
+ENTRYPOINT_ANNOTATION = "purdue-af/ray-entrypoint"
+# Where a cluster's pods read the most workers it has: what a training sizes itself by.
+MOST_VARIABLE = "AF_MAX_WORKERS"
 # Where a job's code is in the bucket: <JOBS_PREFIX>/<RayJob>/<package>.
 JOBS_PREFIX = "ray-nrp/jobs"
 # The Jobs API's names of a submission's resources, and KubeRay's.
@@ -32,16 +37,14 @@ PACKAGE_SCHEME = "gcs://"
 
 
 class NrpApi:
-    """NRP's Kubernetes API, in the namespace and with the token of a kubeconfig."""
+    """NRP's Kubernetes API, in the namespace of a kubeconfig, with the token its renewal keeps beside it."""
 
     def __init__(self, kubeconfig: Path) -> None:
         config = yaml.safe_load(kubeconfig.read_text())
         (cluster,) = config["clusters"]
-        (user,) = config["users"]
         (context,) = config["contexts"]
         self.server = str(cluster["cluster"]["server"]).rstrip("/")
         self.namespace = str(context["context"]["namespace"])
-        self.token = str(user["user"].get("token", ""))
         # Beside the kubeconfig, where its renewal keeps the token current (../interlink/README.md).
         self.token_file = kubeconfig.parent / "token"
         authority = base64.b64decode(cluster["cluster"]["certificate-authority-data"])
@@ -52,7 +55,7 @@ class NrpApi:
         try:
             return self.token_file.read_text().strip()
         except FileNotFoundError:
-            return self.token
+            return ""
 
     def path(self, kind: str) -> str:
         group = "/api/v1" if kind == "pods" else "/apis/ray.io/v1"
@@ -113,6 +116,21 @@ def data_uri(bucket: str, job: str, part: str) -> str:
     return f"s3://{bucket}/{code_prefix(job)}/{part}"
 
 
+def with_env_vars(
+    runtime_env: dict[str, Any], env_vars: dict[str, str]
+) -> dict[str, Any]:
+    """The runtime environment with `env_vars` among its variables."""
+    return {
+        **runtime_env,
+        "env_vars": {**(runtime_env.get("env_vars") or {}), **env_vars},
+    }
+
+
+def entrypoint_of(submission: dict[str, Any]) -> str:
+    """As much of a submission's entrypoint as its RayJob's annotation holds."""
+    return str(submission.get("entrypoint", ""))[:4096]
+
+
 def to_s3(runtime_env: dict[str, Any], bucket: str, job: str) -> dict[str, Any]:
     """The runtime environment with each uploaded package at the job's S3 prefix."""
 
@@ -147,10 +165,8 @@ def build_job(
     job = copy.deepcopy(template)
     metadata = job["metadata"]
     metadata["name"] = name
-    metadata["labels"]["purdue-af/ray-owner"] = owner
-    metadata["annotations"] = {
-        "purdue-af/ray-entrypoint": str(submission.get("entrypoint", ""))[:4096]
-    }
+    metadata["labels"][OWNER_LABEL] = owner
+    metadata["annotations"] = {ENTRYPOINT_ANNOTATION: entrypoint_of(submission)}
     spec = job["spec"]
     spec["suspend"] = True
     spec["jobId"] = submission["submission_id"]
@@ -158,7 +174,7 @@ def build_job(
     spec["ttlSecondsAfterFinished"] = ttl
     runtime_env = dict(submission.get("runtime_env") or {})
     if data:
-        runtime_env["env_vars"] = {**(runtime_env.get("env_vars") or {}), **data}
+        runtime_env = with_env_vars(runtime_env, data)
     if runtime_env:
         spec["runtimeEnvYAML"] = yaml.safe_dump(to_s3(runtime_env, bucket, name))
     for asked, field in ENTRYPOINT_RESOURCES.items():
@@ -201,8 +217,8 @@ def placed(job: dict[str, Any], workers: int, nodes: list[Node]) -> dict[str, An
     for pod in (cluster["headGroupSpec"]["template"], group["template"]):
         for container in pod["spec"]["containers"]:
             container["env"] = [
-                *(e for e in container.get("env", []) if e["name"] != "AF_MAX_WORKERS"),
-                {"name": "AF_MAX_WORKERS", "value": str(workers)},
+                *(e for e in container.get("env", []) if e["name"] != MOST_VARIABLE),
+                {"name": MOST_VARIABLE, "value": str(workers)},
             ]
     return cluster
 
@@ -242,9 +258,12 @@ class Bucket:
             keys = [{"Key": o["Key"]} for o in listed.get("Contents", [])]
             if not keys:
                 return deleted
-            await asyncio.to_thread(
+            answer = await asyncio.to_thread(
                 self.s3.delete_objects, Bucket=self.name, Delete={"Objects": keys}
             )
+            # A key left here would be listed again, for ever.
+            if errors := answer.get("Errors"):
+                raise RuntimeError(f"S3 kept {errors[0].get('Key')}: {errors[0]}")
             deleted += len(keys)
 
     async def jobs(self) -> dict[str, float]:

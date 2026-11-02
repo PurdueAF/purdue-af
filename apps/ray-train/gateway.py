@@ -1,36 +1,4 @@
-"""Ray gateway: each AF user's Ray Client, `ray.init("ray://ray-train-gateway:10001")`,
-reaches a Ray cluster of their own, and each job their Jobs API client,
-`JobSubmissionClient("http://ray-train-gateway:8265")`, submits runs in a
-RayJob of its own: a cluster made the same way, whose workers the gateway
-suspends once the job ends, freeing their GPUs, and whose head, with the job's
-logs, KubeRay removes after the idle timeout. Before its workers go, the gateway
-copies the last LOG_BYTES of the job's logs into a ConfigMap the RayJob owns,
-from which it answers for them after. The RayJob keeps the job's status for
-jobRecordSeconds.
-
-A session's RAY_AUTH_TOKEN is its JupyterHub token, which both clients send
-with every call. The Hub says whose it is, and the call goes on, unread, to
-that user's RayCluster: created from raycluster.yaml when they first connect,
-running as them, and deleted once idle. Only the gateway
-holds a cluster's own Ray token. A cluster runs the global Pixi environment,
-or the one a call names in `af-env`, with one worker, as many as
-`af-n-workers` asks or up to as many as `af-max-workers` asks, each with one
-GPU or as many as `af-gpus-per-worker` asks, of the memory
-`af-min-gpu-memory-gb` asks or more, and with the cores and memory
-`af-cpus-per-worker` and `af-ram-per-worker-gb` ask; a call with any other
-`af-` name is refused. A cluster of `af-n-workers` starts only while that many
-such GPUs are free, and one of `af-max-workers` with the workers whose GPUs
-are; one that a single GPU starts takes it from another cluster's preemptible
-worker while none is free. Its pods read the most workers it has from
-AF_MAX_WORKERS. A user whose session holds a GPU starts and submits to none.
-A workload account's token gets the account a cluster of its own
-(../dask-gateway/README.md#workload-accounts). `GET /af/nrp-gpus` on the Jobs
-API's port answers how many GPUs NRP Nautilus has free for Ray workers, by
-region (nrp_gpus.py), and `GET /af/capacity` how many workers of a shape fit at
-either site. `/af/cluster` reads (GET), starts (POST) and stops (DELETE) the
-caller's own cluster, as Ray Client's first call would start it. `GET /metrics` on METRICS_PORT names, for the dashboards,
-the owner of each job's cluster, whose name has none. The settings are in config.yaml.
-"""
+"""The Ray gateway: relays each AF user's Ray Client and Jobs API calls to Ray clusters of their own (README.md)."""
 
 from __future__ import annotations
 
@@ -53,11 +21,11 @@ import string
 import sys
 import time
 import urllib.parse
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 import grpc
 import nrp_jobs
@@ -72,26 +40,32 @@ from aiohttp import (
     WSServerHandshakeError,
     web,
 )
-from gpu_queries import ALLOC_QUERY, GPU_METRICS, PREEMPTIBLE_QUERY, USED_QUERY
-from nrp_gpus import (
-    as_dict,
-    free_gpus,
-    most_in_one_group,
-    most_when_empty,
-    placement,
-    worker_of,
+from gpu_queries import (
+    ALLOC_QUERY,
+    GPU_METRICS,
+    PREEMPTIBLE_PRIORITY_CLASS,
+    PREEMPTIBLE_QUERY,
+    USED_QUERY,
 )
+from nrp_gpus import Worker, as_dict, free_gpus, most_when_empty, placement, worker_of
 from nrp_gpus import nodes as nrp_nodes
 from nrp_gpus import query as nrp_query
+from nrp_jobs import (
+    ENTRYPOINT_ANNOTATION,
+    MOST_VARIABLE,
+    OWNER_LABEL,
+    entrypoint_of,
+    with_env_vars,
+)
 from yarl import URL
 
 log = logging.getLogger("ray-train-gateway")
 
 NAMESPACE = os.environ.get("NAMESPACE", "cms")
 HUB_API = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api")
-TEMPLATE = Path("/app/raycluster.yaml")
 CODE = Path(__file__)
 # Beside this file in the ConfigMap, as in the repository.
+TEMPLATE = CODE.with_name("raycluster.yaml")
 CONFIG_FILE = CODE.with_name("config.yaml")
 CONFIG: dict[str, Any] = yaml.safe_load(CONFIG_FILE.read_text())
 CODE_POLL_S = float(CONFIG["codePollSeconds"])
@@ -134,7 +108,6 @@ FLAVORS = [
 WORKER_CPUS_MAX = int(CONFIG["workerCpusMax"])
 WORKER_MEMORY_GB_MIN = int(CONFIG["workerMemoryGbMin"])
 WORKER_MEMORY_GB_MAX = int(CONFIG["workerMemoryGbMax"])
-PREEMPTIBLE_PRIORITY_CLASS = str(CONFIG["preemptiblePriorityClass"])
 PROMETHEUS_URL = str(CONFIG["prometheusUrl"])
 NRP_PROMETHEUS_URL = str(CONFIG["nrpPrometheusUrl"])
 NRP_START_TIMEOUT_S = float(CONFIG["nrpStartTimeoutSeconds"])
@@ -142,7 +115,6 @@ NRP_MIN_UTILIZATION = float(CONFIG["nrpMinGpuUtilization"])
 NRP_UTILIZATION_WINDOW_S = int(CONFIG["nrpUtilizationWindowSeconds"])
 # Beside this file in the ConfigMap, as in the repository.
 NRP_TEMPLATE = CODE.with_name("rayjob-nrp.yaml")
-NRP_WORKER = worker_of(yaml.safe_load(NRP_TEMPLATE.read_text()))
 # The interLink plugin's, from the kubeconfig-nrp-interlink Secret: without it, no job runs on NRP.
 NRP_KUBECONFIG = Path("/etc/nrp/kubeconfig.yaml")
 DEFAULT_ENV = str(CONFIG["defaultEnv"])
@@ -170,11 +142,9 @@ RAYJOBS = f"/apis/ray.io/v1/namespaces/{NAMESPACE}/rayjobs"
 SECRETS = f"/api/v1/namespaces/{NAMESPACE}/secrets"
 CONFIGMAPS = f"/api/v1/namespaces/{NAMESPACE}/configmaps"
 MANAGED_BY = "ray-train-gateway"
+MANAGED_SELECTOR = f"app.kubernetes.io/managed-by={MANAGED_BY}"
 # The label KubeRay gives the cluster of a RayJob, which KubeRay, not the reaper, removes.
 FROM_CRD = "ray.io/originated-from-crd"
-# Whose a job is: the name of their own cluster.
-OWNER_LABEL = "purdue-af/ray-owner"
-ENTRYPOINT_ANNOTATION = "purdue-af/ray-entrypoint"
 # Why the gateway stopped a job, when it did.
 STOPPED_ANNOTATION = "purdue-af/ray-stopped"
 # The ConfigMap that keeps an ended job's logs.
@@ -182,6 +152,9 @@ LOGS_ANNOTATION = "purdue-af/ray-logs"
 # A ConfigMap holds at most 1 MiB.
 LOG_BYTES = 900 * 2**10
 LOG_TIMEOUT_S = 120
+# Of a call to Kubernetes or the Hub, which long stalls under load before it hangs.
+API_TIMEOUT = ClientTimeout(total=30)
+LDAP_TIMEOUT_S = 10
 JOB_PATH = re.compile(r"/api/jobs/([^/]+)(/.*)?")
 SUBMISSION_ALPHABET = string.ascii_letters + string.digits
 # The label of a workload account's cluster's pods, which names the account.
@@ -190,7 +163,6 @@ PART_OF = "app.kubernetes.io/part-of"
 CLIENT_PORT = 10001
 # The dashboard's, whose HTTP API, the Jobs API's among it, the gateway relays.
 DASHBOARD_PORT = 8265
-# Prometheus's, for which job clusters' owners are the dashboards' to know.
 METRICS_PORT = 9090
 # What the name of every setting starts with: any other header or metadata so named is a mistake.
 SETTING_PREFIX = "af-"
@@ -203,8 +175,6 @@ WORKERS_ANNOTATION = "purdue-af/ray-workers"
 # Set in place of the workers: the most of them, of which a cluster starts with those whose GPUs are free.
 MOST_METADATA = SETTING_PREFIX + "max-workers"
 LEAST_ANNOTATION = "purdue-af/ray-min-workers"
-# Where a cluster's pods read the most workers it has: what a training sizes itself by.
-MOST_VARIABLE = "AF_MAX_WORKERS"
 PER_WORKER_METADATA = SETTING_PREFIX + "gpus-per-worker"
 PER_WORKER_ANNOTATION = "purdue-af/ray-gpus-per-worker"
 # Set as the environment is: the least memory a worker's GPU may have, in GB.
@@ -214,6 +184,17 @@ MEMORY_ANNOTATION = "purdue-af/ray-gpu-memory"
 CPUS_METADATA = SETTING_PREFIX + "cpus-per-worker"
 CPUS_ANNOTATION = "purdue-af/ray-worker-cpus"
 RAM_METADATA = SETTING_PREFIX + "ram-per-worker-gb"
+RAM_ANNOTATION = "purdue-af/ray-worker-memory"
+# Where a cluster, or a job's, keeps each field of its Shape.
+SHAPE_ANNOTATIONS = {
+    "env": ENV_ANNOTATION,
+    "workers": WORKERS_ANNOTATION,
+    "memory": MEMORY_ANNOTATION,
+    "cpus": CPUS_ANNOTATION,
+    "ram": RAM_ANNOTATION,
+    "per_worker": PER_WORKER_ANNOTATION,
+    "least": LEAST_ANNOTATION,
+}
 # Set as the environment is, by a job: where it runs, and the directories of AF
 # storage it reads from and writes to, which it finds in AF_INPUTS and AF_OUTPUT.
 SITE_METADATA = SETTING_PREFIX + "site"
@@ -261,7 +242,6 @@ STOPPED_IDLE = (
 JOBS = f"/apis/batch/v1/namespaces/{NAMESPACE}/jobs"
 # A setting's name without its prefix is no header of Ray's either.
 UNPREFIXED = {name.removeprefix(SETTING_PREFIX) for name in SETTINGS}
-RAM_ANNOTATION = "purdue-af/ray-worker-memory"
 REMOVED_IDLE = "Your Ray cluster was removed after it went idle: run ray.shutdown(), then ray.init() again."
 REMOVED_BY_USER = (
     "Your Ray cluster was stopped: run ray.shutdown(), then ray.init() again."
@@ -269,6 +249,8 @@ REMOVED_BY_USER = (
 REMOVED_UNPROVISIONED = "Your Ray cluster was removed, as not all of its GPUs started in time: ask for fewer workers, or try again later."
 STOPPED_UNPROVISIONED = "The job was stopped, as not all of its GPUs started in time: ask for fewer workers, or try again later."
 JOB_STARTING = "Its Ray cluster is starting."
+# A Ray that ignores RAY_AUTH_MODE would serve anyone who reaches it.
+OPEN_HEAD = "The Ray in that environment does not enforce the cluster's token."
 # singleuser.podNameTemplate in the Hub values
 SESSION_POD = re.compile(r"purdue-af-(\d+)")
 # custom-spawner.py names the accounts from outside Purdue <login>-cern and <login>-fnal
@@ -328,6 +310,13 @@ class Refused(Exception):
         self.text = text
 
 
+# What a Ray Client call hears when the gateway's own call to Kubernetes or the Hub fails.
+NO_ANSWER = Refused(
+    grpc.StatusCode.UNAVAILABLE,
+    "Kubernetes or JupyterHub did not answer: try again in a minute.",
+)
+
+
 @dataclass(frozen=True)
 class User:
     name: str
@@ -357,6 +346,20 @@ class Account:
     uid: int
     gid: int
     token_sha256: str
+
+
+def session_gpu_refusal(what: str) -> Refused:
+    return Refused(
+        grpc.StatusCode.FAILED_PRECONDITION,
+        f"Your session holds a GPU, and {what} are for sessions without one: train on your session's GPU, or start a session without a GPU.",
+    )
+
+
+def duplicate_refusal(submission: str) -> Refused:
+    return Refused(
+        grpc.StatusCode.FAILED_PRECONDITION,
+        f"You have a job {submission} already: submit it under another ID, or without one.",
+    )
 
 
 class AccountRefused(Exception):
@@ -508,9 +511,12 @@ def refuse_account_name(name: str) -> None:
 
 
 def bearer_token(header: str) -> str | None:
+    """The header's token; none in one that is not printable ASCII, as Hub and account tokens are."""
     scheme, _, token = header.partition(" ")
     token = token.strip()
-    return token if scheme.lower() in ("bearer", "token") and token else None
+    if scheme.lower() not in ("bearer", "token") or not token:
+        return None
+    return token if token.isascii() and token.isprintable() else None
 
 
 def session_pod(user_model: dict[str, Any]) -> re.Match[str] | None:
@@ -544,9 +550,15 @@ def ldap_ids(account: str) -> tuple[int, int]:
     from ldap3 import BASE, Connection, Server
 
     conn = Connection(
-        Server(host=LDAP_HOST, use_ssl=True, get_info="ALL"),
+        Server(
+            host=LDAP_HOST,
+            use_ssl=True,
+            get_info="ALL",
+            connect_timeout=LDAP_TIMEOUT_S,
+        ),
         version=3,
         authentication="ANONYMOUS",
+        receive_timeout=LDAP_TIMEOUT_S,
     )
     conn.start_tls()
     conn.search(
@@ -603,15 +615,7 @@ def build_cluster(
     metadata["name"] = user.cluster
     metadata.setdefault("labels", {})["app.kubernetes.io/managed-by"] = MANAGED_BY
     metadata.setdefault("annotations", {}).update(
-        {
-            ENV_ANNOTATION: shape.env,
-            WORKERS_ANNOTATION: shape.workers,
-            MEMORY_ANNOTATION: shape.memory,
-            CPUS_ANNOTATION: shape.cpus,
-            RAM_ANNOTATION: shape.ram,
-            PER_WORKER_ANNOTATION: shape.per_worker,
-            LEAST_ANNOTATION: shape.least,
-        }
+        {key: getattr(shape, field) for field, key in SHAPE_ANNOTATIONS.items()}
     )
     spec = cluster["spec"]
     spec["authOptions"]["secretName"] = user.cluster
@@ -802,6 +806,11 @@ def job_details(job: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def live(cluster: dict[str, Any] | None) -> TypeGuard[dict[str, Any]]:
+    """Whether the cluster exists and is not being deleted."""
+    return cluster is not None and not cluster["metadata"].get("deletionTimestamp")
+
+
 def head_ready(cluster: dict[str, Any]) -> bool:
     conditions = (cluster.get("status") or {}).get("conditions") or []
     return any(
@@ -838,8 +847,21 @@ def held_gpus(cluster: dict[str, Any]) -> dict[str, int]:
 
 
 def load_template() -> dict[str, Any]:
-    template: dict[str, Any] = yaml.safe_load(TEMPLATE.read_text())
+    # Through JSON, which drops YAML's aliases: an edit of one pod stays out of the other.
+    template: dict[str, Any] = json.loads(
+        json.dumps(yaml.safe_load(TEMPLATE.read_text()))
+    )
     return template
+
+
+def nrp_template() -> dict[str, Any]:
+    template: dict[str, Any] = yaml.safe_load(NRP_TEMPLATE.read_text())
+    return template
+
+
+def nrp_worker() -> Worker:
+    """Read at each use, as raycluster.yaml is: a new template ends no connection."""
+    return worker_of(nrp_template())
 
 
 def cluster_template(user: User) -> dict[str, Any]:
@@ -907,11 +929,21 @@ def worker_size(template: dict[str, Any]) -> tuple[str, str]:
     return str(limits["cpu"]), str(limits["memory"]).removesuffix("Gi")
 
 
+def whole(value: str, least: int = 1, most: int | None = None) -> bool:
+    """Whether `value` is a whole number in bounds, written plainly: a Shape compares it as text."""
+    # Nine digits at most: int() refuses thousands.
+    return (
+        re.fullmatch(r"[1-9][0-9]{0,8}", value) is not None
+        and int(value) >= least
+        and (most is None or int(value) <= most)
+    )
+
+
 def requested_size(name: str, value: str, default: str, least: int, most: int) -> str:
     """What a call asks each worker to have of CPU cores or memory, or the template's."""
     if not value:
         return default
-    if value in {str(n) for n in range(least, most + 1)}:
+    if whole(value, least, most):
         return value
     raise Refused(
         grpc.StatusCode.INVALID_ARGUMENT,
@@ -942,7 +974,7 @@ def requested_per_worker(value: str, memory: str) -> str:
     if not value:
         return "1"
     most = max(f.per_worker for f in FLAVORS if f.memory >= float(memory))
-    if value in {str(n) for n in range(1, most + 1)}:
+    if whole(value, most=most):
         return value
     raise Refused(
         grpc.StatusCode.INVALID_ARGUMENT,
@@ -950,9 +982,12 @@ def requested_per_worker(value: str, memory: str) -> str:
     )
 
 
-def requested_workers(exactly: str, at_most: str, shape: Shape) -> tuple[str, str]:
+def requested_workers(
+    exactly: str, at_most: str, most: int | None = None
+) -> tuple[str, str]:
     """The most workers a call asks for and the fewest its cluster starts with:
-    all of `exactly`, or one of up to `at_most`; one worker by default."""
+    all of `exactly`, or one of up to `at_most`; one worker by default. On NRP
+    there is no `most`: start_nrp_job holds a job to what NRP's nodes have room for."""
     if exactly and at_most:
         raise Refused(
             grpc.StatusCode.INVALID_ARGUMENT,
@@ -961,12 +996,14 @@ def requested_workers(exactly: str, at_most: str, shape: Shape) -> tuple[str, st
     value = exactly or at_most
     if not value:
         return "1", "1"
-    most = sum(f.budget // int(shape.per_worker) for f in shape.flavors)
-    if value in {str(n) for n in range(1, most + 1)}:
+    if whole(value, most=most):
         return value, exactly or "1"
+    name = WORKERS_METADATA if exactly else MOST_METADATA
     raise Refused(
         grpc.StatusCode.INVALID_ARGUMENT,
-        f"{WORKERS_METADATA if exactly else MOST_METADATA} is a number of workers from 1 to {most}.",
+        f"{name} is a whole number of workers, 1 or more, on NRP."
+        if most is None
+        else f"{name} is a number of workers from 1 to {most}.",
     )
 
 
@@ -1060,24 +1097,6 @@ def stamp(when: float) -> str:
     return datetime.fromtimestamp(when, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def nrp_workers(exactly: str, at_most: str) -> tuple[str, str]:
-    """As requested_workers, for the workers of a job on NRP."""
-    if exactly and at_most:
-        raise Refused(
-            grpc.StatusCode.INVALID_ARGUMENT,
-            f"{WORKERS_METADATA} asks for a number of workers and {MOST_METADATA} for up to as many: set one of them.",
-        )
-    value = exactly or at_most
-    if not value:
-        return "1", "1"
-    if re.fullmatch(r"[1-9][0-9]*", value):
-        return value, exactly or "1"
-    raise Refused(
-        grpc.StatusCode.INVALID_ARGUMENT,
-        f"{WORKERS_METADATA if exactly else MOST_METADATA} is a whole number of workers, 1 or more, on NRP.",
-    )
-
-
 async def submitted_json(request: web.Request) -> dict[str, Any]:
     try:
         submitted = json.loads(await request.read())
@@ -1092,19 +1111,11 @@ async def submitted_json(request: web.Request) -> dict[str, Any]:
 
 def cluster_shape(cluster: dict[str, Any]) -> Shape:
     annotations = cluster["metadata"].get("annotations") or {}
-    cpus, ram = worker_size(load_template())
-    workers = str(annotations.get(WORKERS_ANNOTATION, ""))
     return Shape(
-        str(annotations.get(ENV_ANNOTATION, "")),
-        workers,
-        # Without it, a cluster holds GPUs that any call may have.
-        str(annotations.get(MEMORY_ANNOTATION, requested_memory(""))),
-        # Without them, its workers are the template's.
-        str(annotations.get(CPUS_ANNOTATION, cpus)),
-        str(annotations.get(RAM_ANNOTATION, ram)),
-        str(annotations.get(PER_WORKER_ANNOTATION, "1")),
-        # Without it, a cluster started with all its workers.
-        str(annotations.get(LEAST_ANNOTATION, workers)),
+        **{
+            field: str(annotations.get(key, ""))
+            for field, key in SHAPE_ANNOTATIONS.items()
+        }
     )
 
 
@@ -1126,10 +1137,7 @@ def refuse_others(cluster: dict[str, Any], user: User) -> None:
 
 def runs(cluster: dict[str, Any], shape: Shape) -> bool:
     """Whether the cluster stays up and is of `shape`."""
-    return (
-        not cluster["metadata"].get("deletionTimestamp")
-        and cluster_shape(cluster) == shape
-    )
+    return live(cluster) and cluster_shape(cluster) == shape
 
 
 class Gateway:
@@ -1197,11 +1205,12 @@ class Gateway:
             if client in self.gone:
                 raise Refused(grpc.StatusCode.NOT_FOUND, self.gone[client][1])
             cluster = await self.cluster_for(user, shape)
-        except Refused as e:
+        except (Refused, ClientError, asyncio.TimeoutError) as e:
+            refusal = e if isinstance(e, Refused) else NO_ANSWER
             # Refusing ahead of the request races the client's write of it, which grpc reports as INTERNAL.
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(anext(requests, None), REFUSAL_READ_S)
-            await context.abort(e.code, e.text)
+            await context.abort(refusal.code, refusal.text)
         self.clients.setdefault(cluster, set()).add(client)
         self.gone.pop(client, None)
         forwarded = [(k, v) for k, v in metadata if k not in NOT_RELAYED]
@@ -1260,11 +1269,12 @@ class Gateway:
         if site == "nrp":
             others = sorted(name for name in values if name in SETTINGS - NRP_SETTINGS)
             if others:
+                worker = nrp_worker()
                 raise Refused(
                     grpc.StatusCode.INVALID_ARGUMENT,
-                    f"{', '.join(others)} sets a Ray cluster at Purdue: a job on NRP runs the AF's global environment on workers of {NRP_WORKER.gpus} GPU, {NRP_WORKER.cpus:g} CPUs and {NRP_WORKER.memory_gb:g} GB, and takes only {WORKERS_METADATA} or {MOST_METADATA}.",
+                    f"{', '.join(others)} sets a Ray cluster at Purdue: a job on NRP runs the AF's global environment on workers of {worker.gpus} GPU, {worker.cpus:g} CPUs and {worker.memory_gb:g} GB, and takes only {WORKERS_METADATA} or {MOST_METADATA}.",
                 )
-            workers, least = nrp_workers(
+            workers, least = requested_workers(
                 values.get(WORKERS_METADATA, ""), values.get(MOST_METADATA, "")
             )
             return user, Shape("", workers, "", "", "", "1", least, site)
@@ -1289,7 +1299,9 @@ class Gateway:
             "1",
         )
         workers, least = requested_workers(
-            values.get(WORKERS_METADATA, ""), values.get(MOST_METADATA, ""), shape
+            values.get(WORKERS_METADATA, ""),
+            values.get(MOST_METADATA, ""),
+            sum(f.budget // int(shape.per_worker) for f in shape.flavors),
         )
         return user, dataclasses.replace(shape, workers=workers, least=least)
 
@@ -1301,10 +1313,7 @@ class Gateway:
                 f"{SITE_METADATA}: {shape.site} is for jobs a JobSubmissionClient submits: Ray Client reaches your own cluster at Purdue.",
             )
         if user.session_gpu:
-            raise Refused(
-                grpc.StatusCode.FAILED_PRECONDITION,
-                "Your session holds a GPU, and Ray clusters are for sessions without one: train on your session's GPU, or start a session without a GPU.",
-            )
+            raise session_gpu_refusal("Ray clusters")
         # Here rather than in caller: asking after jobs needs no environment.
         mounted_env(shape.env, cluster_template(user))
         if self.started.get(user.cluster) != (user.owner, shape):
@@ -1318,7 +1327,7 @@ class Gateway:
         known = self.started.get(user.cluster)
         if known is None or known[0] != user.owner:
             cluster = await self.cluster(user.cluster)
-            if cluster is None or cluster["metadata"].get("deletionTimestamp"):
+            if not live(cluster):
                 raise Refused(
                     grpc.StatusCode.NOT_FOUND,
                     self.never_started.get(
@@ -1336,10 +1345,7 @@ class Gateway:
         """The head a submission or one of its uploads goes to, the job whose token
         it carries, and a submission's body, which names the job that head waits for."""
         if user.session_gpu:
-            raise Refused(
-                grpc.StatusCode.FAILED_PRECONDITION,
-                "Your session holds a GPU, and Ray jobs are for sessions without one: train on your session's GPU, or start a session without a GPU.",
-            )
+            raise session_gpu_refusal("Ray jobs")
         mounted_env(shape.env, cluster_template(user))
         submitted: dict[str, Any] | None = None
         if request.method == "POST":
@@ -1348,10 +1354,7 @@ class Gateway:
             if submitted is not None:
                 asked = str(submitted.get("submission_id") or new_submission())
                 if await self.submitted_before(user, asked):
-                    raise Refused(
-                        grpc.StatusCode.FAILED_PRECONDITION,
-                        f"You have a job {asked} already: submit it under another ID, or without one.",
-                    )
+                    raise duplicate_refusal(asked)
             data = data_paths(user, request.headers)
             waiting = self.waiting.pop(user.cluster, None)
             if waiting is not None and (
@@ -1368,21 +1371,26 @@ class Gateway:
             # KubeRay follows the job whose jobId is set on a RayJob that waits for one.
             submitted["submission_id"] = asked
             if data:
-                runtime_env = dict(submitted.get("runtime_env") or {})
-                runtime_env["env_vars"] = {
-                    **(runtime_env.get("env_vars") or {}),
-                    **{f"AF_{key.upper()}": path for key, path in data.items()},
-                }
-                submitted["runtime_env"] = runtime_env
-            entrypoint = str(submitted.get("entrypoint", ""))[:4096]
-            await self.kube(
+                submitted["runtime_env"] = with_env_vars(
+                    submitted.get("runtime_env") or {},
+                    {f"AF_{key.upper()}": path for key, path in data.items()},
+                )
+            status, answer = await self.kube(
                 "PATCH",
                 f"{RAYJOBS}/{waiting.name}",
                 {
-                    "metadata": {"annotations": {ENTRYPOINT_ANNOTATION: entrypoint}},
+                    "metadata": {
+                        "annotations": {ENTRYPOINT_ANNOTATION: entrypoint_of(submitted)}
+                    },
                     "spec": {"jobId": asked},
                 },
             )
+            if status != 200:
+                await self.delete_rayjob(waiting.name)
+                raise Refused(
+                    grpc.StatusCode.UNAVAILABLE,
+                    f"Could not start your Ray job: {answer.get('message', status)}",
+                )
         return waiting.head, waiting.name, json.dumps(submitted).encode()
 
     async def start_job(self, user: User, shape: Shape) -> Waiting:
@@ -1407,48 +1415,22 @@ class Gateway:
             created["metadata"]["uid"],
             cluster_token(self.service_token, name),
         )
-        deadline = time.monotonic() + START_TIMEOUT_S
+
+        async def job_head() -> str | None:
+            job = await self.rayjob(name)
+            return ((job or {}).get("status") or {}).get("rayClusterName")
+
         try:
-            while True:
-                status, body = await self.kube("POST", SECRETS, secret)
-                if status not in (201, 409):
-                    raise Refused(
-                        grpc.StatusCode.UNAVAILABLE,
-                        f"Could not create your Ray job's token: {body.get('message', status)}",
-                    )
-                job = await self.rayjob(name)
-                head = ((job or {}).get("status") or {}).get("rayClusterName")
-                if head and await self.head_status(head, keyed=name) == 200:
-                    break
-                if time.monotonic() > deadline:
-                    raise Refused(
-                        grpc.StatusCode.UNAVAILABLE,
-                        "Your Ray job's head did not start in time: try again later.",
-                    )
-                await asyncio.sleep(START_POLL_S)
-            # A Ray that ignores RAY_AUTH_MODE would serve anyone who reaches it.
+            head = await self.head_up(secret, job_head, name, "Ray job")
             if await self.head_status(head, authorized=False) == 200:
-                raise Refused(
-                    grpc.StatusCode.INVALID_ARGUMENT,
-                    "The Ray in that environment does not enforce the cluster's token.",
-                )
+                raise Refused(grpc.StatusCode.INVALID_ARGUMENT, OPEN_HEAD)
         except Refused:
-            await self.kube(
-                "DELETE", f"{RAYJOBS}/{name}", {"propagationPolicy": "Background"}
-            )
+            await self.delete_rayjob(name)
             raise
         return Waiting(name, head, shape, time.monotonic())
 
     async def rayjob(self, name: str) -> dict[str, Any] | None:
-        status, body = await self.kube("GET", f"{RAYJOBS}/{name}")
-        if status == 404:
-            return None
-        if status != 200:
-            raise Refused(
-                grpc.StatusCode.UNAVAILABLE,
-                f"Kubernetes answered HTTP {status} for the Ray job.",
-            )
-        return body
+        return await self.kube_get(RAYJOBS, name, "the Ray job")
 
     async def job(
         self, user: User, submission: str
@@ -1462,14 +1444,12 @@ class Gateway:
             return None
         head = (job.get("status") or {}).get("rayClusterName")
         if head:
-            cluster = await self.cluster(head)
-            if cluster is None or cluster["metadata"].get("deletionTimestamp"):
+            if not live(await self.cluster(head)):
                 head = None
         return job, head
 
     async def jobs(self, user: User) -> list[dict[str, Any]]:
-        selector = urllib.parse.quote(f"{OWNER_LABEL}={user.cluster}")
-        status, listing = await self.kube("GET", f"{RAYJOBS}?labelSelector={selector}")
+        status, listing = await self.listed(RAYJOBS, f"{OWNER_LABEL}={user.cluster}")
         if status != 200:
             raise Refused(
                 grpc.StatusCode.UNAVAILABLE,
@@ -1492,25 +1472,32 @@ class Gateway:
             return web.json_response(job_details(job))
         if method == "DELETE" and not rest:
             if not ended:
-                text = "The job has not ended: stop it first"
-                return web.Response(status=400, reason=text, text=text)
-            await self.kube(
-                "DELETE", f"{RAYJOBS}/{name}", {"propagationPolicy": "Background"}
-            )
+                raise Refused(
+                    grpc.StatusCode.INVALID_ARGUMENT,
+                    "The job has not ended: stop it first",
+                )
+            await self.delete_record(name)
             return web.json_response({"deleted": True})
         if method == "POST" and rest == "/stop":
             if not ended:
                 # Its cluster never came up: nothing ran, and nothing need wait for it.
-                await self.kube(
-                    "DELETE", f"{RAYJOBS}/{name}", {"propagationPolicy": "Background"}
-                )
+                await self.delete_record(name)
             return web.json_response({"stopped": not ended})
-        text = (
+        raise Refused(
+            grpc.StatusCode.NOT_FOUND,
             f"The job's Ray cluster was removed {int(IDLE_TIMEOUT_S // 60)} minutes after the job ended, and its logs with it"
             if ended
-            else "The job's Ray cluster is starting: ask again in a minute"
+            else "The job's Ray cluster is starting: ask again in a minute",
         )
-        return web.Response(status=404, reason=text, text=text)
+
+    async def delete_record(self, name: str) -> None:
+        """Delete a RayJob a user asks to, or refuse: one already gone is deleted."""
+        status = await self.delete_rayjob(name)
+        if status not in (200, 202, 404):
+            raise Refused(
+                grpc.StatusCode.UNAVAILABLE,
+                f"Kubernetes answered HTTP {status} deleting the Ray job.",
+            )
 
     async def kept_logs(
         self, request: web.Request, configmap: str, rest: str
@@ -1518,10 +1505,10 @@ class Gateway:
         """An ended job's logs, as its head would answer for them, from the ConfigMap that keeps them."""
         status, body = await self.kube("GET", f"{CONFIGMAPS}/{configmap}")
         if status != 200:
-            text = (
-                f"The job's logs could not be read: Kubernetes answered HTTP {status}"
+            raise Refused(
+                grpc.StatusCode.UNAVAILABLE,
+                f"The job's logs could not be read: Kubernetes answered HTTP {status}",
             )
-            return web.Response(status=503, reason=text, text=text)
         logs = str((body.get("data") or {}).get("logs", ""))
         if rest == "/logs":
             return web.json_response({"logs": logs})
@@ -1567,10 +1554,7 @@ class Gateway:
             self.nrp_waiting.pop(user.cluster, None)
             asked = str(submitted.get("submission_id") or new_submission())
             if await self.submitted_before(user, asked):
-                raise Refused(
-                    grpc.StatusCode.FAILED_PRECONDITION,
-                    f"You have a job {asked} already: submit it under another ID, or without one.",
-                )
+                raise duplicate_refusal(asked)
             await self.start_nrp_job(
                 user, shape, name, submitted | {"submission_id": asked}, data
             )
@@ -1589,8 +1573,11 @@ class Gateway:
         its workers placed, and the Jobs that copy its inputs there and its outputs back."""
         assert self.nrp is not None and self.bucket is not None
         wanted, least = int(shape.workers), int(shape.least)
+        template = nrp_template()
         try:
-            room = await most_when_empty(self.http, NRP_PROMETHEUS_URL, NRP_WORKER)
+            room = await most_when_empty(
+                self.http, NRP_PROMETHEUS_URL, worker_of(template)
+            )
         except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
             log.warning("asking NRP's Prometheus: %r", e)
             room = 0
@@ -1605,7 +1592,7 @@ class Gateway:
                 f"Your job asks for {least} workers, and the GPU nodes of one region and model on NRP have room for at most {room}, empty: ask for fewer.",
             )
         job = nrp_jobs.build_job(
-            yaml.safe_load(NRP_TEMPLATE.read_text()),
+            template,
             name,
             nrp_jobs.owner_key(user.cluster, user.owner),
             submitted,
@@ -1635,7 +1622,7 @@ class Gateway:
                 grpc.StatusCode.UNAVAILABLE, f"NRP did not take your job: {message}"
             )
         log.info("created %s on NRP", name)
-        template = cluster_template(user)
+        cluster = cluster_template(user)
         for direction, source, target in (
             (
                 "in",
@@ -1652,7 +1639,7 @@ class Gateway:
                 status, body = await self.kube(
                     "POST",
                     JOBS,
-                    stage_job(template, user, name, direction, source, target),
+                    stage_job(cluster, user, name, direction, source, target),
                 )
                 if status != 201:
                     await self.stop_nrp(created, STOPPED_INPUTS)
@@ -1671,7 +1658,7 @@ class Gateway:
         least = int(job["metadata"]["annotations"][LEAST_WORKERS_ANNOTATION])
         async with self.nrp_admitting:
             try:
-                found = await nrp_nodes(self.http, NRP_PROMETHEUS_URL, NRP_WORKER)
+                found = await nrp_nodes(self.http, NRP_PROMETHEUS_URL, nrp_worker())
             except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
                 log.warning("asking NRP's Prometheus: %r", e)
                 return False
@@ -1745,14 +1732,9 @@ class Gateway:
 
     async def stage_state(self, name: str) -> str | None:
         """Where the Geddes Job of that name is: suspended, running, succeeded or failed; None if there is none."""
-        status, body = await self.kube("GET", f"{JOBS}/{name}")
-        if status == 404:
+        body = await self.kube_get(JOBS, name, f"the Job {name}")
+        if body is None:
             return None
-        if status != 200:
-            raise Refused(
-                grpc.StatusCode.UNAVAILABLE,
-                f"Kubernetes answered HTTP {status} for the Job {name}.",
-            )
         state = body.get("status") or {}
         for condition in state.get("conditions") or []:
             if condition.get("status") == "True" and condition.get("type") in (
@@ -1780,9 +1762,9 @@ class Gateway:
             "DCGM_FI_DEV_GPU_UTIL"
             f'{{namespace="{self.nrp.namespace}", pod=~"{cluster}-.*"}}'
         )
-        # Each GPU on its own, of the pods the job has now: a job's average hides a
-        # hung rank, and a replaced worker's old pod is no longer the job's.
-        promql = f"avg_over_time({series}[{NRP_UTILIZATION_WINDOW_S}s]) and {series}"
+        window = f"{NRP_UTILIZATION_WINDOW_S}s"
+        # Per GPU, of the pods the job has now that span the window: an average hides a hung rank, a replaced pod is no longer its, and a new one has few samples.
+        promql = f"avg_over_time({series}[{window}]) and {series} and ({series} offset {window})"
         try:
             samples = await nrp_query(self.http, NRP_PROMETHEUS_URL, promql)
         except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
@@ -1872,7 +1854,7 @@ class Gateway:
     async def nrp_listing(self, user: User | None = None) -> list[dict[str, Any]]:
         """The gateway's RayJobs on NRP, or the user's."""
         assert self.nrp is not None
-        selector = f"app.kubernetes.io/managed-by={MANAGED_BY}"
+        selector = MANAGED_SELECTOR
         if user is not None:
             selector = f"{OWNER_LABEL}={nrp_jobs.owner_key(user.cluster, user.owner)}"
         status, listing = await self.nrp.call(
@@ -1924,11 +1906,13 @@ class Gateway:
             return web.json_response({"stopped": not finished})
         if request.method == "DELETE" and not rest:
             if annotations.get(STAGE_ANNOTATION, "done") != "done":
-                text = "The job has not ended, or its outputs are being copied back: stop it, or wait"
-                return web.Response(status=400, reason=text, text=text)
+                raise Refused(
+                    grpc.StatusCode.INVALID_ARGUMENT,
+                    "The job has not ended, or its outputs are being copied back: stop it, or wait",
+                )
             await self.delete_nrp(name)
             return web.json_response({"deleted": True})
-        return web.Response(status=404, text="Not found")
+        raise Refused(grpc.StatusCode.NOT_FOUND, "Not found")
 
     async def nrp_submitter(self, name: str) -> str | None:
         """The pod of the job's submitter, which KubeRay names after it, once it runs."""
@@ -1977,14 +1961,13 @@ class Gateway:
         return response
 
     async def delete_nrp(self, name: str) -> None:
-        """Remove a job's RayJob on NRP, and its code."""
+        """Remove a job's RayJob on NRP, the Jobs nothing else finds without it, and its code."""
         assert self.nrp is not None and self.bucket is not None
         await self.nrp.call(
             "DELETE",
             f"{self.nrp.path('rayjobs')}/{name}",
             {"propagationPolicy": "Background"},
         )
-        await self.bucket.delete_prefix(nrp_jobs.code_prefix(name))
         for direction in ("in", "out"):
             await self.kube(
                 "DELETE",
@@ -1992,6 +1975,7 @@ class Gateway:
                 {"propagationPolicy": "Background"},
             )
         self.nrp_cleaned.discard(name)
+        await self.bucket.delete_prefix(nrp_jobs.code_prefix(name))
 
     async def reap_nrp(self) -> None:
         """Move every job on NRP on (advance_nrp), and delete code no job took."""
@@ -2108,11 +2092,7 @@ class Gateway:
                 timeout=RELAY_TIMEOUT,
             )
         except (ClientError, asyncio.TimeoutError) as e:
-            self.started.pop(cluster, None)
-            raise Refused(
-                grpc.StatusCode.UNAVAILABLE,
-                "Your Ray cluster did not answer: try again in a minute.",
-            ) from e
+            raise self.head_silent(cluster) from e
         async with upstream:
             response = web.StreamResponse(
                 status=upstream.status,
@@ -2138,11 +2118,7 @@ class Gateway:
         except WSServerHandshakeError as e:
             return web.Response(status=e.status, text=e.message)
         except (ClientError, asyncio.TimeoutError) as e:
-            self.started.pop(cluster, None)
-            raise Refused(
-                grpc.StatusCode.UNAVAILABLE,
-                "Your Ray cluster did not answer: try again in a minute.",
-            ) from e
+            raise self.head_silent(cluster) from e
         async with upstream:
             response = web.WebSocketResponse()
             await response.prepare(request)
@@ -2154,6 +2130,14 @@ class Gateway:
                     await response.send_str(message.data)
                 await response.close()
         return response
+
+    def head_silent(self, cluster: str) -> Refused:
+        """The refusal of a call its cluster did not answer, which then counts as not started."""
+        self.started.pop(cluster, None)
+        return Refused(
+            grpc.StatusCode.UNAVAILABLE,
+            "Your Ray cluster did not answer: try again in a minute.",
+        )
 
     def channel(self, cluster: str) -> grpc.aio.Channel:
         if cluster not in self.channels:
@@ -2217,7 +2201,9 @@ class Gateway:
     async def whoami(self, token: str) -> tuple[str, str]:
         """The kind and the name of the token's owner."""
         async with self.http.get(
-            f"{HUB_API}/user", headers={"Authorization": f"token {token}"}
+            f"{HUB_API}/user",
+            headers={"Authorization": f"token {token}"},
+            timeout=API_TIMEOUT,
         ) as r:
             if r.status in (401, 403):
                 log.warning("token refused: reason=unknown-token")
@@ -2236,6 +2222,7 @@ class Gateway:
         async with self.http.get(
             f"{HUB_API}/users/{urllib.parse.quote(name, safe='')}",
             headers={"Authorization": f"token {self.service_token}"},
+            timeout=API_TIMEOUT,
         ) as r:
             if r.status != 200:
                 raise Refused(
@@ -2267,26 +2254,46 @@ class Gateway:
             data: dict[str, Any] = await r.json(content_type=None)
             return r.status, data
 
-    async def cluster(self, name: str) -> dict[str, Any] | None:
-        status, body = await self.kube("GET", f"{RAYCLUSTERS}/{name}")
+    async def kube_get(
+        self, collection: str, name: str, what: str
+    ) -> dict[str, Any] | None:
+        """The object of that name, or None if there is none; `what` names it in the refusal otherwise."""
+        status, body = await self.kube("GET", f"{collection}/{name}")
         if status == 404:
             return None
         if status != 200:
             raise Refused(
                 grpc.StatusCode.UNAVAILABLE,
-                f"Kubernetes answered HTTP {status} for the Ray cluster.",
+                f"Kubernetes answered HTTP {status} for {what}.",
             )
         return body
+
+    async def listed(
+        self, collection: str, selector: str
+    ) -> tuple[int, dict[str, Any]]:
+        """The objects a label selects, for the caller to judge the answer."""
+        quoted = urllib.parse.quote(selector, safe="")
+        return await self.kube("GET", f"{collection}?labelSelector={quoted}")
+
+    async def delete_rayjob(self, name: str) -> int:
+        """The status Kubernetes answers, which only a caller that reports it reads."""
+        status, _ = await self.kube(
+            "DELETE", f"{RAYJOBS}/{name}", {"propagationPolicy": "Background"}
+        )
+        return status
+
+    async def cluster(self, name: str) -> dict[str, Any] | None:
+        return await self.kube_get(RAYCLUSTERS, name, "the Ray cluster")
 
     async def start_cluster(self, user: User, shape: Shape) -> None:
         """Create the user's cluster in `shape` unless it is in it; return once its head answers."""
         cluster = await self.cluster(user.cluster)
-        if cluster is not None and not cluster["metadata"].get("deletionTimestamp"):
+        if live(cluster):
             refuse_others(cluster, user)
         # Only a call the cluster's owner makes keeps it from being reaped.
         self.last_used[user.cluster] = time.monotonic()
         if cluster is not None and not runs(cluster, shape):
-            if not cluster["metadata"].get("deletionTimestamp"):
+            if live(cluster):
                 if await self.busy(cluster):
                     raise Refused(
                         grpc.StatusCode.FAILED_PRECONDITION,
@@ -2333,6 +2340,23 @@ class Gateway:
             cluster["metadata"]["uid"],
             cluster_token(self.service_token, user.cluster),
         )
+
+        async def own_head() -> str:
+            return user.cluster
+
+        await self.head_up(secret, own_head, user.cluster, "Ray cluster")
+        if await self.head_status(user.cluster, authorized=False) == 200:
+            await self.delete(user.cluster)
+            raise Refused(grpc.StatusCode.INVALID_ARGUMENT, OPEN_HEAD)
+
+    async def head_up(
+        self,
+        secret: dict[str, Any],
+        find_head: Callable[[], Awaitable[str | None]],
+        keyed: str,
+        noun: str,
+    ) -> str:
+        """The head of a cluster that starts, once it answers with the token of `keyed`."""
         deadline = time.monotonic() + START_TIMEOUT_S
         while True:
             # Again on every pass: a Secret left by a deleted namesake is collected with it.
@@ -2340,23 +2364,17 @@ class Gateway:
             if status not in (201, 409):
                 raise Refused(
                     grpc.StatusCode.UNAVAILABLE,
-                    f"Could not create your Ray cluster's token: {body.get('message', status)}",
+                    f"Could not create your {noun}'s token: {body.get('message', status)}",
                 )
-            if await self.head_status(user.cluster) == 200:
-                break
+            head = await find_head()
+            if head and await self.head_status(head, keyed=keyed) == 200:
+                return head
             if time.monotonic() > deadline:
                 raise Refused(
                     grpc.StatusCode.UNAVAILABLE,
-                    "Your Ray cluster's head did not start in time: try again later.",
+                    f"Your {noun}'s head did not start in time: try again later.",
                 )
             await asyncio.sleep(START_POLL_S)
-        # A Ray that ignores RAY_AUTH_MODE would serve anyone who reaches it.
-        if await self.head_status(user.cluster, authorized=False) == 200:
-            await self.delete(user.cluster)
-            raise Refused(
-                grpc.StatusCode.INVALID_ARGUMENT,
-                "The Ray in that environment does not enforce the cluster's token.",
-            )
 
     async def admit(
         self,
@@ -2375,10 +2393,7 @@ class Gateway:
         per_worker = int(shape.per_worker)
         replaced = replaced or {}
         async with self.admitting:
-            status, listing = await self.kube(
-                "GET",
-                f"{RAYCLUSTERS}?labelSelector=app.kubernetes.io%2Fmanaged-by%3D{MANAGED_BY}",
-            )
+            status, listing = await self.listed(RAYCLUSTERS, MANAGED_SELECTOR)
             if status != 200:
                 raise Refused(
                     grpc.StatusCode.UNAVAILABLE,
@@ -2454,7 +2469,7 @@ class Gateway:
             if request.method == "POST":
                 await self.cluster_for(user, shape)
             cluster = await self.cluster(user.cluster)
-            if cluster is None or cluster["metadata"].get("deletionTimestamp"):
+            if not live(cluster):
                 if request.method == "DELETE":
                     raise Refused(grpc.StatusCode.NOT_FOUND, "You have no Ray cluster.")
                 return web.json_response({"exists": False})
@@ -2519,27 +2534,28 @@ class Gateway:
                 "workers_most": sum(k["workers_most"] for k in kinds),
                 "kinds": kinds,
             },
-            "nrp": await self.nrp_capacity() if each == NRP_WORKER.gpus else None,
+            "nrp": await self.nrp_capacity() if each == nrp_worker().gpus else None,
         }
 
     async def nrp_capacity(self) -> dict[str, Any]:
         """The workers of a job on NRP that fit now, by region and GPU model."""
-        worker = dataclasses.asdict(NRP_WORKER)
+        worker = nrp_worker()
+        known = dataclasses.asdict(worker)
         try:
             found, most = await asyncio.gather(
-                nrp_nodes(self.http, NRP_PROMETHEUS_URL, NRP_WORKER),
-                most_when_empty(self.http, NRP_PROMETHEUS_URL, NRP_WORKER),
+                nrp_nodes(self.http, NRP_PROMETHEUS_URL, worker),
+                most_when_empty(self.http, NRP_PROMETHEUS_URL, worker),
             )
         except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
             log.warning("asking NRP's Prometheus: %r", e)
-            return {"known": False, "worker": worker}
+            return {"known": False, "worker": known}
         groups: dict[tuple[str, str], int] = collections.defaultdict(int)
         for node in found:
             groups[(node.region, node.model)] += node.workers
         return {
             "known": bool(most),
-            "worker": worker,
-            "workers_free": most_in_one_group(found),
+            "worker": known,
+            "workers_free": max(groups.values(), default=0),
             "workers_most": most,
             "groups": [
                 {"region": region, "model": model, "workers": workers}
@@ -2635,10 +2651,7 @@ class Gateway:
 
     async def job_owners(self) -> dict[str, str]:
         """The cluster of each RayJob that has one, and its owner's own cluster."""
-        status, listing = await self.kube(
-            "GET",
-            f"{RAYJOBS}?labelSelector=app.kubernetes.io%2Fmanaged-by%3D{MANAGED_BY}",
-        )
+        status, listing = await self.listed(RAYJOBS, MANAGED_SELECTOR)
         if status != 200:
             raise RuntimeError(f"listing Ray jobs: HTTP {status}")
         owners = {}
@@ -2650,10 +2663,7 @@ class Gateway:
         return owners
 
     async def reap_idle(self) -> None:
-        status, listing = await self.kube(
-            "GET",
-            f"{RAYCLUSTERS}?labelSelector=app.kubernetes.io%2Fmanaged-by%3D{MANAGED_BY}",
-        )
+        status, listing = await self.listed(RAYCLUSTERS, MANAGED_SELECTOR)
         if status != 200:
             log.warning("listing Ray clusters: HTTP %s", status)
             return
@@ -2684,15 +2694,14 @@ class Gateway:
         """Remove a RayJob no job was submitted to in time, and a job's record once
         kept long enough; free an ended job's GPUs; stop a job whose workers did
         not all start in time."""
-        status, listing = await self.kube(
-            "GET",
-            f"{RAYJOBS}?labelSelector=app.kubernetes.io%2Fmanaged-by%3D{MANAGED_BY}",
-        )
+        status, listing = await self.listed(RAYJOBS, MANAGED_SELECTOR)
         if status != 200:
             log.warning("listing Ray jobs: HTTP %s", status)
             return
         now = time.time()
-        waited_for = {w.name for w in self.waiting.values()}
+        # An upload no submission followed in time waits for nothing: submission() replaces it.
+        fresh = time.monotonic() - START_TIMEOUT_S
+        waited_for = {w.name for w in self.waiting.values() if w.since > fresh}
         for job in listing.get("items", []):
             metadata = job["metadata"]
             name = metadata["name"]
@@ -2707,11 +2716,7 @@ class Gateway:
                 submission = job["spec"].get("jobId")
                 if not submission:
                     if name not in waited_for and now - created >= 2 * START_TIMEOUT_S:
-                        await self.kube(
-                            "DELETE",
-                            f"{RAYJOBS}/{name}",
-                            {"propagationPolicy": "Background"},
-                        )
+                        await self.delete_rayjob(name)
                         log.info("deleted %s: no job was submitted to it", name)
                 elif not state.get("jobStatus"):
                     await self.follow_on_head(job, submission, created, now)
@@ -2719,11 +2724,7 @@ class Gateway:
                     await self.free_workers(job, state.get("rayClusterName"))
                     ended = epoch_ms(state.get("endTime"))
                     if ended is not None and now - ended / 1000 >= JOB_RECORD_S:
-                        await self.kube(
-                            "DELETE",
-                            f"{RAYJOBS}/{name}",
-                            {"propagationPolicy": "Background"},
-                        )
+                        await self.delete_rayjob(name)
                         log.info("deleted the record of %s", name)
                 elif head := state.get("rayClusterName"):
                     cluster = await self.cluster(head)
@@ -2740,22 +2741,16 @@ class Gateway:
         lets KubeRay follow it to its end; remove it if its head never ran it."""
         name = job["metadata"]["name"]
         head = (job.get("status") or {}).get("rayClusterName")
-        cluster = await self.cluster(head) if head else None
-        if cluster is None or cluster["metadata"].get("deletionTimestamp"):
+        if not head or not live(await self.cluster(head)):
             if now - created >= JOB_RECORD_S:
-                await self.kube(
-                    "DELETE", f"{RAYJOBS}/{name}", {"propagationPolicy": "Background"}
-                )
+                await self.delete_rayjob(name)
                 log.info("deleted the record of %s, which has no cluster", name)
             return
-        assert head is not None
         state = await self.head_job_status(head, name, submission)
         if state in ("SUCCEEDED", "FAILED", "STOPPED"):
             await self.free_workers(job, head)
         elif state == "" and now - created >= 2 * START_TIMEOUT_S:
-            await self.kube(
-                "DELETE", f"{RAYJOBS}/{name}", {"propagationPolicy": "Background"}
-            )
+            await self.delete_rayjob(name)
             log.info("deleted %s: its head runs no job %s", name, submission)
 
     async def head_job_status(
@@ -2780,9 +2775,8 @@ class Gateway:
         as KubeRay's DeleteWorkers does: their GPUs go, the head stays."""
         name = job["metadata"]["name"]
         cluster = await self.cluster(head) if head else None
-        if cluster is None or cluster["metadata"].get("deletionTimestamp"):
+        if not head or not live(cluster):
             return
-        assert head is not None
         await self.keep_logs(job, head)
         groups = cluster["spec"].get("workerGroupSpecs") or []
         suspend = [
@@ -2975,7 +2969,7 @@ def dashboard_app(gateway: Gateway) -> web.Application:
     async def nrp_gpus(request: web.Request) -> web.Response:
         """The GPUs free on NRP for Ray workers, by region: public, so asked by no user."""
         try:
-            regions = await free_gpus(gateway.http, NRP_PROMETHEUS_URL, NRP_WORKER)
+            regions = await free_gpus(gateway.http, NRP_PROMETHEUS_URL, nrp_worker())
         except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as error:
             log.warning("asking NRP's Prometheus: %r", error)
             return web.Response(status=503, text="NRP's Prometheus did not answer")
@@ -3023,7 +3017,9 @@ async def serve() -> None:
     async with (
         # Unlimited: a relayed log tail holds its connection for as long as its job runs.
         ClientSession(connector=TCPConnector(limit=0)) as http,
-        ClientSession(connector=TCPConnector(ssl=kube_tls)) as kube,
+        ClientSession(
+            connector=TCPConnector(ssl=kube_tls), timeout=API_TIMEOUT
+        ) as kube,
     ):
         nrp = bucket = None
         if NRP_KUBECONFIG.exists() and nrp_jobs.bucket_name():

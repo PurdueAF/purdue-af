@@ -11,9 +11,7 @@ FROM ${GOLANG_IMAGE} AS build-stage
 ARG SLURM_PLUGIN_REF
 WORKDIR /app
 
-RUN git clone https://github.com/interlink-hq/interlink-slurm-plugin.git /app && \
-    git fetch --tags && \
-    git checkout "${SLURM_PLUGIN_REF}" && \
+RUN git clone --depth 1 --branch "${SLURM_PLUGIN_REF}" https://github.com/interlink-hq/interlink-slurm-plugin.git /app && \
     CGO_ENABLED=0 GOOS=linux go build -o bin/slurm-sidecar cmd/main.go
 
 FROM ${BASE_IMAGE}
@@ -21,17 +19,16 @@ FROM ${BASE_IMAGE}
 # Fix: https://github.com/hadolint/hadolint/wiki/DL4006 (SC3040)
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# cpio/rpm only extract the client RPMs below, which then removes them.
 RUN dnf install -y \
         https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm \
-        sudo findutils cpio rpm munge && \
+        findutils cpio rpm munge && \
     dnf clean all && rm -rf /var/cache/dnf
 
 # /etc/slurm and slurm-active/bin start empty, so an unset SLURM_CLUSTER reaches no controller.
 COPY slurm/ /tmp/slurm-build/
 RUN set -euo pipefail \
- && groupadd -g 1033 slurm || true \
- && adduser -u 2000 -g 1033 slurm || true \
+ && { getent group slurm >/dev/null || groupadd -g 1033 slurm; } \
+ && { id -u slurm >/dev/null 2>&1 || adduser -u 2000 -g 1033 slurm; } \
  && mkdir -p /opt/purdue-af/slurm-configs \
              /opt/purdue-af/slurm-clients \
              /opt/purdue-af/slurm-active/bin \
@@ -39,7 +36,7 @@ RUN set -euo pipefail \
  && shopt -s nullglob \
  && printf 'ClusterName=smoke\nSlurmctldHost=localhost\n' > /tmp/smoke.conf \
  && rpms=(/tmp/slurm-build/slurm-*-1.el8.x86_64.rpm) \
- && (( ${#rpms[@]} > 0 )) || { echo "no slurm/slurm-*-1.el8.x86_64.rpm in build context" >&2; exit 1; } \
+ && { (( ${#rpms[@]} > 0 )) || { echo "no slurm/slurm-*-1.el8.x86_64.rpm in build context" >&2; exit 1; }; } \
  && for rpm in "${rpms[@]}"; do \
       ver="$(basename "${rpm}" | sed -n 's/^slurm-\(.*\)-1\.el8\.x86_64\.rpm$/\1/p')"; \
       [ -n "${ver}" ] || { echo "cannot parse version from ${rpm}" >&2; exit 1; }; \
@@ -65,19 +62,16 @@ RUN set -euo pipefail \
  && for d in /tmp/slurm-build/slurm-configs-*; do \
       [ -d "$d" ] || continue; \
       name="${d##*/slurm-configs-}"; \
-      cp -a "$d" "/opt/purdue-af/slurm-configs/${name}"; \
+      cp -a "$d" "/opt/purdue-af/slurm-configs/${name}" || exit 1; \
     done \
  && rm -rf /etc/slurm/* /tmp/slurm-build /tmp/smoke.conf \
  && chown -R slurm:slurm /var/log/slurm \
- && dnf remove -y cpio rpm rpm-libs rpm-build-libs python3-rpm || true \
- && dnf clean all && rm -rf /var/cache/dnf \
- && test -n "$(find /opt/purdue-af/slurm-configs -mindepth 1 -maxdepth 1 -type d -print -quit)" \
- || { echo "no slurm/slurm-configs-* trees found in build context" >&2; exit 1; }
+ && { test -n "$(find /opt/purdue-af/slurm-configs -mindepth 1 -maxdepth 1 -type d -print -quit)" \
+      || { echo "no slurm/slurm-configs-* trees found in build context" >&2; exit 1; }; }
 
 COPY docker/interlink-slurm-plugin/startup.sh /etc/startup.sh
 
-RUN chmod 555 /etc/startup.sh && \
-    mkdir -p /cvmfs/grid.cern.ch/etc/grid-security
+RUN chmod 555 /etc/startup.sh
 
 WORKDIR /root
 
@@ -89,9 +83,6 @@ RUN test -x /sidecar/slurm-sidecar \
  && test -f /opt/purdue-af/slurm-configs/hammer/slurm.conf \
  && test -f /opt/purdue-af/slurm-clients/client-versions
 
-ENV SLURMCONFIGPATH=/root/SlurmConfig.yaml
-# Must be overridden per Deployment (e.g. hammer).
-ENV SLURM_CLUSTER=
 # Active client binaries (symlinks filled by startup.sh) come first on PATH.
 ENV PATH="/opt/purdue-af/slurm-active/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
@@ -99,4 +90,4 @@ LABEL org.opencontainers.image.title="purdue-af-interlink-slurm-plugin" \
       org.opencontainers.image.description="interLink Slurm sidecar with Purdue multi-cluster client configs" \
       org.opencontainers.image.source="https://github.com/PurdueAF/purdue-af"
 
-ENTRYPOINT ["/bin/sh", "-c", "/etc/startup.sh && SHARED_FS=true /sidecar/slurm-sidecar "]
+ENTRYPOINT ["/bin/sh", "-c", "/etc/startup.sh && exec /sidecar/slurm-sidecar"]

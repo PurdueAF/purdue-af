@@ -1,48 +1,18 @@
 # Triton offloaded to NRP Nautilus through the interlink-nrp node; Envoy stays on AF nodes
 # and reaches Triton's ports through the node's wstunnel (apps/interlink/README.md).
 
-# Short: interLink derives each Triton pod's shadow hostname from its name.
 nameOverride: sonic-nrp
 
 serverLoadThreshold: 20
 
 # Waking schedules a pod on NRP; raise this together with idle_timeout in envoy-config.yaml.
 scaleFromZero:
-  enabled: true
   readyTimeoutSeconds: 900
   holdMinReplicasSeconds: 900
 
 serverLoadMetric: 'sum (rate(nv_inference_queue_duration_us{app=~"supersonic", release=~"sonic-nrp", namespace=~"cms"}[30s])) / sum ((rate(nv_inference_exec_count{app=~"supersonic", release=~"sonic-nrp", namespace=~"cms"}[30s]) * 1000))'
 
 inferenceServer:
-  # The models and image of apps/sonic/supersonic, so a CMSSW job can switch to this release.
-  image: fastml/triton-torchgeo:26.04-py3-geometric
-  command: ["/bin/sh", "-c"]
-  args:
-    - |
-      /opt/tritonserver/bin/tritonserver \
-      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoBTag/Combined/data/models/ \
-      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoEgamma/EgammaPhotonProducers/data/models/ \
-      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoTauTag/TrainingFiles/data/DeepTauIdSONIC/ \
-      --model-repository=/cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_17_0_0_pre2/external/el9_amd64_gcc13/data/RecoMET/METPUSubtraction/data/models/ \
-      --model-control-mode=explicit \
-      --load-model=deepmet \
-      --load-model=deeptau_2018v2p5 \
-      --load-model=particleNetFromMiniAODAK4CHSCentral \
-      --load-model=particleNetFromMiniAODAK4PuppiCentral \
-      --load-model=particleNetFromMiniAODAK4PuppiForward \
-      --load-model=particleNetFromMiniAODAK8 \
-      --load-model=particlenet_AK8_MD-2prong_PT \
-      --load-model=particlenet_AK8_MassRegression_PT \
-      --load-model=particlenet_PT \
-      --load-model=unifiedparticletransformer_AK4_V01 \
-      --allow-gpu-metrics=true \
-      --log-verbose=0 \
-      --exit-timeout-secs=60
-
-  resources:
-    limits: { cpu: 4, memory: 16G, nvidia.com/gpu: 1 }
-    requests: { cpu: 4, memory: 16G, nvidia.com/gpu: 1 }
   nodeSelector:
     kubernetes.io/hostname: interlink-nrp
   tolerations:
@@ -51,7 +21,6 @@ inferenceServer:
   annotations:
     interlink.io/remote-pvc: cvmfs
     interlink.virtual-kubelet.io/wstunnel-timeout: "5m"
-    # The shadow pod in cms rather than a cms-wstunnel namespace.
     interlink.eu/shadow-same-ns: "true"
     # NRP places the pod on any GPU; this Triton's CUDA needs compute capability 7.5 or newer.
     interlink.eu/remote-affinity: >-
@@ -59,13 +28,6 @@ inferenceServer:
       {"matchExpressions": [{"key": "nvidia.com/gpu.compute.major", "operator": "Gt", "values": ["7"]}]},
       {"matchExpressions": [{"key": "nvidia.com/gpu.compute.major", "operator": "In", "values": ["7"]},
       {"key": "nvidia.com/gpu.compute.minor", "operator": "Gt", "values": ["4"]}]}]}}}
-  service:
-    labels:
-      scrape_metrics: "true"
-  modelRepository:
-    enabled: true
-    storageType: cvmfs-pvc
-    mountPath: /cvmfs
   readinessProbe:
     successThreshold: 3
   # A first load from a cold CVMFS cache on NRP; a failed startup probe ends the pod there.
@@ -77,44 +39,18 @@ inferenceServer:
       port: http
 
 envoy:
-  enabled: true
-  nodeSelector: { "cms-af-prod": "true" }
-  tolerations:
-    - key: hub.jupyter.org/dedicated
-      operator: Equal
-      value: cms-af
-      effect: NoSchedule
-  loadBalancerPolicy: "ROUND_ROBIN"
-  service:
-    type: LoadBalancer
-  # No public inference ingress; clients use the private-pool LoadBalancer or the in-cluster Service.
-  ingress:
-    enabled: false
   external_config:
     load_from_configmap: true
     configmap_name: "supersonic-interlink-nrp-envoy-config-custom"
-    configmap_key: "envoy.yaml"
 
 keda:
-  enabled: true
-  # RepositoryIndex raises this to 1; the wake path lives in envoy-config.yaml.
-  minReplicaCount: 0
   maxReplicaCount: 4
   scaleUp:
     stabilizationWindowSeconds: 120
     periodSeconds: 120
-    stepsize: 1
   scaleDown:
     stabilizationWindowSeconds: 120
     periodSeconds: 30
-    stepsize: 1
-
-prometheus:
-  external:
-    enabled: true
-    url: prometheus-server.cms.svc.cluster.local
-    port: 9090
-    scheme: http
 
 grafana:
   enabled: false

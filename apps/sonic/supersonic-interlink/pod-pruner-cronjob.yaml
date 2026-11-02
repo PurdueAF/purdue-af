@@ -1,4 +1,4 @@
-# The virtual kubelet marks exited Slurm-backed pods Failed and nothing else sweeps them.
+# The virtual kubelet marks exited offloaded Triton pods Failed and nothing else sweeps them.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -34,7 +34,7 @@ spec:
                 - |
                   set -eu
                   kubectl get pods \
-                    -l app.kubernetes.io/instance=sonic-hammer,app.kubernetes.io/component=inference-server \
+                    -l 'app.kubernetes.io/instance in (sonic-hammer,sonic-nrp),app.kubernetes.io/component=inference-server' \
                     --field-selector status.phase=Failed \
                     -o name \
                   | xargs -r kubectl delete --wait=false

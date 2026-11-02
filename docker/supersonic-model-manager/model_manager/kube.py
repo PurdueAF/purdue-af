@@ -127,6 +127,21 @@ def pvc_capacity_bytes() -> int:
     return parse_quantity(capacity)
 
 
+def _release_ingresses(release: str) -> list:
+    """The release's Ingresses, as ``(item, host)`` for those that have a host."""
+    payload = _get(
+        f"/apis/networking.k8s.io/v1/namespaces/{settings.triton_namespace}/ingresses",
+        params={"labelSelector": f"app.kubernetes.io/instance={release}"},
+    )
+    found = []
+    for item in (payload or {}).get("items", []):
+        rules = (item.get("spec") or {}).get("rules") or []
+        host = rules[0].get("host") if rules else None
+        if host:
+            found.append((item, host))
+    return found
+
+
 def find_inference_endpoint() -> dict:
     """Where clients send inference requests for this SuperSONIC release.
 
@@ -146,20 +161,10 @@ def find_inference_endpoint() -> dict:
     # SuperSONIC names the Envoy gRPC Ingress "{release}-ingress-grpc".
     # Other release ingresses (Grafana, metrics collector, …) share the
     # instance label and must be ignored.
-    ingresses = _get(
-        f"/apis/networking.k8s.io/v1/namespaces/{namespace}/ingresses",
-        params={"labelSelector": selector},
-    )
-    for item in (ingresses or {}).get("items", []):
-        name = (item.get("metadata") or {}).get("name", "")
-        if "ingress-grpc" not in name:
+    for item, host in _release_ingresses(release):
+        if "ingress-grpc" not in (item.get("metadata") or {}).get("name", ""):
             continue
-        spec = item.get("spec") or {}
-        rules = spec.get("rules") or []
-        host = rules[0].get("host") if rules else None
-        if not host:
-            continue
-        port = 443 if spec.get("tls") else 80
+        port = 443 if (item.get("spec") or {}).get("tls") else 80
         return {"endpoint": f"{host}:{port}", "source": "ingress"}
 
     services = _get(
@@ -191,23 +196,13 @@ def find_grafana_url() -> dict:
     if not release:
         return {"url": "", "source": None}
 
-    namespace = settings.triton_namespace
-    ingresses = _get(
-        f"/apis/networking.k8s.io/v1/namespaces/{namespace}/ingresses",
-        params={"labelSelector": f"app.kubernetes.io/instance={release}"},
-    )
-    for item in (ingresses or {}).get("items", []):
+    for item, host in _release_ingresses(release):
         meta = item.get("metadata") or {}
         name = meta.get("name", "")
         labels = meta.get("labels") or {}
         if "grafana" not in name and labels.get("app.kubernetes.io/name") != "grafana":
             continue
-        spec = item.get("spec") or {}
-        rules = spec.get("rules") or []
-        host = rules[0].get("host") if rules else None
-        if not host:
-            continue
-        scheme = "https" if spec.get("tls") else "http"
+        scheme = "https" if (item.get("spec") or {}).get("tls") else "http"
         return {"url": f"{scheme}://{host}", "source": "ingress"}
 
     return {"url": "", "source": None}

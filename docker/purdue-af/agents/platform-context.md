@@ -214,17 +214,13 @@ so nothing that asks for more GPUs at once than one worker has ever starts.
 From a session that holds a GPU, submissions are refused: train on the
 session's GPU. A job's cluster starts only while its GPUs are free, and is
 removed some minutes after the job ends, with the job's logs; its status stays
-some days. The client's `headers` set its shape: `af-max-workers` (a
-number as a string, default `"1"`: the cluster starts with as many of them as have
-free GPUs, and its pods read the number from `AF_MAX_WORKERS`) or `af-n-workers` (an
-exact number: the cluster starts only while the GPUs of them all are free),
-`af-gpus-per-worker` (`"1"` or `"2"`, two
-being T4s only), `af-min-gpu-memory-gb` (GB; above `"5"` means T4s only),
-`af-cpus-per-worker` and `af-ram-per-worker-gb` (each worker's cores and GB,
-default `"8"` and `"32"`) and `af-env` (an environment's path, default the
-global one); any other `af-` header is refused with the list of these. That
-environment must sit on storage the cluster sees and have the same Python and
-Ray as the submitter. Each job runs with the headers it was submitted with.
+some days. The client's `headers`, each a string, set its shape:
+`af-max-workers` or `af-n-workers`, `af-gpus-per-worker`,
+`af-min-gpu-memory-gb`, `af-cpus-per-worker`, `af-ram-per-worker-gb` and
+`af-env`, as https://analysis-facility.physics.purdue.edu/guide-ray-train/#settings
+says. The environment of `af-env` must sit on storage the cluster sees and have
+the same Python and Ray as the submitter. Each job runs with the headers it was
+submitted with.
 A job's cluster has no `/home`:
 ship code with `runtime_env={"working_dir": "."}`, write results to `/work`, and
 give Ray Train and Ray Tune a `storage_path` on `/work`. Every worker past the

@@ -11,27 +11,17 @@ image:
 modelRepository:
   # RWX: the manager writes while the Triton pods read.
   claimName: supersonic-model-repository
-  create: true
-  size: 1Gi
   accessModes:
     - ReadWriteMany
   storageClassName: geddes-standard-multinode
-  mountPath: /models
-
-triton:
-  discovery: kubernetes
-  labelSelector: ""
-  httpPort: 8000
 
 # The Envoy LoadBalancer clients dial; discovery would report the in-cluster Service.
 inferenceEndpoint: supersonic-af.cms.geddes.rcac.purdue.edu:8001
 
 prometheus:
   url: http://prometheus-server.cms.svc.cluster.local:9090
-  window: 5m
 
 auth:
-  enabled: true
   # Secret created out of band (README.md); the HelmRelease retries until it exists.
   existingSecret: supersonic-model-manager-auth
 
@@ -48,11 +38,3 @@ tolerations:
     operator: Equal
     value: cms-af
     effect: NoSchedule
-
-resources:
-  requests:
-    cpu: 100m
-    memory: 256Mi
-  limits:
-    cpu: 1
-    memory: 1Gi

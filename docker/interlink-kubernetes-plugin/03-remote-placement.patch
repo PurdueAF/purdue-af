@@ -1,5 +1,5 @@
---- a/app/common/config.py
-+++ b/app/common/config.py
+--- a/interlink-kubernetes-plugin/app/common/config.py
++++ b/interlink-kubernetes-plugin/app/common/config.py
 @@ -38,6 +38,7 @@ class Option(Enum):
      OFFLOADING_ENSURE_NAMESPACE = ("offloading", "ensure_namespace")
      OFFLOADING_NODE_SELECTOR = ("offloading", "node_selector")
@@ -8,8 +8,8 @@
  
      WSTUNNEL_CLIENT_IMAGE = ("wstunnel", "client_image")
  
---- a/app/services/kubernetes_plugin_service.py
-+++ b/app/services/kubernetes_plugin_service.py
+--- a/interlink-kubernetes-plugin/app/services/kubernetes_plugin_service.py
++++ b/interlink-kubernetes-plugin/app/services/kubernetes_plugin_service.py
 @@ -28,6 +28,7 @@ _I_RMT_PVC_KEY: Final = "interlink.io/remote-pvc"  # comma-separated list of PVC
  _I_RMT_PVC_RETENTION_POLICY_KEY: Final = "interlink.io/pvc-retention-policy"  # "delete" or "retain"
  _I_PRE_EXEC_KEY: Final = "slurm-job.vk.io/pre-exec"

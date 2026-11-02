@@ -106,7 +106,7 @@ def test_it_mints_the_next_token_and_writes_both_keys_into_the_secret(
     assert opened == [str(tmp_path / "kubeconfig.yaml")]
     (_, account, namespace, request), (_, secret, here, patch) = api.calls
     assert (account, namespace) == ("interlink-plugin", "interlink-cms")
-    assert request.spec.expiration_seconds == 30 * 86400
+    assert request.spec.expiration_seconds == renew.LIFETIME_S
     assert (secret, here) == ("kubeconfig-nrp-interlink", "cms")
     data = {k: base64.b64decode(v).decode() for k, v in patch["data"].items()}
     assert data["token"] == "minted"

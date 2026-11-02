@@ -258,6 +258,21 @@ def _is_junk(relative: Path) -> bool:
     return False
 
 
+def copy_with_limit(stream, target: Path, written: int = 0) -> int:
+    """Stream onto the PVC, never into RAM; ``written`` is the upload's running total."""
+    limit = settings.max_upload_bytes
+    with open(target, "wb") as out:
+        while chunk := stream.read(1024 * 1024):
+            written += len(chunk)
+            if written > limit:
+                raise RepositoryError(
+                    "Upload exceeds the configured size limit "
+                    f"({limit / (1024**3):.1f} GiB)."
+                )
+            out.write(chunk)
+    return written
+
+
 def _extract_zip(archive: Path, dest: Path, budget: int) -> None:
     with zipfile.ZipFile(archive) as zf:
         remaining = budget
@@ -437,15 +452,7 @@ class DirectoryUpload:
             return
         target = self.root / rel
         target.parent.mkdir(parents=True, exist_ok=True)
-        with open(target, "wb") as out:
-            while True:
-                chunk = stream.read(1024 * 1024)
-                if not chunk:
-                    break
-                self.written += len(chunk)
-                if self.written > settings.max_upload_bytes:
-                    raise RepositoryError("Upload exceeds the configured size limit.")
-                out.write(chunk)
+        self.written = copy_with_limit(stream, target, self.written)
 
     def finish(self) -> dict:
         try:

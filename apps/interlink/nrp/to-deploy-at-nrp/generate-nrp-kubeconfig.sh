@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 CTX=nautilus # your kubelogin context for NRP
 NS=interlink-cms
 SA=interlink-plugin

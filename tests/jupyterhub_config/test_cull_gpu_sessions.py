@@ -306,6 +306,25 @@ async def test_main_continues_after_cull_failure(monkeypatch):
     assert sleeps == [7]
 
 
+async def test_new_code_ends_the_service_for_the_hub_to_start_it_again(
+    tmp_path, monkeypatch
+):
+    mod = culler()
+    source = tmp_path / "cull-gpu-sessions.py"
+    source.write_text("running")
+
+    async def cull_once(namespace, timeout):
+        pass
+
+    async def new_code_lands(seconds):
+        source.write_text("new")
+
+    monkeypatch.setattr(mod, "SOURCE", source)
+    monkeypatch.setattr(mod, "cull_once", cull_once)
+    monkeypatch.setattr(mod.asyncio, "sleep", new_code_lands)
+    await mod.main("cms", ONE_DAY, every=7)
+
+
 # ── namespace + failure visibility ────────────────────────────────────────────
 
 

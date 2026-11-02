@@ -11,7 +11,7 @@ rules:
   - apiGroups: [""]
     resources: [secrets]
     resourceNames: [kubeconfig-nrp-interlink]
-    verbs: [get, patch]
+    verbs: [patch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

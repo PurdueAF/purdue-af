@@ -58,8 +58,6 @@ spec:
           env:
             - name: PYTHONPATH
               value: /deps
-            - name: JUPYTERHUB_API_URL
-              value: "http://hub:8081/hub/api"
             - name: NAMESPACE
               valueFrom:
                 fieldRef:

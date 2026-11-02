@@ -16,10 +16,22 @@ def load(path):
     return yaml.safe_load(path.read_text())
 
 
+def merged(base, override):
+    """Flux's merge of valuesFrom: maps deep; lists and nulls replace."""
+    out = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = merged(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
 @pytest.fixture(scope="session")
 def interlink_clusters():
     """{cluster: {"values": ..., "release": ..., "dir": ...}} for every
     apps/interlink/<cluster>/ whose HelmRelease is the interlink chart."""
+    shared = load(INTERLINK / "values.yaml")
     clusters = {}
     for d in sorted(INTERLINK.iterdir()):
         release = d / "helmrelease.yaml"
@@ -30,29 +42,12 @@ def interlink_clusters():
         clusters[d.name] = {
             "dir": d,
             "release": load(release),
-            "values": load(d / "values.yaml"),
+            "values": merged(shared, load(d / "values.yaml")),
         }
     assert clusters, "no interlink clusters found"
     return clusters
 
 
 @pytest.fixture(scope="session")
-def active_clusters(interlink_clusters, experimental):
-    """Only the clusters the experimental channel actually deploys — the rest
-    are commented out in the kustomization, waiting on their munge PVC."""
-    resources = set(experimental["resources"])
-    return {
-        cluster: app
-        for cluster, app in interlink_clusters.items()
-        if f"../../apps/interlink/{cluster}/helmrelease.yaml" in resources
-    }
-
-
-@pytest.fixture(scope="session")
 def experimental():
     return load(EXPERIMENTAL)
-
-
-@pytest.fixture(scope="session")
-def experimental_text():
-    return EXPERIMENTAL.read_text()

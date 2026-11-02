@@ -7,17 +7,18 @@ class renamed in the gateway alone would count every worker as guaranteed.
 import re
 
 import pytest
-import yaml
 from common import REPO
 from dashboard_helpers import panel
 
 DASK_RELEASE = REPO / "apps/dask-gateway/helmrelease.yaml"
-RAY_CONFIG = REPO / "apps/ray-train/config.yaml"
+GPU_QUERIES = REPO / "apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py"
 
 
 def _classes():
     (dask,) = set(re.findall(r'PREEMPTIBLE = "([^"]+)"', DASK_RELEASE.read_text()))
-    ray = yaml.safe_load(RAY_CONFIG.read_text())["preemptiblePriorityClass"]
+    (ray,) = set(
+        re.findall(r'PREEMPTIBLE_PRIORITY_CLASS = "([^"]+)"', GPU_QUERIES.read_text())
+    )
     return {"Dask Gateway": dask, "Ray on Geddes": ray}
 
 

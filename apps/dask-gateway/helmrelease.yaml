@@ -80,6 +80,28 @@ spec:
                   name: af-accounts
                   mountPath: /etc/af-accounts
                   readOnly: true
+              # ldap3, in the chart's own server image, whose Python imports it from PYTHONPATH (values.yaml).
+              - op: add
+                path: /spec/template/spec/volumes/-
+                value:
+                  name: deps
+                  emptyDir: {}
+              - op: add
+                path: /spec/template/spec/containers/0/volumeMounts/-
+                value:
+                  name: deps
+                  mountPath: /deps
+              - op: add
+                path: /spec/template/spec/initContainers
+                value:
+                  - name: pip-install
+                    command: ["pip", "install", "--no-cache-dir", "--target", "/deps", "ldap3==2.9.1"]
+                    volumeMounts:
+                      - name: deps
+                        mountPath: /deps
+              - op: copy
+                from: /spec/template/spec/containers/0/image
+                path: /spec/template/spec/initContainers/0/image
           - target:
               kind: Service
               name: "api-.*"
@@ -87,7 +109,7 @@ spec:
               - op: add
                 path: /spec/type
                 value: LoadBalancer
-          # The chart has no controller extraConfig or probes: the launch command makes workers past a cluster's floor preemptible, starts them only while the namespace quotas keep a reserve free, and serves the /healthz both probes read.
+          # The chart has no controller extraConfig or probes.
           - target:
               kind: Deployment
               name: "controller-.*"

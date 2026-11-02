@@ -30,6 +30,11 @@ def mount_configmap(volume, version, files):
     (volume / "..data_tmp").replace(volume / "..data")
 
 
+def sample(value, **labels):
+    """A sample of a Prometheus answer."""
+    return {"metric": labels, "value": [0, str(value)]}
+
+
 class ConfigSink(dict):
     """Accepts both attribute traversal (c.ServerApp.ip = 1) and dict ops
     (c.KubeSpawner.environment.setdefault(...)), like a traitlets config."""

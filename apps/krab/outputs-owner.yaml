@@ -1,5 +1,4 @@
-# A new CephFS volume's root is root's, and CephFS ignores fsGroup: hand it to the
-# cmssw-docker image's user.
+# CephFS ignores fsGroup, so this hands the new volume's root to the cmssw-docker image's user.
 apiVersion: batch/v1
 kind: Job
 metadata:

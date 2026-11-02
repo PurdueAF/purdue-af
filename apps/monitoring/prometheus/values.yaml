@@ -780,9 +780,10 @@ serverFiles:
             annotations:
               summary: The NRP token has not been renewed for {{ $value | humanizeDuration }}
               description: >
-                The daily interlink-nrp-token-renewal CronJob mints the token of
-                30 days with which the interlink-nrp node and the ray-train
-                gateway reach NRP. Once it expires, nothing runs on NRP. Check:
+                The daily interlink-nrp-token-renewal CronJob mints the token,
+                valid for LIFETIME_S in apps/interlink/nrp/token-renewal/renew.py,
+                with which the interlink-nrp node and the ray-train gateway
+                reach NRP. Once it expires, nothing runs on NRP. Check:
                 kubectl -n cms get jobs | grep interlink-nrp-token-renewal, and
                 the logs of the latest; to renew by hand, see apps/interlink/README.md.
 

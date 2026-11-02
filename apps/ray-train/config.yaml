@@ -17,7 +17,7 @@ goneSeconds: 300
 
 # The GPUs a worker may hold, of one kind each, those a cluster takes first at the top: the resource, its memory,
 # the most of them all clusters hold together while Prometheus does not say how many are free, and the most one
-# worker may hold: a process uses one MIG slice only, and no node has more than two T4s.
+# worker may hold: a process uses one MIG slice only, and a worker no more T4s than one node has (docs/docs/hardware.md).
 # A call may ask for as many workers as the budgets of the GPUs with the memory it asks for hold.
 gpus:
   - resource: nvidia.com/mig-1g.5gb
@@ -33,8 +33,6 @@ gpus:
 workerCpusMax: 16
 workerMemoryGbMin: 4
 workerMemoryGbMax: 64
-# The PriorityClass of a cluster's workers past its first: below the default, above Dask Gateway's preemptible workers.
-preemptiblePriorityClass: medium-priority-preemptible
 # How long an admitted cluster's GPUs count as taken, for Prometheus to see its pods.
 grantSeconds: 120
 prometheusUrl: http://prometheus-server:9090
