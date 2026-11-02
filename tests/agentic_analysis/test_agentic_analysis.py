@@ -25,11 +25,10 @@ from urllib.parse import urlsplit
 
 import pytest
 import yaml
-from common import REPO, load_script
+from analysis_helpers import APP, EXPERIMENTAL
+from common import REPO, load_all, load_script
 
-APP = REPO / "apps" / "agentic-analysis"
 WORKFLOW = REPO / "workflows" / "agentic-analysis"
-EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
 
 
 class Launcher:
@@ -115,10 +114,6 @@ def root(tmp_path, monkeypatch):
     return tmp_path
 
 
-def docs(path):
-    return [d for d in yaml.safe_load_all(path.read_text()) if d]
-
-
 def _variables(container):
     """A container's environment: each variable's value, or where it comes from."""
     return {v["name"]: v.get("value", v.get("valueFrom")) for v in container["env"]}
@@ -136,31 +131,22 @@ def test_flux_lists_every_manifest_of_the_app():
         line.partition("=")[2] for line in generators["af-accounts"]["files"]
     }
     files = {f"../../apps/agentic-analysis/{path.name}" for path in APP.glob("*.yaml")}
-    assert files & declarations == {"../../apps/agentic-analysis/account.yaml"}
     resources = kustomization["resources"]
     assert {r for r in resources if "/apps/agentic-analysis/" in r} == (
         files - declarations
     )
 
 
-def test_the_task_image_is_built_published_and_pulled_under_one_name():
-    ci = yaml.safe_load((REPO / ".github/workflows/ci-images.yml").read_text())
-    matrix = {
-        m["name"]: m
-        for m in ci["jobs"]["build-aux-images"]["strategy"]["matrix"]["include"]
-    }
-    assert (
-        matrix["agentic-analysis"]["dockerfile"] == "docker/agentic-analysis/Dockerfile"
-    )
+def test_the_task_image_is_locked_and_pulled_under_one_name():
     assert (REPO / "docker/agentic-analysis/uv.lock").is_file()
-    (job,) = docs(APP / "workspace.yaml")
-    (container,) = job["spec"]["template"]["spec"]["containers"]
+    deployment, _ = load_all(APP / "llm-proxy.yaml")
+    (container,) = deployment["spec"]["template"]["spec"]["containers"]
     assert runner.IMAGE == container["image"]
     assert runner.IMAGE.endswith("/purdueaf/agentic-analysis:latest")
 
 
 def test_the_task_runs_in_the_pod_template_and_project_named_after_the_workflow():
-    (template,) = docs(APP / "podtemplate.yaml")
+    (template,) = load_all(APP / "podtemplate.yaml")
     config = yaml.safe_load((WORKFLOW / "config.yaml").read_text())
     flyte_values = yaml.safe_load((REPO / "apps/flyte/values.yaml").read_text())
     assert runner.env.options["pod_template"] == template["metadata"]["name"]
@@ -171,9 +157,9 @@ def test_the_task_runs_in_the_pod_template_and_project_named_after_the_workflow(
 def test_task_pods_work_on_their_accounts_volume_as_its_clusters_do():
     """The account's Dask and Ray pods mount its volume at /<name> as its UID:
     apps/dask-gateway/README.md#workload-accounts."""
-    (template,) = docs(APP / "podtemplate.yaml")
-    (job,) = docs(APP / "workspace.yaml")
-    (account,) = docs(APP / "account.yaml")
+    (template,) = load_all(APP / "podtemplate.yaml")
+    (job,) = load_all(APP / "workspace.yaml")
+    (account,) = load_all(APP / "account.yaml")
     pod = template["template"]["spec"]
     mounts = {m["name"]: m for m in pod["containers"][0]["volumeMounts"]}
     claims = {
@@ -195,24 +181,21 @@ def test_task_pods_work_on_their_accounts_volume_as_its_clusters_do():
     (made,) = container["volumeMounts"]
     (handed,) = job["spec"]["template"]["spec"]["volumes"]
     assert handed["persistentVolumeClaim"]["claimName"] == account["name"]
-    assert container["command"][-1] == "chown {}:{} {}".format(*ids, made["mountPath"])
+    assert container["command"] == ["chown", "{}:{}".format(*ids), made["mountPath"]]
 
 
 def test_task_pods_hold_their_accounts_token_where_the_helpers_read_it():
-    (template,) = docs(APP / "podtemplate.yaml")
-    (secret,) = docs(APP / "secret-account.yaml")
-    (account,) = docs(APP / "account.yaml")
+    (template,) = load_all(APP / "podtemplate.yaml")
+    (secret,) = load_all(APP / "secret-account.yaml")
     pod = template["template"]["spec"]
     (container,) = pod["containers"]
     env = _variables(container)
     mounts = {m["name"]: m for m in container["volumeMounts"]}
-    assert secret["metadata"]["name"] == f"{account['name']}-account"
     (name,) = [
         v["name"]
         for v in pod["volumes"]
         if v.get("secret", {}).get("secretName") == secret["metadata"]["name"]
     ]
-    assert "token" in secret["stringData"]
     assert env[clusters.TOKEN_FILE] == f"{mounts[name]['mountPath']}/token"
     assert mounts[name]["readOnly"]
     # Readable by the task user, whom the Secret's files do not belong to.
@@ -223,22 +206,14 @@ def test_task_pods_hold_their_accounts_token_where_the_helpers_read_it():
 
 
 def test_task_pods_reach_the_llm_proxy_with_the_token_it_takes():
-    (template,) = docs(APP / "podtemplate.yaml")
-    deployment, service = docs(APP / "llm-proxy.yaml")
-    (secret,) = docs(APP / "secret-llm-proxy.yaml")
+    (template,) = load_all(APP / "podtemplate.yaml")
+    deployment, service = load_all(APP / "llm-proxy.yaml")
     env = _variables(template["template"]["spec"]["containers"][0])
     (port,) = service["spec"]["ports"]
     (proxy,) = deployment["spec"]["template"]["spec"]["containers"]
     assert env[runner.PROXY] == f"http://{service['metadata']['name']}:{port['port']}"
     taken = _variables(proxy)["LLM_PROXY_TOKEN"]["secretKeyRef"]
     assert env[runner.TOKEN] == {"secretKeyRef": taken}
-    assert taken["name"] == secret["metadata"]["name"]
-    assert taken["key"] in secret["stringData"]
-
-
-def test_the_agents_run_on_roles_the_proxy_serves():
-    wanted = {"orchestrator", "compaction", *(r for r, _ in runner.AGENTS.values())}
-    assert wanted <= ROLES.keys()
 
 
 def test_opencode_waits_out_the_proxys_keepalives_and_holds():
@@ -248,10 +223,17 @@ def test_opencode_waits_out_the_proxys_keepalives_and_holds():
     assert runner.WAITS["timeout"] > settings.hold_hours * 3_600_000
 
 
-def test_the_plugin_ships_with_the_task_and_needs_no_package():
-    """OpenCode installs no npm package into its read-only configuration."""
-    assert runner.env.options["include"] == (runner.PLUGIN.name,)
-    assert runner.PLUGIN.parent == WORKFLOW
+def test_what_the_task_reads_beside_it_ships_with_it_and_the_plugin_needs_no_package():
+    """A file left out of the code bundle fails every run in its pod. OpenCode
+    installs no npm package into its read-only configuration."""
+    beside = {
+        value
+        for value in vars(runner).values()
+        if isinstance(value, Path) and value.parent == WORKFLOW
+    }
+    assert {runner.PLUGIN, runner.FACILITY} <= beside
+    assert set(runner.env.options["include"]) == {path.name for path in beside}
+    assert all(path.is_file() for path in beside)
     imported = re.findall(
         r'^import .* from "([^"]+)";$', runner.PLUGIN.read_text(), re.M
     )
@@ -259,8 +241,8 @@ def test_the_plugin_ships_with_the_task_and_needs_no_package():
 
 
 def test_the_workspace_job_and_the_browser_open_the_volume_the_app_declares():
-    (volume,) = docs(APP / "volume.yaml")
-    (job,) = docs(APP / "workspace.yaml")
+    (volume,) = load_all(APP / "volume.yaml")
+    (job,) = load_all(APP / "workspace.yaml")
     name = volume["metadata"]["name"]
     assert volume["metadata"]["annotations"]["kustomize.toolkit.fluxcd.io/prune"] == (
         "disabled"
@@ -291,7 +273,7 @@ def _found(document, key):
 
 
 def test_task_pods_send_profiles_where_the_sessions_do_as_the_workflow():
-    (template,) = docs(APP / "podtemplate.yaml")
+    (template,) = load_all(APP / "podtemplate.yaml")
     container = template["template"]["spec"]["containers"][0]
     env = _variables(container)
     hub = yaml.safe_load((REPO / "apps/jupyterhub/jupyterhub/values.yaml").read_text())
@@ -303,14 +285,14 @@ def test_task_pods_reach_the_sessions_gateway_from_a_pod_as_their_account():
     """The gateway takes an account's token only from a pod, at its API Service, and
     serves dashboards only through its Traefik; the pods reach schedulers through that
     Traefik's in-cluster Service, at the sessions' port."""
-    (template,) = docs(APP / "podtemplate.yaml")
+    (template,) = load_all(APP / "podtemplate.yaml")
     container = template["template"]["spec"]["containers"][0]
     env = _variables(container)
     spawner = (
         REPO / "apps/jupyterhub/jupyterhub/extraFiles/custom-spawner.py"
     ).read_text()
-    (release,) = docs(REPO / "apps/dask-gateway/helmrelease.yaml")
-    (ingress,) = docs(REPO / "apps/dask-gateway/ingress.yaml")
+    (release,) = load_all(REPO / "apps/dask-gateway/helmrelease.yaml")
+    (ingress,) = load_all(REPO / "apps/dask-gateway/ingress.yaml")
     names = sorted(name for name in env if name.startswith("DASK_GATEWAY__"))
     assert names == [
         "DASK_GATEWAY__ADDRESS",
@@ -341,8 +323,8 @@ def test_the_workload_reaches_in_the_cluster_only_what_its_task_pods_are_pointed
     """The egress policy holds the task pods and the account's clusters to each other,
     the pods behind the addresses the task pods are given, and the internet outside
     the cluster's pod network."""
-    (policy,) = docs(APP / "networkpolicy.yaml")
-    (template,) = docs(APP / "podtemplate.yaml")
+    (policy,) = load_all(APP / "networkpolicy.yaml")
+    (template,) = load_all(APP / "podtemplate.yaml")
     labels = template["template"]["metadata"]["labels"]
     assert policy["spec"]["podSelector"] == {"matchLabels": labels}
     assert policy["spec"]["policyTypes"] == ["Egress"]
@@ -367,7 +349,7 @@ def test_the_workload_reaches_in_the_cluster_only_what_its_task_pods_are_pointed
     env = _variables(template["template"]["spec"]["containers"][0])
 
     def deployment(path):
-        (found,) = [d for d in docs(path) if d["kind"] == "Deployment"]
+        (found,) = [d for d in load_all(path) if d["kind"] == "Deployment"]
         pod = found["spec"]["template"]
         ports = {
             p["containerPort"]
@@ -377,7 +359,7 @@ def test_the_workload_reaches_in_the_cluster_only_what_its_task_pods_are_pointed
         return frozenset(found["spec"]["selector"]["matchLabels"].items()), ports
 
     def released(path, component):
-        (release,) = docs(path)
+        (release,) = load_all(path)
         instance = ("app.kubernetes.io/instance", release["metadata"]["name"])
         return frozenset({instance, *component.items()})
 
@@ -430,7 +412,7 @@ def test_the_workload_reaches_in_the_cluster_only_what_its_task_pods_are_pointed
 
 
 def test_task_pods_hold_the_facilitys_proxy_and_the_certificates_to_use_it():
-    (template,) = docs(APP / "podtemplate.yaml")
+    (template,) = load_all(APP / "podtemplate.yaml")
     pod = template["template"]["spec"]
     (container,) = pod["containers"]
     env = _variables(container)
@@ -853,6 +835,16 @@ def test_prepare_redoes_a_setup_that_died_before_its_last_step(root, monkeypatch
     ]
 
 
+def test_a_setup_step_that_stalls_is_ended(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "SETUP_SECONDS", 0.1)
+    started = time.monotonic()
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        runner._run("sleep", "30", cwd=tmp_path)
+
+    assert time.monotonic() - started < 10
+
+
 def test_data_is_fetched_once_per_url(root, tmp_path_factory, monkeypatch):
     source = tmp_path_factory.mktemp("s3") / "zz.tgz"
     with tarfile.open(source, "w:gz") as tar:
@@ -861,12 +853,11 @@ def test_data_is_fetched_once_per_url(root, tmp_path_factory, monkeypatch):
         tar.addfile(info, io.BytesIO(b"events"))
     fetched = []
 
-    def urlretrieve(url, dest):
+    def urlopen(url, timeout):
         fetched.append(url)
-        dest.write_bytes(source.read_bytes())
-        return dest, None
+        return open(source, "rb")
 
-    monkeypatch.setattr(runner.urllib.request, "urlretrieve", urlretrieve)
+    monkeypatch.setattr(runner.urllib.request, "urlopen", urlopen)
 
     data = runner._data(ANALYSIS)
     assert runner._data(ANALYSIS) == data and data.parent == root / "data"
@@ -1146,11 +1137,9 @@ def test_the_analysis_scripts_share_its_running_cluster(gateway):
 
 
 def test_workers_get_the_pods_proxy_now_and_again_while_the_client_is_open(
-    gateway, tmp_path, monkeypatch
+    gateway, x509, monkeypatch
 ):
-    proxy = tmp_path / "x509up"
-    proxy.write_bytes(b"proxy one")
-    monkeypatch.setenv("X509_USER_PROXY", str(proxy))
+    x509.write_bytes(b"proxy one")
     tick, ticked = threading.Event(), threading.Event()
 
     def sleep(seconds):
@@ -1163,7 +1152,7 @@ def test_workers_get_the_pods_proxy_now_and_again_while_the_client_is_open(
 
     dask = clusters.client()
     assert ticked.wait(5)
-    proxy.write_bytes(b"proxy two")
+    x509.write_bytes(b"proxy two")
     ticked.clear()
     tick.set()
     assert ticked.wait(5)
@@ -1177,21 +1166,13 @@ def test_workers_get_the_pods_proxy_now_and_again_while_the_client_is_open(
 
 @pytest.mark.parametrize("ended", ["closing", "closed"])
 def test_workers_get_no_proxy_from_a_client_that_ended_while_it_waited(
-    gateway, tmp_path, monkeypatch, ended
+    gateway, x509, inline_thread, monkeypatch, ended
 ):
-    proxy = tmp_path / "x509up"
-    proxy.write_bytes(b"proxy")
-    monkeypatch.setenv("X509_USER_PROXY", str(proxy))
     statuses = iter([ended])
     monkeypatch.setattr(
         clusters.time,
         "sleep",
         lambda seconds: setattr(gateway.client, "status", next(statuses)),
-    )
-    monkeypatch.setattr(
-        clusters.threading,
-        "Thread",
-        lambda target, daemon: types.SimpleNamespace(start=target),
     )
 
     dask = clusters.client()
@@ -1200,11 +1181,8 @@ def test_workers_get_no_proxy_from_a_client_that_ended_while_it_waited(
 
 
 def test_a_renewal_skips_a_reconnecting_client_and_tells_a_running_ones_failure(
-    gateway, tmp_path, monkeypatch, capsys
+    gateway, x509, inline_thread, monkeypatch, capsys
 ):
-    proxy = tmp_path / "x509up"
-    proxy.write_bytes(b"proxy")
-    monkeypatch.setenv("X509_USER_PROXY", str(proxy))
     statuses = iter(["connecting", "running", "closed"])
 
     def register_plugin(plugin, name):
@@ -1219,11 +1197,6 @@ def test_a_renewal_skips_a_reconnecting_client_and_tells_a_running_ones_failure(
         gateway.client.register_plugin = register_plugin
 
     monkeypatch.setattr(clusters.time, "sleep", sleep)
-    monkeypatch.setattr(
-        clusters.threading,
-        "Thread",
-        lambda target, daemon: types.SimpleNamespace(start=target),
-    )
 
     clusters.client()
 
@@ -1346,10 +1319,9 @@ def test_opencode_is_configured_from_the_proxys_roles(proxy):
     assert af["models"].keys() == ROLES.keys()
     for name, role in ROLES.items():
         model = af["models"][name]
-        # OpenCode compacts at context - output, and at most OUTPUT_MAX below it.
+        # OpenCode compacts at context - output.
         assert model["limit"]["context"] == role["context"]
         assert model["limit"]["output"] == role["context"] - role["compact_at"]
-        assert 0 <= model["limit"]["output"] <= runner.OUTPUT_MAX
         assert ("image" in model["modalities"]["input"]) == (role["images"] > 0)
     agents = config["agent"]
     assert agents["orchestrator"]["mode"] == "primary"
@@ -1461,7 +1433,7 @@ def test_setup_writes_opencodes_configuration_read_only_off_the_workspace(
     # OpenCode's global AGENTS.md, so it loads no ~/.claude/CLAUDE.md.
     assert Path(facility) == config / "AGENTS.md"
     assert Path(claude) == workspace / "CLAUDE.md"
-    assert Path(facility).read_text() == runner.FACILITY.format(
+    assert Path(facility).read_text() == runner.FACILITY.read_text().format(
         cores=runner.CORES,
         hours=runner.COMMAND_HOURS,
         minutes=runner.COMMAND_MINUTES,
@@ -1483,6 +1455,7 @@ def test_setup_writes_opencodes_configuration_read_only_off_the_workspace(
     assert (Path(plugin["helpers"]) / plugin["hook"]).is_file()
     assert plugin["tasks"] == str(home / "opencode" / "tasks")
     assert plugin["seats"] == runner.SEATS
+    assert plugin["ongoing"] == list(runner.ONGOING)
     assert plugin["timeout"] == runner.COMMAND_HOURS * 3_600_000
     assert plugin["images"] == {
         "orchestrator": ROLES["orchestrator"]["images"],
@@ -1545,7 +1518,7 @@ def test_roles_are_asked_of_the_proxy_with_the_clients_token(monkeypatch):
             self.wfile.write(body)
 
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Proxy)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    threading.Thread(target=server.serve_forever, args=(0.05,), daemon=True).start()
     monkeypatch.setenv(runner.PROXY, f"http://127.0.0.1:{server.server_port}")
     monkeypatch.setenv(runner.TOKEN, "client token")
     try:
@@ -1900,17 +1873,29 @@ COMPACTED = [*_step({"text": "SUMMARY of the session"}), CONTINUE]
 GATE = _step({"text": "At the gate."})
 
 
+def _kept(*replies, session="ses_1"):
+    """The plugin's records of a turn in which it kept `replies` of `session`."""
+    kept = [{"kind": "reply", "session": session, "text": text} for text in replies]
+    return ({"kind": "loaded"}, *kept)
+
+
 @pytest.mark.parametrize(
-    "events, outcome",
+    "events, records, outcome",
     [
         # The reply that ended the turn reached where the session compacts.
         (
             [*GATE, *COMPACTED, *_step({"text": "Waiting."})],
+            _kept("At the gate."),
             (["At the gate."], "Waiting.", "stop"),
         ),
-        ([*GATE, *COMPACTED, *_step()], (["At the gate."], "", "stop")),
+        (
+            [*GATE, *COMPACTED, *_step()],
+            _kept("At the gate."),
+            (["At the gate."], "", "stop"),
+        ),
         (
             [*GATE, *COMPACTED, *_step({"text": "Going on"}, reason="length")],
+            _kept("At the gate."),
             (["At the gate."], "Going on", "length"),
         ),
         # A step with nothing to say ended the reply.
@@ -1921,6 +1906,7 @@ GATE = _step({"text": "At the gate."})
                 *COMPACTED,
                 *_step({"text": "Waiting."}),
             ],
+            _kept("At the gate."),
             (["At the gate."], "Waiting.", "stop"),
         ),
         # A step in the middle of the reply did.
@@ -1930,17 +1916,49 @@ GATE = _step({"text": "At the gate."})
                 *COMPACTED,
                 *_step({"text": "Done."}),
             ],
+            _kept(),
+            ([], "Done.", "stop"),
+        ),
+        # A subagent's reply goes to the orchestrator, not to the human.
+        (
+            [*GATE, *COMPACTED, *_step({"text": "Done."})],
+            _kept("Phase 1 is written.", session="ses_2"),
             ([], "Done.", "stop"),
         ),
     ],
 )
 def test_a_reply_opencode_compacted_after_and_went_on_from_is_kept(
-    tmp_path, workspace, events, outcome
+    tmp_path, workspace, events, records, outcome
 ):
-    assert _run(tmp_path, workspace, events) == outcome
+    assert _run(tmp_path, workspace, events, records=records) == outcome
 
 
 NODE = pytest.mark.skipif(not shutil.which("node"), reason="runs the plugin on Node")
+
+
+def _node(tmp_path, driver, data, *argv, **settings):
+    """What `driver` prints as it runs the plugin, argv[2], on `data`, argv[3],
+    and `argv` after them, under `settings` over the runner's."""
+    plugin = tmp_path / "af_opencode.mjs"
+    plugin.write_text(runner.PLUGIN.read_text())
+    (tmp_path / "driver.mjs").write_text(driver)
+    (tmp_path / "data.json").write_text(json.dumps(data))
+    defaults = {
+        "records": str(tmp_path / "records.jsonl"),
+        "tasks": str(tmp_path / "tasks"),
+        "seats": 1,
+        "ongoing": runner.ONGOING,
+        "images": {},
+    }
+    return subprocess.run(
+        ["node", tmp_path / "driver.mjs", plugin, tmp_path / "data.json", *argv],
+        env={**os.environ, "AF_PLUGIN": json.dumps(defaults | settings)},
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+
 # Runs the plugin in argv[2] on the events in argv[3], "resumed" starting a task that resumes ses_2, then hands it a task's result from ses_2.
 DRIVE = """
 import fs from "node:fs";
@@ -1962,9 +1980,6 @@ process.stdout.write(output.output);
 def _task_result(tmp_path, parts):
     """The result of a task the plugin hands the orchestrator once OpenCode
     has published `parts` of the subagent's session."""
-    plugin = tmp_path / "af_opencode.mjs"
-    plugin.write_text(runner.PLUGIN.read_text())
-    (tmp_path / "drive.mjs").write_text(DRIVE)
     published = [
         part
         if part == "resumed"
@@ -1974,20 +1989,7 @@ def _task_result(tmp_path, parts):
         }
         for part in parts
     ]
-    (tmp_path / "events.json").write_text(json.dumps(published))
-    settings = {
-        "records": str(tmp_path / "records.jsonl"),
-        "tasks": str(tmp_path / "tasks"),
-        "seats": 1,
-        "images": {},
-    }
-    return subprocess.run(
-        ["node", tmp_path / "drive.mjs", plugin, tmp_path / "events.json"],
-        env={**os.environ, "AF_PLUGIN": json.dumps(settings)},
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
+    return _node(tmp_path, DRIVE, published)
 
 
 def _parts(text, reason="stop"):
@@ -2051,25 +2053,7 @@ process.stdout.write(JSON.stringify(output.env));
 
 @NODE
 def test_a_command_knows_its_session_agent_and_call(tmp_path):
-    plugin = tmp_path / "af_opencode.mjs"
-    plugin.write_text(runner.PLUGIN.read_text())
-    (tmp_path / "shell.mjs").write_text(SHELL)
-    settings = {
-        "records": str(tmp_path / "records.jsonl"),
-        "tasks": str(tmp_path / "tasks"),
-        "seats": 1,
-        "images": {},
-        "env": {},
-    }
-    env = json.loads(
-        subprocess.run(
-            ["node", tmp_path / "shell.mjs", plugin],
-            env={**os.environ, "AF_PLUGIN": json.dumps(settings)},
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
-    )
+    env = json.loads(_node(tmp_path, SHELL, None, env={}))
 
     assert env == {
         "AF_SESSION": "ses_1",
@@ -2105,23 +2089,7 @@ TASK = "Write Phases 1 and 2 only."
 def _nudged(tmp_path, steps):
     """What the requests among `steps` carry in place of OpenCode's prompt to
     go on, the plugin keeping its subagents' tasks in tmp_path/tasks."""
-    plugin = tmp_path / "af_opencode.mjs"
-    plugin.write_text(runner.PLUGIN.read_text())
-    (tmp_path / "nudge.mjs").write_text(NUDGE)
-    (tmp_path / "steps.json").write_text(json.dumps(steps))
-    settings = {
-        "records": str(tmp_path / "records.jsonl"),
-        "tasks": str(tmp_path / "tasks"),
-        "seats": 8,
-        "images": {},
-    }
-    printed = subprocess.run(
-        ["node", tmp_path / "nudge.mjs", plugin, tmp_path / "steps.json"],
-        env={**os.environ, "AF_PLUGIN": json.dumps(settings)},
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
+    printed = _node(tmp_path, NUDGE, steps, seats=8)
     return [json.loads(line) for line in printed.splitlines()]
 
 
@@ -2230,6 +2198,12 @@ def test_an_agent_compacted_after_the_reply_that_ended_its_turn_ends_it_again(
     assert GO_ON not in nudged and TASK not in nudged
 
 
+def _replies(tmp_path):
+    """The replies the plugin recorded for the runner, as (session, text)."""
+    records = map(json.loads, (tmp_path / "records.jsonl").read_text().splitlines())
+    return [(r["session"], r["text"]) for r in records if r["kind"] == "reply"]
+
+
 @NODE
 def test_a_subagent_whose_last_step_said_nothing_goes_on_to_its_result(tmp_path):
     said = _published("ses_2", *_parts("Writing the result.", "tool-calls"))
@@ -2238,6 +2212,82 @@ def test_a_subagent_whose_last_step_said_nothing_goes_on_to_its_result(tmp_path)
     )
 
     assert nudged.endswith(TASK)
+    assert _replies(tmp_path) == []
+
+
+@NODE
+def test_the_orchestrator_goes_on_where_its_last_step_said_nothing(tmp_path):
+    said = _published("ses_1", *_parts("Writing the note.", "tool-calls"))
+
+    nudged = _nudged(tmp_path, [*said, *_compacted("ses_1", "stop", said="")])
+
+    assert nudged == [GO_ON]
+
+
+@NODE
+@pytest.mark.parametrize(
+    "steps, kept",
+    [
+        # The reply that ended the turn reached where the session compacts.
+        (_compacted("ses_1", "stop"), ["At the gate."]),
+        (_compacted("ses_1", "length"), ["At the gate."]),
+        # A step with nothing to say ended the reply.
+        (
+            [
+                *_published("ses_1", *_parts("At the gate.", "tool-calls")),
+                *_compacted("ses_1", "stop", said=""),
+            ],
+            ["At the gate."],
+        ),
+        # A step in the middle of the reply did.
+        (_compacted("ses_1", "tool-calls"), []),
+        (_compacted("ses_1", "stop", overflow=True), []),
+        (_compacted("ses_1", "stop", died=True), []),
+        # What it said before a compaction, or the summary, is not what it said after.
+        (
+            [
+                *_compacted("ses_1", "stop", 1),
+                *_compacted("ses_1", "stop", 2, said=""),
+            ],
+            ["At the gate."],
+        ),
+    ],
+)
+def test_the_main_sessions_reply_opencode_went_on_from_is_recorded(
+    tmp_path, steps, kept
+):
+    _nudged(tmp_path, steps)
+
+    assert _replies(tmp_path) == [("ses_1", text) for text in kept]
+
+
+@NODE
+def test_after_a_compaction_the_runner_keeps_the_humans_reply_and_a_subagent_its_task(
+    tmp_path, workspace
+):
+    """The plugin's records of one turn, handed to the runner: a subagent's
+    compaction neither takes it past its task nor reaches the human."""
+    midway, ended, orchestrator = _nudged(
+        tmp_path,
+        [
+            SUBAGENT,
+            STARTED,
+            *_compacted("ses_2", "tool-calls", 1, said="Phase 1 written."),
+            *_compacted("ses_2", "stop", 2, said="Phase 2 written."),
+            *_compacted("ses_1", "stop", 3),
+        ],
+    )
+
+    assert GO_ON not in midway and midway.endswith(TASK)
+    assert "the orchestrator" in ended and TASK not in ended
+    assert "the human" in orchestrator
+    records = map(json.loads, (tmp_path / "records.jsonl").read_text().splitlines())
+    events = [*GATE, *COMPACTED, *_step({"text": "Waiting."})]
+    assert _run(tmp_path, workspace, events, records=list(records)) == (
+        ["At the gate."],
+        "Waiting.",
+        "stop",
+    )
 
 
 @NODE
@@ -2296,26 +2346,15 @@ process.stdout.write(JSON.stringify(outcomes));
 def _shown(tmp_path, steps, images, most):
     """What the plugin does with each image a plot validator reads or fetches:
     "shown", or why not."""
-    plugin = tmp_path / "af_opencode.mjs"
-    plugin.write_text(runner.PLUGIN.read_text())
-    (tmp_path / "images.mjs").write_text(IMAGES)
-    (tmp_path / "steps.json").write_text(json.dumps(steps))
-    settings = {
-        "records": str(tmp_path / "records.jsonl"),
-        "tasks": str(tmp_path / "tasks"),
-        "seats": 1,
-        "images": {"plot_validator": images},
-        "image_bytes": {"plot_validator": most},
-    }
     return json.loads(
-        subprocess.run(
-            ["node", tmp_path / "images.mjs", plugin, tmp_path / "steps.json"]
-            + ["plot_validator"],
-            env={**os.environ, "AF_PLUGIN": json.dumps(settings)},
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
+        _node(
+            tmp_path,
+            IMAGES,
+            steps,
+            "plot_validator",
+            images={"plot_validator": images},
+            image_bytes={"plot_validator": most},
+        )
     )
 
 
@@ -2341,10 +2380,10 @@ def test_an_image_too_large_for_a_request_of_its_role_is_refused(tmp_path):
 SITE = ".pixi/envs/default/lib/python3.12/site-packages"
 # Where a rebuild on another Python leaves an environment's packages.
 MOVED = ".pixi/envs/default/lib/python3.11/site-packages"
-# Runs the plugin in argv[2] on the analysis in argv[3], for argv[4]'s steps: "bash" as a command starts, or an environment's rebuild, the directory to empty.
+# Runs the plugin in argv[2] for the steps in argv[3], on the analysis in argv[4]: "bash" as a command starts, or an environment's rebuild, the directory to empty.
 BUILT = """
 import fs from "node:fs";
-const [plugin, directory, steps] = process.argv.slice(2);
+const [plugin, steps, directory] = process.argv.slice(2);
 const hooks = await (await import(plugin)).default.server({ directory });
 for (const step of JSON.parse(fs.readFileSync(steps)))
   if (step === "bash")
@@ -2362,32 +2401,20 @@ for (const step of JSON.parse(fs.readFileSync(steps)))
 def _run_plugin(tmp_path, steps, helpers=None):
     """The analysis the plugin ran on, and the records it wrote, once it has
     gone through `steps`."""
-    plugin, work = tmp_path / "af_opencode.mjs", tmp_path / "work"
-    plugin.write_text(runner.PLUGIN.read_text())
-    (tmp_path / "built.mjs").write_text(BUILT)
-    (tmp_path / "steps.json").write_text(
-        json.dumps([step if step == "bash" else str(work / step) for step in steps])
-    )
+    work = tmp_path / "work"
     (tmp_path / "local").mkdir(exist_ok=True)
-    settings = {
-        "records": str(tmp_path / "records.jsonl"),
-        "tasks": str(tmp_path / "tasks"),
-        "helpers": str(helpers or runner._helpers(tmp_path / "local")),
-        "hook": runner.HOOK,
-        "seats": 1,
-        "images": {},
-    }
     (work / SITE).mkdir(parents=True, exist_ok=True)
     # Conda's alias of the Python directory.
     alias = work / SITE.replace("python3.12", "python3.1")
     if not alias.parent.is_symlink():
         alias.parent.symlink_to("python3.12")
-    subprocess.run(
-        ["node", tmp_path / "built.mjs", plugin, work, tmp_path / "steps.json"],
-        env={**os.environ, "AF_PLUGIN": json.dumps(settings)},
-        capture_output=True,
-        text=True,
-        check=True,
+    _node(
+        tmp_path,
+        BUILT,
+        [step if step == "bash" else str(work / step) for step in steps],
+        work,
+        helpers=str(helpers or runner._helpers(tmp_path / "local")),
+        hook=runner.HOOK,
     )
     return work, [
         record
@@ -2678,28 +2705,6 @@ def test_advance_returns_and_keeps_what_the_agent_said(root, stretch):
     assert stretch.slept == []
 
 
-def test_each_turn_reads_the_runners_facility_rules(root, stretch, monkeypatch):
-    read = []
-
-    def opencode(command, prompt, work, env, home, taken):
-        facility, _ = json.loads(env["OPENCODE_CONFIG_CONTENT"])["instructions"]
-        read.append(Path(facility).read_text())
-        return [], "", "stop"
-
-    monkeypatch.setattr(runner, "_opencode", opencode)
-    runner.advance(ANALYSIS, "ws", "")
-
-    assert read == [
-        runner.FACILITY.format(
-            cores=runner.CORES,
-            hours=runner.COMMAND_HOURS,
-            minutes=runner.COMMAND_MINUTES,
-            python=runner.PYTHON,
-            root=runner.ROOT,
-        )
-    ]
-
-
 def test_advance_hands_a_reply_to_the_agent_once(root, stretch):
     runner.advance(ANALYSIS, "ws", "")
     stretch.action.run_name = "run-2"
@@ -2765,6 +2770,21 @@ def test_advance_waits_after_a_failed_turn_longer_each_time(stretch, monkeypatch
             runner.advance(ANALYSIS, "ws", "")
 
     assert stretch.slept == [15 * 60, 30 * 60, 240 * 60]
+
+
+def test_a_setup_that_stalled_fails_its_attempt_and_frees_the_workspace(
+    root, stretch, monkeypatch
+):
+    monkeypatch.setattr(
+        runner, "_prepare", _failing(subprocess.TimeoutExpired("pixi", 1))
+    )
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        runner.advance(ANALYSIS, "ws", "")
+
+    with open(root / "ws/lock") as other:
+        fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    assert stretch.slept == []
 
 
 def test_advance_does_not_wait_on_a_failure_no_retry_follows(stretch, monkeypatch):

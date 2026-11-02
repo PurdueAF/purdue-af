@@ -19,13 +19,11 @@ spec:
           effect: NoSchedule
       containers:
         - name: chown
-          image: geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/agentic-analysis:latest
+          image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/busybox:1.38
           command:
-            - sh
-            - -c
-            - chown 1000:1000 /volume
-          securityContext:
-            runAsUser: 0
+            - chown
+            - "1000:1000"
+            - /volume
           volumeMounts:
             - name: volume
               mountPath: /volume

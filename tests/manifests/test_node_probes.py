@@ -7,7 +7,7 @@ probed. A mount in one and not the other would read "never reported" forever.
 import ast
 
 import yaml
-from common import REPO
+from common import REPO, load_all
 
 PROBES = REPO / "apps/monitoring/af-monitoring/daemonset-af-node-probe.yaml"
 EXPORTER = REPO / "docker/af-node-monitor/node_healthcheck.py"
@@ -21,7 +21,7 @@ DEPLOYMENTS = (
 
 
 def docs():
-    return [d for d in yaml.safe_load_all(PROBES.read_text()) if d]
+    return load_all(PROBES)
 
 
 def daemonsets():

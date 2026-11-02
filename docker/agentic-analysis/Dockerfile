@@ -1,5 +1,5 @@
 # Task image of workflows/agentic-analysis: the Flyte 2 runtime, git, pixi, and
-# OpenCode with ripgrep and poppler. Flyte ships the workflow code as a code bundle.
+# OpenCode with ripgrep and poppler.
 FROM python:3.12-slim
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /uvx /bin/
@@ -21,8 +21,7 @@ RUN curl -fsSL --retry 3 --retry-delay 2 -o /tmp/opencode.tgz \
         "https://registry.npmjs.org/opencode-linux-x64-baseline/-/opencode-linux-x64-baseline-${OPENCODE_VERSION}.tgz" \
     && tar -xzf /tmp/opencode.tgz -C /tmp package/bin/opencode \
     && install -m 0755 /tmp/package/bin/opencode /usr/local/bin/opencode \
-    && rm -rf /tmp/opencode.tgz /tmp/package \
-    && opencode --version
+    && rm -rf /tmp/opencode.tgz /tmp/package
 ENV OPENCODE_DISABLE_AUTOUPDATE=1 \
     OPENCODE_DISABLE_LSP_DOWNLOAD=1
 

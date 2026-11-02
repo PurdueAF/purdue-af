@@ -20,18 +20,20 @@ cut_retries = 3
 # How long a restart waits for the requests in flight, within the Deployment's
 # terminationGracePeriodSeconds.
 drain_seconds = 600
+# Each model's `budget`, the tokens all its requests in flight may hold, is this
+# fraction of what fair use lets them hold (SHARE in llm_proxy.py).
+budget_fraction = 0.9
+# Each model's output per minute: 0.85 of NRP's per-key rate.
+output_per_minute = 40_800
 
-# Per model: `budget` is the tokens all its requests in flight may hold
-# (0.9 of the 35% of its context), `output_per_minute` 0.85 of NRP's per-key
-# rate, `max_tokens` the bounds of the cap that keeps a reply within
+# Per model: `max_tokens` is the bounds of the cap that keeps a reply within
 # `stream_seconds`, and `ttft` and `decode` its typical and slow speeds: slots
 # shrink against the typical ones, and the cap follows the slow ones until it
-# has samples of its own.
+# has samples of its own. A model may set its own `budget` and
+# `output_per_minute`.
 [models.glm-5]
 context = 1_048_576
 slots = [2, 2]
-budget = 330_000
-output_per_minute = 40_800
 max_tokens = [6_000, 20_000]
 image_tokens = 0
 ttft = [0.92, 3.4]
@@ -42,8 +44,6 @@ variants.low = { chat_template_kwargs = { reasoning_effort = "low" } }
 [models.deepseek-v4-flash]
 context = 1_048_576
 slots = [8, 16]
-budget = 330_000
-output_per_minute = 40_800
 max_tokens = [6_000, 20_000]
 image_tokens = 1_000
 ttft = [0.63, 1.5]
@@ -54,8 +54,6 @@ variants.low = { chat_template_kwargs = { reasoning_effort = "low" } }
 [models.qwen3]
 context = 1_000_000
 slots = [6, 12]
-budget = 315_000
-output_per_minute = 40_800
 max_tokens = [6_000, 16_000]
 image_tokens = 1_902
 ttft = [2.1, 35.0]
@@ -65,8 +63,6 @@ variants.medium = { reasoning_effort = "medium" }
 [models.qwen3-small]
 context = 1_000_000
 slots = [6, 8]
-budget = 315_000
-output_per_minute = 40_800
 max_tokens = [8_000, 32_000]
 image_tokens = 1_902
 ttft = [0.74, 2.3]
@@ -76,8 +72,6 @@ variants.medium = { reasoning_effort = "medium" }
 [models.gemma]
 context = 262_144
 slots = [4, 8]
-budget = 82_600
-output_per_minute = 40_800
 max_tokens = [6_000, 16_000]
 image_tokens = 268
 ttft = [0.58, 3.9]

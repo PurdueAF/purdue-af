@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from common import REPO, load_script
+from common import REPO, load_all, load_script
 
 APP = REPO / "apps" / "ray-train"
 HUB_VALUES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
@@ -29,10 +29,6 @@ def gateway():
 
 def load(path):
     return yaml.safe_load(path.read_text())
-
-
-def load_all(path):
-    return [doc for doc in yaml.safe_load_all(path.read_text()) if doc]
 
 
 def by_kind(path, kind):

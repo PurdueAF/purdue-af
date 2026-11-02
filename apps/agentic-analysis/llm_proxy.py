@@ -35,6 +35,31 @@ CONFIG = Path(
 SHARE = 0.35
 # Seconds of speed samples that the caps and slots follow.
 WINDOW = 900.0
+# Speed samples a model needs before they move its cap and slots.
+SAMPLES = 5
+# The cap's slow end of those samples: this quantile of decode speeds, and of times to the first token.
+SLOW_DECODE = 0.1
+SLOW_TTFT = 0.9
+# Slots halve once the median time to the first token is this many times the typical one, or the median decode speed this fraction of it.
+TTFT_SLOWDOWN = 3
+DECODE_SLOWDOWN = 0.5
+# Seconds between halvings of a model's slots, and before it gains one back.
+SHRINK_PERIOD = 300
+GROW_PERIOD = 600
+# Seconds a model fails on before it counts as unhealthy, and seconds it then does.
+FAILING_SECONDS = 1800
+UNHEALTHY_SECONDS = 600
+# A stream that breaks off before this fraction of `cut_seconds` failed; it was not too long.
+EARLY_CUT = 0.9
+# The fraction of a cut reply's output that the next try may take.
+CUT_SHRINK = 0.8
+# Seconds the read of a whole reply outlasts NRP's cut.
+READ_MARGIN = 60
+# The tokens and seconds, beyond these, a reply needs to count as a decode speed.
+DECODE_TOKENS = 50
+DECODE_SECONDS = 1
+# Seconds to wait after a 429 that names none.
+RATE_LIMIT_WAIT = 60.0
 # Seconds a waiting request takes to rise by one queue class.
 AGING = 600.0
 STICKY = 10_000
@@ -62,6 +87,8 @@ class Settings:
     backoff_max_seconds: float
     cut_retries: int
     drain_seconds: float
+    budget_fraction: float
+    output_per_minute: int
 
 
 @dataclass(frozen=True)
@@ -104,6 +131,11 @@ class Config:
     roles: dict[str, Role]
 
 
+def _budget(fraction: float, context: int) -> int:
+    """`fraction` of what SHARE lets a context's requests hold, to three significant figures."""
+    return int(float(f"{fraction * SHARE * context:.3g}"))
+
+
 def load(path: Path) -> Config:
     """models.toml, checked: every backend names a model and variant it has,
     and a role that may send images is served only by models that take them."""
@@ -115,8 +147,8 @@ def load(path: Path) -> Config:
             name=name,
             context=m["context"],
             slots=(m["slots"][0], m["slots"][1]),
-            budget=m["budget"],
-            output_per_minute=m["output_per_minute"],
+            budget=m.get("budget", _budget(settings.budget_fraction, m["context"])),
+            output_per_minute=m.get("output_per_minute", settings.output_per_minute),
             max_tokens=(m["max_tokens"][0], m["max_tokens"][1]),
             image_tokens=m["image_tokens"],
             ttft=(m["ttft"][0], m["ttft"][1]),
@@ -248,9 +280,13 @@ class Gate:
         floor, ceiling = self.model.max_tokens
         with self.cond:
             self._trim(time.monotonic())
-            if len(self.decodes) >= 5:
-                slow = _quantile([r for _, r in self.decodes], 0.1)
-                late = _quantile([t for _, t in self.ttfts], 0.9) if self.ttfts else 0
+            if len(self.decodes) >= SAMPLES:
+                slow = _quantile([r for _, r in self.decodes], SLOW_DECODE)
+                late = (
+                    _quantile([t for _, t in self.ttfts], SLOW_TTFT)
+                    if self.ttfts
+                    else 0
+                )
             else:
                 slow, late = self.model.decode[1], self.model.ttft[1]
         within = int(slow * (self.settings.stream_seconds - late))
@@ -279,21 +315,22 @@ class Gate:
         self.observe(ttft, decode)
 
     def _adjust(self, now: float) -> None:
-        if len(self.decodes) < 5 or now - self.adjusted < 300:
+        if len(self.decodes) < SAMPLES or now - self.adjusted < SHRINK_PERIOD:
             return
         ttft = statistics.median(t for _, t in self.ttfts) if self.ttfts else 0
         decode = statistics.median(r for _, r in self.decodes)
-        if ttft > 3 * self.model.ttft[0] or decode < 0.5 * self.model.decode[0]:
+        slow = decode < DECODE_SLOWDOWN * self.model.decode[0]
+        if ttft > TTFT_SLOWDOWN * self.model.ttft[0] or slow:
             self.slots = max(1, self.slots // 2)
             self.adjusted = now
-        elif now - self.adjusted >= 600 and self.slots < self.model.slots[1]:
+        elif now - self.adjusted >= GROW_PERIOD and self.slots < self.model.slots[1]:
             self.slots += 1
             self.adjusted = now
 
     def failed(self, retry_after: float | None, attempt: int) -> float:
         """Seconds to wait before a request's next try: the model's own
         Retry-After on a 429, otherwise a backoff doubling with the request's
-        own `attempt`. Halves the slots at most once in five minutes."""
+        own `attempt`. Halves the slots at most once in SHRINK_PERIOD."""
         with self.cond:
             now = time.monotonic()
             if now - self.last_failure > self.settings.backoff_max_seconds:
@@ -301,11 +338,11 @@ class Gate:
             self.failures += 1
             self.last_failure = now
             self.failing_since = self.failing_since or now
-            if now - self.adjusted >= 300:
+            if now - self.adjusted >= SHRINK_PERIOD:
                 self.slots = max(1, self.slots // 2)
                 self.adjusted = now
-            if now - self.failing_since >= 1800:
-                self.unhealthy_until = now + 600
+            if now - self.failing_since >= FAILING_SECONDS:
+                self.unhealthy_until = now + UNHEALTHY_SECONDS
             if retry_after is not None:
                 self.paused_until = now + retry_after
                 return retry_after
@@ -391,7 +428,8 @@ class Reply:
     def decode(self) -> float | None:
         tokens = self.completion()
         spent = self.seconds - (self.ttft or 0)
-        return tokens / spent if tokens > 50 and spent > 1 else None
+        counts = tokens > DECODE_TOKENS and spent > DECODE_SECONDS
+        return tokens / spent if counts else None
 
     def message(self, role: str) -> dict[str, Any]:
         """The reply as a chat.completion."""
@@ -576,7 +614,7 @@ class Proxy:
         headers = {"Authorization": f"Bearer {self.key}"}
         if not payload["stream"]:
             # A whole reply arrives only at its end, which NRP lets run to its cut.
-            read = self.config.settings.stream_seconds + 180
+            read = self.config.settings.cut_seconds + READ_MARGIN
             timeout = httpx.Timeout(15, read=read, write=60, pool=60)
             response = self.client.post(
                 url, json=payload, headers=headers, timeout=timeout
@@ -678,7 +716,9 @@ class Proxy:
                 record["problem"] = streamed.problem()
                 return streamed, record
             problem = reply.problem() if reply.status == 200 else None
-            early = problem == "cut" and reply.seconds < 0.9 * settings.cut_seconds
+            early = (
+                problem == "cut" and reply.seconds < EARLY_CUT * settings.cut_seconds
+            )
             if reply.status == 429 or reply.status >= 500 or early:
                 # A stream that broke off well before NRP's cut failed; it was not too long.
                 if cancelled():
@@ -708,7 +748,7 @@ class Proxy:
                         502, "server_error", "the model's reply was cut off"
                     ), record
                 # Less than the cut reply reached, so that the next one ends in time.
-                shrink = max(model.max_tokens[0], int(0.8 * reply.completion()))
+                shrink = max(model.max_tokens[0], int(CUT_SHRINK * reply.completion()))
                 continue
             if problem and reply.finish != "length" and streamed is None:
                 streamed = reply
@@ -744,7 +784,7 @@ def _retry_after(reply: Reply) -> float:
             return max(1.0, float(reply.headers[name]))
         except (KeyError, ValueError):
             continue
-    return 60.0
+    return RATE_LIMIT_WAIT
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -932,8 +972,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 class Server(http.server.ThreadingHTTPServer):
-    daemon_threads = True
-
     def __init__(self, address: tuple[str, int], proxy: Proxy) -> None:
         self.proxy = proxy
         self.draining = False

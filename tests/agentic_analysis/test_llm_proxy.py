@@ -18,10 +18,9 @@ import types
 import httpx
 import pytest
 import yaml
-from common import REPO, load_script, mount_configmap
+from analysis_helpers import APP, EXPERIMENTAL
+from common import load_all, load_script, mount_configmap
 
-APP = REPO / "apps" / "agentic-analysis"
-EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
 llm = load_script(APP / "llm_proxy.py", "llm_proxy")
 TOKEN = "stand-in-token"
 
@@ -39,6 +38,8 @@ backoff_seconds = 0.01
 backoff_max_seconds = 0.05
 cut_retries = 2
 drain_seconds = 5
+budget_fraction = 0.5
+output_per_minute = 2_000_000
 
 [models.m]
 context = 1_000_000
@@ -81,10 +82,6 @@ def _config(upstream="http://u", max_body=200_000):
     return CONFIG.format(upstream=upstream, max_body=max_body)
 
 
-def _docs(path):
-    return [d for d in yaml.safe_load_all(path.read_text()) if d]
-
-
 def _chunk(delta=None, finish=None, usage=None):
     chunk = {"id": "c", "object": "chat.completion.chunk", "model": "m"}
     chunk["choices"] = (
@@ -123,8 +120,9 @@ class Upstream:
                 upstream.script.pop(0)(self)
 
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self.server.daemon_threads = True
-        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        threading.Thread(
+            target=self.server.serve_forever, args=(0.05,), daemon=True
+        ).start()
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}/v1"
 
     def stream(self, chunks, done=True, delay=0.0, hold=0.0):
@@ -181,8 +179,7 @@ def _serve(tmp_path, text):
     path.write_text(text)
     running = llm.Proxy(llm.load(path), "nrp-key", TOKEN)
     server = llm.Server(("127.0.0.1", 0), running)
-    server.daemon_threads = True
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    threading.Thread(target=server.serve_forever, args=(0.05,), daemon=True).start()
     running.url = f"http://127.0.0.1:{server.server_address[1]}"
     return running, server
 
@@ -246,6 +243,28 @@ def test_every_role_of_the_repositorys_models_fits_its_backends_within_fair_use(
                 str(backend),
             )
     assert config.settings.max_body_bytes < 4 * 2**20
+
+
+def test_a_model_takes_its_budget_and_output_rate_from_the_proxy_unless_it_sets_its_own(
+    tmp_path,
+):
+    own = "budget = 300_000\noutput_per_minute = 1_000_000\n"
+    path = tmp_path / "models.toml"
+    path.write_text(_config().replace(own, "", 1))
+
+    models = llm.load(path).models
+
+    assert models["m"].budget == llm._budget(0.5, 1_000_000)
+    assert models["m"].output_per_minute == 2_000_000
+    assert (models["v"].budget, models["v"].output_per_minute) == (300_000, 1_000_000)
+
+
+@pytest.mark.parametrize(
+    "context, budget",
+    [(1_048_576, 330_000), (1_000_000, 315_000), (262_144, 82_600)],
+)
+def test_a_budget_is_rounded_to_three_figures_of_its_share(context, budget):
+    assert llm._budget(0.9, context) == budget
 
 
 @pytest.mark.parametrize(
@@ -362,7 +381,7 @@ def test_a_reply_cut_off_at_the_limit_is_asked_for_again_with_less_output(
 
     assert [json.loads(e) for e in _events(response)[:-1]] == SAID
     first, second = upstream.bodies
-    assert second["max_tokens"] == int(0.8 * 500) < first["max_tokens"]
+    assert second["max_tokens"] == int(llm.CUT_SHRINK * 500) < first["max_tokens"]
     assert proxy.gates["m"].failures == 0 and proxy.gates["m"].slots == 2
 
 
@@ -636,22 +655,23 @@ def test_images_count_by_number_not_by_their_bytes(proxy):
 
 def test_the_output_cap_follows_the_slow_end_of_recent_speeds():
     gate = _gate()
-    assert gate.cap() == int(5.0 * (1080 - 10.0))
+    stream_seconds = gate.settings.stream_seconds
+    assert gate.cap() == int(5.0 * (stream_seconds - 10.0))
     for _ in range(10):
         gate.observe(ttft=4.0, decode=20.0)
 
-    assert gate.cap() == int(20.0 * (1080 - 4.0))
+    assert gate.cap() == int(20.0 * (stream_seconds - 4.0))
 
 
 def test_slow_replies_halve_the_slots():
     gate = _gate()
-    for _ in range(5):
+    for _ in range(llm.SAMPLES):
         gate.observe(ttft=1.0, decode=10.0)
 
     assert gate.slots == 2
 
 
-def test_failures_halve_the_slots_at_most_once_in_five_minutes():
+def test_failures_halve_the_slots_at_most_once_in_a_period():
     gate = _gate()
 
     gate.failed(None, 1)
@@ -898,7 +918,7 @@ def test_a_line_of_the_log_is_one_write(monkeypatch):
 
 
 def test_the_deployment_runs_the_mounted_proxy_with_both_secrets():
-    deployment, service = _docs(APP / "llm-proxy.yaml")
+    deployment, service = load_all(APP / "llm-proxy.yaml")
     spec = deployment["spec"]["template"]["spec"]
     (container,) = spec["containers"]
     (mount,) = container["volumeMounts"]
@@ -916,13 +936,9 @@ def test_the_deployment_runs_the_mounted_proxy_with_both_secrets():
         ("secret-nrp.yaml", "NRP_API_KEY"),
         ("secret-llm-proxy.yaml", "LLM_PROXY_TOKEN"),
     ):
-        (secret,) = _docs(APP / path)
+        (secret,) = load_all(APP / path)
         assert refs[name]["name"] == secret["metadata"]["name"]
         assert refs[name]["key"] in secret["stringData"]
-    (job,) = _docs(APP / "workspace.yaml")
-    assert (
-        container["image"] == job["spec"]["template"]["spec"]["containers"][0]["image"]
-    )
     (port,) = container["ports"]
     (exposed,) = service["spec"]["ports"]
     assert port["containerPort"] == settings.port
