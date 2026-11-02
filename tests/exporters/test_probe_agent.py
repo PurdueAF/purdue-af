@@ -19,6 +19,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 os.environ.setdefault("MOUNT_NAME", "/depot/")
 os.environ.setdefault("NODE_NAME", "node-a")
@@ -82,6 +83,28 @@ def test_successful_attempt_is_published(env, monkeypatch):
     assert served()["ok"] is True
 
 
+def child_reports(ok):
+    return f"""
+    print("the reason", file=sys.stderr)
+    RESULT_PATH.write_text(json.dumps({{"ok": {ok}}}))
+    """
+
+
+def test_a_not_ok_result_logs_why(env, monkeypatch, capsys):
+    """A failed mount exits 0, so this is the only trace of what failed."""
+    child(monkeypatch, env, child_reports(False))
+    assert pa.run_attempt(0) == "published"
+    assert "the reason" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(("verbose", "logged"), [("false", False), ("true", True)])
+def test_an_ok_result_logs_only_when_verbose(env, monkeypatch, capsys, verbose, logged):
+    monkeypatch.setenv("AF_NODE_MONITOR_VERBOSE", verbose)
+    child(monkeypatch, env, child_reports(True))
+    assert pa.run_attempt(0) == "published"
+    assert ("the reason" in capsys.readouterr().out) is logged
+
+
 def test_cycle_marks_ready_and_beats(env, monkeypatch):
     child(monkeypatch, env, WRITES_OK)
     assert pa.cycle(0) == "published"
@@ -139,6 +162,25 @@ def test_timeout_carries_the_fio_history_forward(env, monkeypatch):
     assert served()["throughput_gbps"] == 6.4
 
 
+def test_deadline_logs_what_the_child_said(env, monkeypatch, capsys):
+    class Deadline:
+        def __init__(self, *a, **kw):
+            self.calls = 0
+
+        def communicate(self, timeout=None):
+            self.calls += 1
+            if self.calls == 1:
+                raise pa.subprocess.TimeoutExpired(cmd="child", timeout=timeout)
+            return "", "ping started\n"
+
+        def kill(self):
+            pass
+
+    monkeypatch.setattr(pa.subprocess, "Popen", Deadline)
+    assert pa.run_attempt(0) == "timeout"
+    assert "ping started" in capsys.readouterr().err
+
+
 def test_a_timed_out_probe_stays_ready(env, monkeypatch):
     """It published a verdict, so the probe works. Dropping out of Ready here
     would say "monitoring is broken" about a working probe on a dead mount."""
@@ -153,20 +195,18 @@ def test_late_child_cannot_overwrite_the_published_verdict(env, monkeypatch):
     own attempt file, which is never promoted, so it cannot resurrect a stale
     success over the timeout that replaced it."""
     monkeypatch.setattr(pa, "PROBE_DEADLINE_S", 0.3)
-    child(
-        monkeypatch,
-        env,
-        """
-        time.sleep(1.5)
-        RESULT_PATH.write_text(json.dumps({"ok": True, "stale": True}))
-        """,
-    )
+    child(monkeypatch, env, "time.sleep(30)")
     assert pa.run_attempt(0) == "timeout"
-    time.sleep(2.5)
-    published = json.loads(pa.result_path().read_text())
-    assert published["timeout"] is True
-    assert "stale" not in published
+    verdict = served()
+
+    pa.attempt_path(0).write_text(json.dumps({"ok": True, "stale": True}))
+    assert served() == verdict
+    assert json.loads(pa.result_path().read_text()) == verdict
+
+    assert pa.run_attempt(1) == "timeout"
+    assert served()["timeout"] is True
     assert "stale" not in served()
+    assert "stale" not in json.loads(pa.result_path().read_text())
 
 
 def test_unkillable_child_does_not_block_the_verdict(env, monkeypatch):
@@ -207,6 +247,40 @@ def test_crashed_child_publishes_nothing(env, monkeypatch):
     assert served() == {"ok": True, "timestamp": 1.0}
 
 
+def test_crash_logs_the_end_of_stderr(env, monkeypatch, capsys):
+    """The reason comes last: the first characters would be start-up lines."""
+    child(
+        monkeypatch,
+        env,
+        f"""
+        print("start-up " * {pa.STDERR_TAIL_CHARS}, file=sys.stderr)
+        sys.exit("the reason")
+        """,
+    )
+    assert pa.run_attempt(0) == "failed"
+    log = capsys.readouterr().err
+    assert "check exited 1" in log
+    assert log.rstrip().endswith("the reason")
+    assert len(log) < 2 * pa.STDERR_TAIL_CHARS
+
+
+def test_a_job_runner_that_crashes_logs_why(env, monkeypatch, capsys):
+    """The real script, quiet as the DaemonSets run it, with no `cat` to exec."""
+    monkeypatch.setattr(
+        pa, "JOB_RUNNER", str(Path(pa.__file__).with_name("job_runner.py"))
+    )
+    monkeypatch.setenv("CHECK_FILE", "/mount/check")
+    monkeypatch.delenv("CHECKSUM", raising=False)
+    monkeypatch.setenv("AF_NODE_MONITOR_VERBOSE", "false")
+    monkeypatch.setenv("PATH", str(env))
+    assert pa.run_attempt(0) == "failed"
+    log = capsys.readouterr().err
+    assert "check exited 1" in log
+    assert "FileNotFoundError" in log
+    assert "'cat'" in log
+    assert served() is None
+
+
 def test_crashed_child_drops_out_of_ready(env, monkeypatch):
     child(monkeypatch, env, WRITES_OK)
     pa.cycle(0)
@@ -217,11 +291,12 @@ def test_crashed_child_drops_out_of_ready(env, monkeypatch):
     assert not pa.READY.exists()
 
 
-def test_child_that_writes_nothing_is_a_failure(env, monkeypatch):
-    child(monkeypatch, env, "pass")
+def test_child_that_writes_nothing_is_a_failure(env, monkeypatch, capsys):
+    child(monkeypatch, env, "print('the reason', file=sys.stderr)")
     assert pa.run_attempt(0) == "failed"
     assert not pa.result_path().exists()
     assert served() is None
+    assert "the reason" in capsys.readouterr().err
 
 
 def test_missing_child_script_is_a_failure(env, monkeypatch):

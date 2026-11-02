@@ -1,9 +1,7 @@
-"""Tests for docker/af-node-monitor pure helpers (no cluster required)."""
+"""Tests for docker/af-node-monitor/job_runner.py (no cluster required)."""
 
 import json
-import os
 import subprocess
-import sys
 import types
 
 import pytest
@@ -271,54 +269,51 @@ def paths(monkeypatch, tmp_path):
     return types.SimpleNamespace(attempt=attempt, published=published)
 
 
-def test_main_writes_timeout_when_ping_fails(monkeypatch, paths):
-    monkeypatch.setattr(runner, "NODE_NAME", "node-a")
-    monkeypatch.setattr(runner, "ENABLE_FIO", False)
-    monkeypatch.setattr(runner, "FIO_FILE", None)
-    monkeypatch.setattr(runner, "_check_ping", lambda: (False, False, 12.0))
-    monkeypatch.setattr(runner, "_check_metadata", lambda: (True, False, 1.0))
+@pytest.fixture
+def run_main(monkeypatch, paths):
+    """main() over stubbed checks, fio off without a fio_file; returns the attempt."""
 
-    runner.main()
+    def run(ping=(True, False, 1.0), metadata=(True, False, 1.0), fio_file=None):
+        monkeypatch.setattr(runner, "NODE_NAME", "node-a")
+        monkeypatch.setattr(runner, "ENABLE_FIO", fio_file is not None)
+        monkeypatch.setattr(runner, "FIO_FILE", fio_file)
+        monkeypatch.setattr(runner, "_check_ping", lambda: ping)
+        monkeypatch.setattr(runner, "_check_metadata", lambda: metadata)
+        runner.main()
+        return json.loads(paths.attempt.read_text())
 
-    result = json.loads(paths.attempt.read_text())
+    return run
+
+
+def test_main_writes_timeout_when_ping_fails(run_main):
+    result = run_main(ping=(False, False, 12.0))
+
     assert result["ok"] is False
     assert result["timeout"] is True
     assert result["throughput_gbps"] is None
     assert result["node"] == "node-a"
 
 
-def test_a_failed_check_keeps_the_last_measured_rate(monkeypatch, paths):
+def test_a_failed_check_keeps_the_last_measured_rate(run_main, paths):
     """The exporter shows no rate for a timeout; once the mount answers again
     the rate is the one fio last measured, not a zero it never measured."""
-    monkeypatch.setattr(runner, "NODE_NAME", "node-a")
-    monkeypatch.setattr(runner, "ENABLE_FIO", True)
-    monkeypatch.setattr(runner, "FIO_FILE", "/probe")
     paths.published.write_text(json.dumps({"throughput_gbps": 6.4, "last_fio_ts": 1.0}))
-    monkeypatch.setattr(runner, "_check_ping", lambda: (False, True, 3000.0))
-    monkeypatch.setattr(runner, "_check_metadata", lambda: (True, False, 1.0))
 
-    runner.main()
+    result = run_main(ping=(False, True, 3000.0), fio_file="/probe")
 
-    result = json.loads(paths.attempt.read_text())
     assert (result["timeout"], result["throughput_gbps"]) == (True, 6.4)
 
 
-def test_a_new_pod_places_its_first_fio_run_at_random(monkeypatch, paths):
+def test_a_new_pod_places_its_first_fio_run_at_random(monkeypatch, run_main):
     """Without history every pod of a rollout would read the same 1 GiB file
     in the same minute."""
-    monkeypatch.setattr(runner, "NODE_NAME", "n1")
-    monkeypatch.setattr(runner, "ENABLE_FIO", True)
-    monkeypatch.setattr(runner, "FIO_FILE", "/probe")
     monkeypatch.setattr(runner, "FIO_INTERVAL_S", 1800.0)
-    monkeypatch.setattr(runner, "_check_ping", lambda: (True, False, 1.0))
-    monkeypatch.setattr(runner, "_check_metadata", lambda: (True, False, 1.0))
     monkeypatch.setattr(runner.random, "uniform", lambda a, b: 600.0)
     ran = []
     monkeypatch.setattr(runner, "_run_bounded", lambda cmd, t: ran.append(cmd))
 
-    runner.main()
+    result = run_main(fio_file="/probe")
 
-    result = json.loads(paths.attempt.read_text())
     assert ran == []
     assert result["ok"] is True
     # No measurement yet is not a zero rate.
@@ -326,59 +321,33 @@ def test_a_new_pod_places_its_first_fio_run_at_random(monkeypatch, paths):
     assert result["timestamp"] - result["last_fio_ts"] == pytest.approx(600.0, abs=5)
 
 
-def test_main_success_without_node_name(monkeypatch, paths):
-    monkeypatch.setattr(runner, "NODE_NAME", "")
-    monkeypatch.setattr(runner, "ENABLE_FIO", False)
-    monkeypatch.setattr(runner, "FIO_FILE", None)
-    monkeypatch.setattr(runner, "_check_ping", lambda: (True, False, 5.0))
-    monkeypatch.setattr(runner, "_check_metadata", lambda: (True, False, 2.0))
-    monkeypatch.setattr(
-        runner, "_check_throughput", lambda last: (True, False, None, last)
-    )
+def test_main_success(run_main):
+    result = run_main(ping=(True, False, 5.0), metadata=(True, False, 2.0))
 
-    runner.main()
-
-    result = json.loads(paths.attempt.read_text())
     assert result["ok"] is True
     assert result["timeout"] is False
     assert result["ping_ms"] == 5.0
-    assert result["node"] == ""
+    assert result["node"] == "node-a"
     assert result["throughput_gbps"] is None
 
 
-def test_main_runs_fio_and_records_throughput(monkeypatch, paths):
-    monkeypatch.setattr(runner, "NODE_NAME", "n1")
-    monkeypatch.setattr(runner, "ENABLE_FIO", True)
-    monkeypatch.setattr(runner, "FIO_FILE", "/probe")
-    monkeypatch.setattr(runner, "FIO_INTERVAL_S", 1.0)
-    monkeypatch.setattr(runner, "_check_ping", lambda: (True, False, 1.0))
-    monkeypatch.setattr(runner, "_check_metadata", lambda: (True, False, 1.0))
+def test_main_runs_fio_and_records_throughput(monkeypatch, run_main):
     monkeypatch.setattr(
         runner, "_check_throughput", lambda last: (True, False, 3.5, 12345.0)
     )
 
-    runner.main()
+    result = run_main(fio_file="/probe")
 
-    result = json.loads(paths.attempt.read_text())
     assert result["ok"] is True
     assert result["throughput_gbps"] == 3.5
     assert result["last_fio_ts"] == 12345.0
 
 
-def test_main_tolerates_corrupt_previous_last_fio_ts(monkeypatch, paths):
-    monkeypatch.setattr(runner, "NODE_NAME", "n1")
+def test_main_tolerates_corrupt_previous_last_fio_ts(run_main, paths):
     paths.published.write_text('{"last_fio_ts": "not-a-float", "throughput_gbps": 1.0}')
-    monkeypatch.setattr(runner, "ENABLE_FIO", False)
-    monkeypatch.setattr(runner, "FIO_FILE", None)
-    monkeypatch.setattr(runner, "_check_ping", lambda: (True, False, 1.0))
-    monkeypatch.setattr(runner, "_check_metadata", lambda: (True, False, None))
-    monkeypatch.setattr(
-        runner, "_check_throughput", lambda last: (True, False, None, last)
-    )
 
-    runner.main()
+    result = run_main(metadata=(True, False, None))
 
-    result = json.loads(paths.attempt.read_text())
     assert result["ok"] is True
     assert result["last_fio_ts"] is None
 
@@ -430,10 +399,10 @@ def test_run_bounded_pipe_error_is_not_a_timeout(monkeypatch):
     )
 
 
-def test_run_bounded_missing_binary_is_not_a_timeout():
-    ok, timeout, _out, err = runner._run_bounded(["definitely-not-a-binary"], 5)
-    assert (ok, timeout) == (False, False)
-    assert err
+def test_run_bounded_missing_binary_breaks_the_probe_not_the_mount():
+    """A failed exec says nothing about the mount: the child must exit non-zero."""
+    with pytest.raises(FileNotFoundError):
+        runner._run_bounded(["definitely-not-a-binary"], 5)
 
 
 # ── result paths the supervisor supplies ──────────────────────────────────────
@@ -446,49 +415,10 @@ def test_main_needs_both_paths_from_the_supervisor(monkeypatch, paths, variable)
         runner.main()
 
 
-# ── quiet mode ────────────────────────────────────────────────────────────────
+# ── logging ───────────────────────────────────────────────────────────────────
 
 
-def test_quiet_mode_silences_inherited_stdio(tmp_path):
-    """Replacing sys.stdout alone would still let os.write(2, ...) and child
-    processes reach the Job logs."""
-    env = {
-        **os.environ,
-        "MOUNT_NAME": "/depot/",
-        "CHECK_FILE": "/depot/validate.txt",
-        "PYTHONPATH": os.path.dirname(runner.__file__),
-    }
-    env.pop("AF_NODE_MONITOR_VERBOSE", None)
-    code = (
-        "import os, job_runner; print('out'); os.write(2, b'err'); "
-        "os.system('echo child')"
-    )
-    proc = subprocess.run(
-        [sys.executable, "-c", code], env=env, capture_output=True, cwd=tmp_path
-    )
-    assert proc.returncode == 0
-    assert (proc.stdout, proc.stderr) == (b"", b"")
-
-
-# ── quiet mode ────────────────────────────────────────────────────────────────
-
-
-@pytest.mark.parametrize("verbose", [False, True])
-def test_import_silences_os_level_stdio_unless_verbose(verbose):
-    """Job logs must stay empty when quiet: the module redirects fds 1 and 2
-    at import, so even a later os.write(2, ...) goes to /dev/null. A
-    subprocess, because the redirect would swallow pytest's own output."""
-    env = {k: v for k, v in os.environ.items() if k != "AF_NODE_MONITOR_VERBOSE"}
-    env.update({"MOUNT_NAME": "/depot/", "CHECK_FILE": "/depot/validate.txt"})
-    if verbose:
-        env["AF_NODE_MONITOR_VERBOSE"] = "1"
-    probe = (
-        "import os, runpy, sys;"
-        f"runpy.run_path({str(runner.__file__)!r}, run_name='imported');"
-        "print('out'); sys.stderr.write('err'); sys.stderr.flush(); os.write(2, b'raw')"
-    )
-    proc = subprocess.run(
-        [sys.executable, "-c", probe], env=env, capture_output=True, text=True
-    )
-    assert proc.returncode == 0
-    assert (proc.stdout, proc.stderr) == (("out\n", "errraw") if verbose else ("", ""))
+def test_diagnostics_go_to_stderr(capsys):
+    """probe_agent discards stdout and logs the tail of stderr."""
+    runner._vlog("why")
+    assert capsys.readouterr() == ("", "why\n")

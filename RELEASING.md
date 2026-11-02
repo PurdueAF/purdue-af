@@ -34,7 +34,7 @@ profile is pinned to the released semver tag.
 | Experimental component                            | push to `main` → CI green → publish advances `main-validated` → experimental Flux reconciles (~1 min)                       |
 | Global env (`pixi/global`)                        | push to `main` → CI validates the lock → `pixi-global-sync` applies it to `/work/pixi/global`                               |
 | agentic-interface image                           | push to `main` → CI green → publish auto-releases the next version and advances `main-validated` → Flux rolls pod (~1 min)  |
-| Monitor images (af-pod-monitor, af-node-monitor)  | push to `main` → CI green → `:latest` moves → pod restart picks it up                                                       |
+| Monitor images (af-pod-monitor, af-node-monitor)  | push to `main` → CI green → `:latest` moves → new spawns pull af-pod-monitor; a node keeps the af-node-monitor it first pulled |
 
 Every commit runs one pipeline ([ci.yml](.github/workflows/ci.yml)) and
 nothing is published unless every stage passed for that exact commit. The

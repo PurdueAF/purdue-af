@@ -35,6 +35,7 @@ from mcp.server.mcpserver import MCPServer
 from shared import prom_query, prom_scalar, quote_label, shared_client
 
 from tools.metrics import component_problems
+from tools.storage import dir_reading_query
 
 EASTERN = ZoneInfo("America/New_York")
 
@@ -148,11 +149,12 @@ def register(mcp: MCPServer) -> None:
             "count by (alertname) (changes(ALERTS_FOR_STATE[6h]) > 0)",
             timeout=10.0,
         )
+        selector = f'username="{quoted}"'
         home_rows, _ = await prom_query(
-            client, PROMETHEUS_URL, f'af_home_dir_util{{username="{quoted}"}}'
+            client, PROMETHEUS_URL, dir_reading_query("home", "util", selector)
         )
         size_rows, _ = await prom_query(
-            client, PROMETHEUS_URL, f'af_home_dir_size_kb{{username="{quoted}"}}'
+            client, PROMETHEUS_URL, dir_reading_query("home", "size_kb", selector)
         )
         home_util = prom_scalar(home_rows)
         home_size = prom_scalar(size_rows)

@@ -7,6 +7,7 @@ resources:
   - ../../apps/dask-gateway/ingress.yaml
   - ../../apps/dask-gateway/aliases.yaml
 
+  - ../../apps/monitoring/helmrepo-grafana.yaml
   - ../../apps/monitoring/pyroscope/helmrelease.yaml
   - ../../apps/monitoring/pyroscope/pvc.yaml
   - ../../apps/monitoring/loki/helmrelease.yaml

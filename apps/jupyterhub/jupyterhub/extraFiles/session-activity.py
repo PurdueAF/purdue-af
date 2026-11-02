@@ -7,12 +7,12 @@ It exports what JupyterHub itself calls activity, the signal the cullers act on.
 """
 
 import datetime
-import logging
 from collections.abc import Iterator
 from typing import Any
 
 from prometheus_client import REGISTRY
 from prometheus_client.core import GaugeMetricFamily
+from traitlets.log import get_logger
 
 # JupyterHub injects `c` at exec time; the annotation is for type checkers only.
 c: Any
@@ -21,7 +21,7 @@ c: Any
 POD_NAME_TEMPLATE: str = c.KubeSpawner.pod_name_template or "purdue-af-{userid}"
 LABELS = ["username", "servername", "pod"]
 
-log = logging.getLogger("session-activity")
+log = get_logger()
 
 
 def to_timestamp(value: datetime.datetime | None) -> float | None:
@@ -84,7 +84,7 @@ class SessionActivityCollector:
             rows = sessions()
         except Exception:
             # Raising here would take down every metric /hub/metrics serves.
-            log.exception("session activity collection failed")
+            log.exception("[session-activity] collection failed")
             rows = []
         for labels, last, start in rows:
             activity.add_metric(labels, last)

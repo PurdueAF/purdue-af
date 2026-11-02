@@ -50,9 +50,7 @@ PROBE_INTERVAL_S = float(_get_env("PROBE_INTERVAL_S", "600"))
 PROBE_DEADLINE_S = float(_get_env("PROBE_DEADLINE_S", "180"))
 # De-synchronise the fleet so every node does not probe the same server at once.
 PROBE_STARTUP_JITTER_S = float(_get_env("PROBE_STARTUP_JITTER_S", "60"))
-# How long to wait for a killed child before abandoning it. A child wedged in
-# an uninterruptible read cannot be reaped at all; waiting for it is what
-# would freeze this loop.
+# Wait on a killed child before abandoning it: one in an uninterruptible read is never reaped.
 CHILD_KILL_GRACE_S = float(_get_env("CHILD_KILL_GRACE_S", "5"))
 # Longest one HTTP connection may take in total, however slowly it sends.
 HTTP_TIMEOUT_S = float(_get_env("PROBE_HTTP_TIMEOUT_S", "5"))
@@ -60,6 +58,8 @@ HTTP_TIMEOUT_S = float(_get_env("PROBE_HTTP_TIMEOUT_S", "5"))
 HEARTBEAT = RUNTIME_DIR / "heartbeat"
 READY = RUNTIME_DIR / "ready"
 ATTEMPTS_DIR = RESULTS_DIR / ".attempts"
+# How much of a check's stderr one log line carries; the reason is at its end.
+STDERR_TAIL_CHARS = 2000
 
 
 def _vlog(msg: str) -> None:
@@ -69,6 +69,10 @@ def _vlog(msg: str) -> None:
 
 def _elog(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
+
+
+def _tail(stderr: str) -> str:
+    return stderr.strip()[-STDERR_TAIL_CHARS:]
 
 
 class Published:
@@ -147,7 +151,7 @@ def load_json(path: Path) -> Dict[str, Any]:
             return loaded
     except FileNotFoundError:
         return {}
-    except Exception as e:
+    except (OSError, ValueError) as e:
         _elog(f"[probe_agent] cannot read {path}: {e}")
         return {}
 
@@ -248,8 +252,8 @@ def run_attempt(seq: int) -> str:
         err = ""
         proc.kill()
         try:
-            proc.communicate(timeout=CHILD_KILL_GRACE_S)
-        except Exception:
+            _out, err = proc.communicate(timeout=CHILD_KILL_GRACE_S)
+        except (OSError, subprocess.TimeoutExpired):
             # Wedged in the kernel; it will reparent here and be reaped later.
             _elog(f"[probe_agent] child pid={proc.pid} unkillable, abandoned")
     except Exception as e:
@@ -264,22 +268,28 @@ def run_attempt(seq: int) -> str:
             _elog(f"[probe_agent] cannot record timeout result: {e}")
             return "failed"
         PUBLISHED.set(result)
-        _vlog(f"[probe_agent] {MOUNT_NAME}: deadline exceeded, published timeout")
+        _elog(
+            f"[probe_agent] {MOUNT_NAME}: deadline exceeded, published timeout: "
+            f"{_tail(err)}"
+        )
         return "timeout"
 
     if proc.returncode != 0:
-        # The check itself broke (bad config, crash). Publishing anything here
-        # would be a guess; let the last result go stale and drop out of Ready.
+        # The check itself broke: publishing would be a guess, so the last result goes stale.
         _elog(
-            f"[probe_agent] {MOUNT_NAME}: check exited {proc.returncode}: "
-            f"{(err or '').strip()[:500]}"
+            f"[probe_agent] {MOUNT_NAME}: check exited {proc.returncode}: {_tail(err)}"
         )
         return "failed"
 
     result = load_json(attempt)
     if not result:
-        _elog(f"[probe_agent] {MOUNT_NAME}: check produced no result")
+        _elog(f"[probe_agent] {MOUNT_NAME}: check produced no result: {_tail(err)}")
         return "failed"
+
+    if result.get("ok"):
+        _vlog(f"[probe_agent] {MOUNT_NAME}: check ok: {err.strip()}")
+    else:
+        _elog(f"[probe_agent] {MOUNT_NAME}: check not ok: {_tail(err)}")
 
     try:
         # Promoted from this attempt's own file, which no abandoned child writes.
@@ -297,9 +307,7 @@ def cycle(seq: int) -> str:
     try:
         outcome = run_attempt(seq)
     except Exception as e:
-        # Handled here, not in main(): a probe that crashed must stop
-        # advertising itself as Ready, and that invariant should not depend on
-        # the caller remembering it.
+        # Here, not in main(): a crashed probe must stop advertising itself as Ready.
         _elog(f"[probe_agent] {MOUNT_NAME}: attempt raised: {e}")
         outcome = "failed"
     set_ready(outcome in ("published", "timeout"))
@@ -377,9 +385,7 @@ def main() -> None:
     running = CODE.read_bytes()
     start()
     serve()
-    # The jitter goes after the first cycle, not before it: a pod that has to
-    # wait to report is a pod that stays NotReady, and a DaemonSet rollout
-    # advances one wave at a time on readiness.
+    # Jitter follows the first cycle: a DaemonSet rollout advances on readiness.
     jitter = random.uniform(0, PROBE_STARTUP_JITTER_S)
     seq = 0
     while CODE.read_bytes() == running:
@@ -387,8 +393,7 @@ def main() -> None:
         cycle(seq)
         delay = PROBE_INTERVAL_S + (jitter if seq == 0 else 0.0)
         seq += 1
-        # Pace on cycle starts, not on cycle ends, so a slow check does not
-        # stretch the interval past the exporter's staleness window.
+        # Paced on cycle starts: a slow check must not outrun the exporter's staleness window.
         time.sleep(max(0.0, started + delay - time.time()))
     print(
         f"[probe_agent] {CODE} changed: exiting, for the container to restart on it",

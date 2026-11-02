@@ -16,8 +16,19 @@ controller:
       operator: "Equal"
       value: "cms-af"
       effect: "NoSchedule"
-  nodeSelector:
-    cms-af-dev: "true"
+  # Sessions and the hub run on either label.
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: cms-af-prod
+                operator: In
+                values: ["true"]
+          - matchExpressions:
+              - key: cms-af-dev
+                operator: In
+                values: ["true"]
 
 # Prometheus scrapes the pods; only the clustering peers use a Service (alloy-cluster).
 service:
@@ -45,11 +56,9 @@ alloy:
       cpu: 100m
       memory: 512Mi
   configMap:
-    create: true
     content: |
       logging {
         level = "warn"
-        format = "logfmt"
       }
 
       discovery.kubernetes "pods" {

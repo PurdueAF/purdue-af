@@ -57,6 +57,15 @@ def test_ldap_lookup_raises_when_the_user_is_absent(monkeypatch, fake_ldap):
     assert fake_ldap["bases"] == [f"uid=alice,{ALL_PEOPLE}"]
 
 
+def test_ldap_lookup_refuses_an_account_with_no_uid_number(monkeypatch, fake_ldap):
+    """ldap3 returns [] for an absent attribute; NB_UID must never become "[]"."""
+    fake_ldap["uid"] = []
+    ns = load(monkeypatch)
+
+    with pytest.raises(TypeError):
+        ns["ldap_lookup"]("alice")
+
+
 # ── passthrough_auth_state_hook ───────────────────────────────────────────────
 
 

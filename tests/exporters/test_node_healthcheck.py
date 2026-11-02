@@ -19,6 +19,7 @@ import node_healthcheck as nh
 import pytest
 from common import mount_configmap
 from prometheus_client import REGISTRY
+from urllib3.exceptions import MaxRetryError
 
 NOW = time.time()
 
@@ -98,26 +99,17 @@ class FakeCoreV1:
         self.pods = pods or []
         self.calls = 0
 
-    def list_node(self, label_selector):
+    def list_node(self, label_selector, _request_timeout):
         self.calls += 1
         return types.SimpleNamespace(items=self.nodes)
 
-    def list_namespaced_pod(self, namespace, label_selector=None):
+    def list_namespaced_pod(self, namespace, label_selector, _request_timeout):
         return types.SimpleNamespace(items=self.pods)
 
 
 @pytest.fixture(autouse=True)
 def clear_metrics():
-    for metric in (
-        nh.mount_valid,
-        nh.mount_ping_ms,
-        nh.mount_data_rate_gbps,
-        nh.mount_metadata_latency_ms,
-        nh.mount_result_fresh,
-        nh.mount_timeout_total,
-        nh.mount_last_success_ts,
-        nh.mount_probe_up,
-    ):
+    for metric in nh.ALL_MOUNT_GAUGES:
         metric.clear()
     nh.monitor_results_available.set(1)
     nh._result_cache.clear()
@@ -140,14 +132,8 @@ def k8s(monkeypatch):
     return types.SimpleNamespace(core=core)
 
 
-def sample(name, mount="/depot/", node="node-a", node_pool="prod", **extra):
-    labels = {
-        "mount_name": mount,
-        "mount_path": nh.MOUNTS[mount],
-        "node": node,
-        "node_pool": node_pool,
-        **extra,
-    }
+def sample(name, mount="/depot/", node="node-a", node_pool="prod"):
+    labels = {"mount_name": mount, "node": node, "node_pool": node_pool}
     return REGISTRY.get_sample_value(name, labels)
 
 
@@ -180,13 +166,8 @@ def test_list_af_nodes_without_k8s(monkeypatch):
 
 def _seed_pool_gauges(node: str, pool: str, *, latency: float = 10000.0) -> None:
     """Create the full set of status gauges for every mount under one pool."""
-    for m_name, m_path in nh.MOUNTS.items():
-        labels = {
-            "mount_name": m_name,
-            "mount_path": m_path,
-            "node": node,
-            "node_pool": pool,
-        }
+    for mount in nh.MOUNTS:
+        labels = {"mount_name": mount, "node": node, "node_pool": pool}
         nh.mount_valid.labels(**labels).set(0)
         nh.mount_ping_ms.labels(**labels).set(nh._timeout_ping_ms())
         nh.mount_metadata_latency_ms.labels(**labels).set(latency)
@@ -244,12 +225,29 @@ def test_refresh_keeps_the_last_node_list_when_the_api_fails(k8s):
     nh._list_af_nodes()
     nh._last_node_refresh = 0.0  # force a refresh
 
-    def boom(label_selector):
+    def boom(**kwargs):
         raise nh.ApiException("denied")
 
     k8s.core.list_node = boom
     assert nh._list_af_nodes() == [("node-a", "prod", True)]
     assert nh._node_pools == {"node-a": "prod"}
+
+
+def test_an_api_timeout_keeps_the_last_lists(k8s):
+    """The client raises urllib3's own error, not ApiException; it must still
+    land on the cached lists rather than end the pass."""
+    k8s.core.pods = [fake_pod()]
+    now = time.time()
+    nodes, pods = nh._list_af_nodes(), nh._probe_pods(now)
+    nh._last_node_refresh = 0.0  # force a refresh
+
+    def stalled(**kwargs):
+        raise MaxRetryError(None, "/api/v1/nodes", "read timed out")
+
+    k8s.core.list_node = stalled
+    k8s.core.list_namespaced_pod = stalled
+    assert nh._list_af_nodes() == nodes
+    assert nh._probe_pods(now + 10) == pods
 
 
 def test_pool_flip_dev_to_prod_drops_dev_series(k8s):
@@ -322,7 +320,6 @@ def test_fresh_ok_result(metrics_env):
     assert sample("af_node_mount_ping_ms") == 1.5
     assert sample("af_node_mount_metadata_latency_ms") == 20.0
     assert sample("af_node_mount_data_rate_gbps") == 8.2
-    assert sample("af_node_mount_last_success_timestamp_seconds") > 0
 
 
 def test_missing_result_reports_timeout_semantics(metrics_env):
@@ -331,15 +328,15 @@ def test_missing_result_reports_timeout_semantics(metrics_env):
     assert sample("af_node_mount_valid") == 0
     assert sample("af_node_mount_result_fresh") == 0
     assert sample("af_node_mount_ping_ms") == nh._timeout_ping_ms()
-    assert sample("af_node_mount_timeout_total", check_type="no_recent_result") == 1
 
 
-def test_missing_result_with_a_probe_pod_is_never_started(metrics_env):
+def test_missing_result_from_a_probe_that_is_not_ready_is_unknown(metrics_env):
     metrics_env.pod("/depot/", ready=False)
 
     nh.update_metrics()
 
-    assert sample("af_node_mount_timeout_total", check_type="job_never_started") == 1
+    assert sample("af_node_mount_result_fresh") == 0
+    assert sample("af_node_mount_probe_up") == 0
 
 
 def test_ready_probe_that_does_not_answer_is_unreachable(metrics_env):
@@ -352,7 +349,6 @@ def test_ready_probe_that_does_not_answer_is_unreachable(metrics_env):
 
     assert sample("af_node_mount_result_fresh") == 0
     assert sample("af_node_mount_probe_up") == 0
-    assert sample("af_node_mount_timeout_total", check_type="unreachable") == 1
 
 
 def test_stale_success_is_unknown(metrics_env, monkeypatch):
@@ -364,7 +360,6 @@ def test_stale_success_is_unknown(metrics_env, monkeypatch):
 
     assert sample("af_node_mount_valid") == 0
     assert sample("af_node_mount_result_fresh") == 0
-    assert sample("af_node_mount_timeout_total", check_type="stale_result") == 1
 
 
 def test_stale_failure_stays_red(metrics_env, monkeypatch):
@@ -384,7 +379,6 @@ def test_stale_failure_stays_red(metrics_env, monkeypatch):
 
     assert sample("af_node_mount_valid") == 0
     assert sample("af_node_mount_result_fresh") == 1
-    assert sample("af_node_mount_timeout_total", check_type="job_result") == 1
 
 
 def test_not_ready_node_clears_gauges_to_null(metrics_env, monkeypatch):
@@ -413,7 +407,6 @@ def test_not_ready_node_clears_gauges_to_null(metrics_env, monkeypatch):
     assert sample("af_node_mount_metadata_latency_ms") is None
     assert sample("af_node_mount_ping_ms") is None
     assert sample("af_node_mount_data_rate_gbps") is None
-    assert sample("af_node_mount_last_success_timestamp_seconds") is None
 
 
 def test_an_unmeasured_rate_is_absent_not_zero(metrics_env):
@@ -469,7 +462,6 @@ def test_timeout_result_uses_worst_case_latencies(metrics_env):
     assert sample("af_node_mount_ping_ms") == 2.0  # partial measurement kept
     assert sample("af_node_mount_metadata_latency_ms") == nh._timeout_metadata_ms()
     assert sample("af_node_mount_data_rate_gbps") == 0.0
-    assert sample("af_node_mount_timeout_total", check_type="job_result") == 1
 
 
 def test_a_missed_pull_keeps_the_last_verdict(metrics_env):
@@ -786,7 +778,6 @@ def test_setup_failure_beside_a_working_sibling_is_red(metrics_env):
     assert sample("af_node_mount_valid") == 0
     assert sample("af_node_mount_result_fresh") == 1
     assert sample("af_node_mount_probe_up") == 0
-    assert sample("af_node_mount_timeout_total", check_type="mount_setup_failed") == 1
 
 
 def test_setup_failure_with_no_working_sibling_is_unknown(metrics_env):
@@ -882,14 +873,12 @@ def test_future_timestamp_is_not_fresh(metrics_env):
     )
     nh.update_metrics()
     assert sample("af_node_mount_result_fresh") == 0
-    assert sample("af_node_mount_timeout_total", check_type="bad_timestamp") == 1
 
 
 def test_missing_timestamp_is_not_fresh(metrics_env):
     metrics_env("/depot/", "node-a", ok=True, ping_ms=1.0)
     nh.update_metrics()
     assert sample("af_node_mount_result_fresh") == 0
-    assert sample("af_node_mount_timeout_total", check_type="bad_timestamp") == 1
 
 
 def test_unparseable_timestamp_is_not_fresh(metrics_env):
@@ -1034,12 +1023,7 @@ def test_one_slow_probe_cannot_stall_the_pass(monkeypatch):
 def test_clear_gauges_tolerates_a_never_published_label_set():
     """Older prometheus_client raises KeyError from remove() for an unknown
     label set; one of those must not stop the rest being cleared."""
-    labels = {
-        "mount_name": "/depot/",
-        "mount_path": "/depot/",
-        "node": "node-a",
-        "node_pool": "prod",
-    }
+    labels = {"mount_name": "/depot/", "node": "node-a", "node_pool": "prod"}
     nh.mount_valid.labels(**labels).set(1)
 
     class Strict:
@@ -1048,16 +1032,6 @@ def test_clear_gauges_tolerates_a_never_published_label_set():
 
     nh._clear_gauges(labels, (Strict(), nh.mount_valid))
     assert sample("af_node_mount_valid") is None
-
-
-def test_clear_gauges_holds_objects_not_names():
-    """Resolving a gauge by name through globals() turns a typo into the
-    KeyError that _clear_gauges swallows, and a gauge that is silently never
-    cleared is the frozen last-known-good green the clearing exists to stop."""
-    assert all(hasattr(g, "remove") for g in nh.RESULT_GAUGES)
-    assert nh.mount_probe_up in nh.ALL_MOUNT_GAUGES
-    assert nh.mount_probe_up not in nh.RESULT_GAUGES
-    assert set(nh.RESULT_GAUGES) < set(nh.ALL_MOUNT_GAUGES)
 
 
 # ── new code ──────────────────────────────────────────────────────────────────

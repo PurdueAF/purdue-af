@@ -1,8 +1,8 @@
 """Tests for the Prometheus alert rules and the health dashboard they feed.
 
 The Grafana health table and the MCP health tool both read `ALERTS`, so every
-rule carries the labels they group by. Expression correctness is promtool's
-job (validate-manifests.sh)."""
+rule carries the labels they group by. What each expression does is tested in
+alerts.test.yml, which validate-manifests.sh runs with promtool."""
 
 import json
 import re
@@ -20,6 +20,21 @@ def rules():
     doc = yaml.safe_load(VALUES.read_text())
     groups = doc["serverFiles"]["alerting_rules.yml"]["groups"]
     return [r for g in groups for r in g["rules"]]
+
+
+def jobs():
+    doc = yaml.safe_load(VALUES.read_text())
+    return doc["serverFiles"]["prometheus.yml"]["scrape_configs"]
+
+
+def af_pod_monitor_drops():
+    af = next(j for j in jobs() if j["job_name"] == "af-pod-monitor")
+    return [
+        r
+        for r in af["relabel_configs"]
+        if r.get("action") == "drop"
+        and r.get("source_labels") == ["__meta_kubernetes_service_name"]
+    ]
 
 
 def test_every_alert_has_a_component_and_severity():
@@ -61,82 +76,25 @@ def test_hub_alert_is_scoped_to_this_environment():
     )
 
 
-def test_login_callback_alert_ignores_denied_users_and_successes():
-    """A denied user gets a 403 at the callback; only a 400 run with no 302
-    in the same window means the identity provider is rejecting logins."""
+def test_login_callback_alert_is_scoped_to_this_environment():
+    """Both sides of the `unless` read the same hub, or one environment's
+    successes would clear another's failures."""
     rule = next(r for r in rules() if r["alert"] == "AFLoginCallbackFailing")
-    expr = rule["expr"]
-    assert expr.count('instance="${jupyterhub_host}"') == 2, expr
-    assert 'handler="oauthenticator.oauth2.OAuthCallbackHandler"' in expr
-    failing, _, succeeded = expr.partition("unless")
-    assert 'code="400"' in failing and "403" not in expr
-    assert 'code="302"' in succeeded
-    assert rule["labels"]["component"] == "access"
-
-
-def test_mount_invalid_is_a_warning_not_an_error():
-    """Transient storage failures must not flip Facility health / MCP Degraded."""
-    invalid = next(r for r in rules() if r["alert"] == "AFMountInvalid")
-    assert invalid["labels"]["severity"] == "warning"
-    slow = next(r for r in rules() if r["alert"] == "AFMountSlow")
-    assert slow["labels"]["severity"] == "warning"
-
-
-def test_dask_controller_stall_counts_only_pods_that_still_exist():
-    """A range window over the phase series keeps a deleted pod's last
-    Succeeded samples, so it counts pods the controller already removed;
-    kube_pod_completion_time has a sample only while the pod exists."""
-    stall = next(r for r in rules() if r["alert"] == "AFDaskControllerStalled")
-    assert "kube_pod_completion_time" in stall["expr"]
-    assert "_over_time" not in stall["expr"]
-
-
-def test_mount_invalid_requires_fresh_completed_check():
-    """Red (AFMountInvalid) is only a finished failing check — never a missing
-    series from a NotReady node (those publish null and do not match)."""
-    invalid = next(r for r in rules() if r["alert"] == "AFMountInvalid")
-    assert "af_node_mount_valid" in invalid["expr"]
-    assert "af_node_mount_result_fresh" in invalid["expr"]
-    assert "== 1" in invalid["expr"]
-
-
-def test_prod_nodes_not_ready_uses_cms_af_taint():
-    """NotReady AF capacity must page operators; mount gauges are null there."""
-    rule = next(r for r in rules() if r["alert"] == "AFProdNodesNotReady")
-    assert 'value="cms-af"' in rule["expr"], rule["expr"]
-    assert "kube_node_status_condition" in rule["expr"]
-    assert rule["labels"]["component"] == "compute"
-    assert rule["labels"]["severity"] == "error"
-
-
-def test_mount_health_unknown_waits_ten_minutes():
-    """Unknown mount health fires within ten minutes."""
-    unknown = next(r for r in rules() if r["alert"] == "AFMountHealthUnknown")
-    assert unknown["for"] == "10m"
+    assert rule["expr"].count('instance="${jupyterhub_host}"') == 2, rule["expr"]
 
 
 def test_af_pod_monitor_does_not_double_scrape_pixi_sync():
     """pixi-global-sync has its own static scrape; kubernetes SD must not
     duplicate those series under job=af-pod-monitor."""
-    doc = yaml.safe_load(VALUES.read_text())
-    jobs = doc["serverFiles"]["prometheus.yml"]["scrape_configs"]
-    af = next(j for j in jobs if j["job_name"] == "af-pod-monitor")
-    drops = [
-        r
-        for r in af["relabel_configs"]
-        if r.get("action") == "drop"
-        and r.get("source_labels") == ["__meta_kubernetes_service_name"]
-    ]
+    drops = af_pod_monitor_drops()
     assert any("pixi-global-sync" in str(r.get("regex", "")) for r in drops), drops
-    assert any(j["job_name"] == "pixi-global-sync" for j in jobs)
+    assert any(j["job_name"] == "pixi-global-sync" for j in jobs())
 
 
 def test_kube_state_metrics_scrape_keeps_only_cms_and_cluster_scoped():
     """Cluster-wide KSM (~244k series) is what balloons TSDB on this PVC and
     stretches Ceph compaction long enough for liveness to SIGKILL the pod."""
-    doc = yaml.safe_load(VALUES.read_text())
-    jobs = doc["serverFiles"]["prometheus.yml"]["scrape_configs"]
-    ksm = next(j for j in jobs if j["job_name"] == "kube-state-metrics")
+    ksm = next(j for j in jobs() if j["job_name"] == "kube-state-metrics")
     keeps = [
         r
         for r in ksm.get("metric_relabel_configs", [])
@@ -166,7 +124,7 @@ def test_prometheus_server_tolerates_ceph_stalls():
 
 def test_prometheus_tsdb_uses_rwo_block_storage():
     """CephFS/RWX freezes this server during WAL/compaction (probes time out
-    for hours at ~0 CPU). Same fix as Grafana/alertmanager: RBD RWO."""
+    for hours at ~0 CPU), so the TSDB sits on RBD RWO, like Grafana's."""
     pvc = yaml.safe_load((REPO / "apps/monitoring/prometheus/pvc.yaml").read_text())
     assert pvc["spec"]["storageClassName"] == "${singlenode_storage_class}"
     assert pvc["spec"]["accessModes"] == ["ReadWriteOnce"]
@@ -176,37 +134,20 @@ def test_prometheus_tsdb_uses_rwo_block_storage():
 
 def test_af_node_monitor_has_dedicated_scrape_without_pod_host():
     """Mount metrics must not carry the Deployment host (geddes-b001 etc.)."""
-    doc = yaml.safe_load(VALUES.read_text())
-    jobs = doc["serverFiles"]["prometheus.yml"]["scrape_configs"]
-    node_mon = next(j for j in jobs if j["job_name"] == "af-node-monitor")
+    node_mon = next(j for j in jobs() if j["job_name"] == "af-node-monitor")
     targets = node_mon["static_configs"][0]["targets"]
     assert "af-node-monitor-service:8000" in targets
-    af = next(j for j in jobs if j["job_name"] == "af-pod-monitor")
-    drops = [
-        r
-        for r in af["relabel_configs"]
-        if r.get("action") == "drop"
-        and r.get("source_labels") == ["__meta_kubernetes_service_name"]
-    ]
+    drops = af_pod_monitor_drops()
     assert any("af-node-monitor-service" in str(r.get("regex", "")) for r in drops), (
         drops
     )
-
-
-def test_pixi_daemon_stale_alert_uses_heartbeat():
-    rule = next(r for r in rules() if r["alert"] == "AFGlobalEnvDaemonStale")
-    assert "loop_heartbeat_timestamp_seconds" in rule["expr"]
-    assert rule["labels"]["severity"] == "warning"
-    assert rule["labels"]["component"] == "environment"
 
 
 def test_af_pod_monitor_scrape_does_not_steal_node_label():
     """af-node-monitor exports node=<AF worker>. Scraping the monitor pod's
     kubernetes node name into the same label renames the worker to exported_node
     and makes non-AF hosts (e.g. where the Deployment sits) look monitored."""
-    doc = yaml.safe_load(VALUES.read_text())
-    jobs = doc["serverFiles"]["prometheus.yml"]["scrape_configs"]
-    af = next(j for j in jobs if j["job_name"] == "af-pod-monitor")
+    af = next(j for j in jobs() if j["job_name"] == "af-pod-monitor")
     node_targets = [
         r
         for r in af["relabel_configs"]
@@ -215,82 +156,6 @@ def test_af_pod_monitor_scrape_does_not_steal_node_label():
     assert node_targets, "expected a pod-node relabel"
     assert all(r.get("target_label") != "node" for r in node_targets), node_targets
     assert any(r.get("target_label") == "pod_node" for r in node_targets)
-
-
-def test_mount_alerts_name_the_worker_node_label():
-    """Summaries must use the exporter's node label, not a scrape-host alias."""
-    for name in (
-        "AFMountInvalid",
-        "AFMountSlow",
-        "AFMountHealthUnknown",
-        "AFMountInvalidDev",
-        "AFCvmfsFailing",
-        "AFEosSlow",
-    ):
-        rule = next(r for r in rules() if r["alert"] == name)
-        summary = rule["annotations"]["summary"]
-        assert "$labels.node" in summary, summary
-        assert "exported_node" not in summary
-
-
-def test_cvmfs_alerts_wait_for_more_than_one_failed_check():
-    """A /cvmfs check after autofs expired the repository pays a cold
-    automount, which outlasts the read timeout on some node most hours. The
-    per-check rules leave /cvmfs out; its own rules need a node failing most
-    of its checks, or many nodes failing at once."""
-    invalid = next(r for r in rules() if r["alert"] == "AFMountInvalid")["expr"]
-    assert 'mount_name!="cvmfs"' in invalid
-    for name in ("AFCvmfsFailing", "AFCvmfsFailingWidely"):
-        expr = next(r for r in rules() if r["alert"] == name)["expr"]
-        assert 'mount_name="cvmfs"' in expr, name
-        assert "_over_time" in expr, name
-        assert "af_node_mount_result_fresh" in expr, name
-
-
-def test_widespread_mount_failure_is_an_error():
-    """One node's failing mount is a warning; the same mount failing on most
-    nodes is a storage outage and must turn Facility health / MCP Degraded."""
-    widely = next(r for r in rules() if r["alert"] == "AFMountFailingWidely")
-    assert widely["labels"]["severity"] == "error"
-    assert 'mount_name!="cvmfs"' in widely["expr"]
-    assert "by (mount_name)" in widely["expr"]
-    assert "af_node_mount_result_fresh" in widely["expr"]
-
-
-def test_eos_slow_needs_most_of_an_hour_of_slow_checks():
-    """A timed-out check publishes the 10000 ms sentinel, which averaged with a
-    healthy check lands inside AFMountSlow's band. eos times out one node and
-    one check at a time, so AFMountSlow leaves eos (and /cvmfs) out; AFEosSlow
-    needs half of a node's eos checks over an hour slow, timeouts included,
-    and one slow check that completed, so an outage of timeouts alone fires
-    AFMountInvalid and not both."""
-    slow = next(r for r in rules() if r["alert"] == "AFMountSlow")["expr"]
-    assert 'mount_name!~"cvmfs|eos"' in slow
-    eos = next(r for r in rules() if r["alert"] == "AFEosSlow")["expr"]
-    assert 'mount_name="eos"' in eos
-    assert "} > bool 2000" in eos
-    assert "< 10000 > bool 2000" in eos
-    assert "max_over_time" in eos
-    assert eos.count("[1h:]") == 2
-    assert "af_node_mount_result_fresh" in eos
-
-
-def test_mount_slow_excludes_the_probe_timeout_sentinel():
-    """af-node-monitor reports its timeout value (10000 ms) as the latency when
-    a check gives up; AFMountInvalid covers that case. Without the upper bound
-    both alerts fire for one fault."""
-    slow = next(r for r in rules() if r["alert"] == "AFMountSlow")
-    assert "< 10000" in slow["expr"], slow["expr"]
-
-
-def test_mount_slow_uses_a_rolling_average_on_prod():
-    """Mount checks refresh only every ~10 minutes and individual samples often
-    dip below the threshold while EOS is still chronically slow. Instant
-    comparisons with `for:` never hold; avg_over_time does. Prod-only so a
-    sick cms-af-dev node cannot affect the user-facing signal."""
-    slow = next(r for r in rules() if r["alert"] == "AFMountSlow")
-    assert "avg_over_time" in slow["expr"], slow["expr"]
-    assert 'node_pool="prod"' in slow["expr"], slow["expr"]
 
 
 # --- the dashboard that turns alerts into a health answer -----------------
@@ -338,16 +203,6 @@ def test_dashboard_covers_every_component_that_has_alerts():
     table = json.dumps(panel(DASHBOARD, "Firing alerts by component"))
     hardcoded = [c for c in components if f'"{c}"' in table]
     assert not hardcoded, f"table hardcodes components: {hardcoded}"
-
-
-def test_delivery_alerts_are_kept_apart_by_kind():
-    """Names repeat across kinds, so the rules select on kind, not on a name."""
-    by_name = {r["alert"]: r for r in rules() if r["labels"]["component"] == "delivery"}
-    assert (
-        'kind=~"Kustomization|GitRepository"' in by_name["AFFluxRootNotReady"]["expr"]
-    )
-    assert 'kind="HelmRelease"' in by_name["AFHelmReleaseNotReady"]["expr"]
-    assert "absent(" in by_name["AFFluxStateUnknown"]["expr"]
 
 
 def test_a_stuck_session_alerts_before_the_hub_deletes_the_pod():

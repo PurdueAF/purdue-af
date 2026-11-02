@@ -288,6 +288,10 @@ def test_snippet_finds_gpu_queries_in_its_config_dir(monkeypatch):
 
 async def test_get_free_gpus_unknown_on_query_failure(monkeypatch):
     ns = load(monkeypatch)
+    warnings = []
+    ns["log"] = types.SimpleNamespace(
+        warning=lambda message, *args: warnings.append(message % args)
+    )
 
     async def prom(query):
         raise OSError("connection refused")
@@ -295,6 +299,9 @@ async def test_get_free_gpus_unknown_on_query_failure(monkeypatch):
     ns["_prom_query"] = prom
 
     assert await ns["get_free_gpus"]() is None
+    assert warnings == [
+        "[gpu-availability] Prometheus query failed: connection refused"
+    ]
 
 
 async def test_get_free_gpus_unknown_when_metrics_missing(monkeypatch):

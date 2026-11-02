@@ -19,7 +19,6 @@ spec:
     cleanupOnFail: true
     remediation:
       retries: -1
-      strategy: rollback
   valuesFrom:
     - kind: ConfigMap
       name: alloy-config

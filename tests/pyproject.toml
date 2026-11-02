@@ -22,7 +22,6 @@ dependencies = [
     "kubernetes>=31", # af-node-monitor
     "cachetools>=5.5", # agentic-interface
     "matplotlib>=3.9", # plot-af-users cron
-    "pandas>=2.2",
     "jupyterhub-kubespawner>=7.1",
     "aiohttp>=3.9", # ray-train gateway
     "grpcio>=1.60", # ray-train gateway

@@ -173,6 +173,13 @@ async def test_storage_prometheus_down_is_an_error_not_no_data(user_ctx):
     assert "not a quota problem" in out
 
 
+def test_a_reading_is_filtered_to_directories_the_last_pass_read():
+    assert storage.dir_reading_query("work", "util", 'username="alice"') == (
+        'af_work_dir_util{username="alice"}'
+        ' and on(pod) af_work_dir_ok{username="alice"} == 1'
+    )
+
+
 @respx.mock
 async def test_storage_partial_outage_is_noted(user_ctx):
     def responder(request):
