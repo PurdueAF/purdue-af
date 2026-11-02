@@ -16,6 +16,7 @@ directory under [`analyses/`](analyses) with an `analysis.toml`, such as
 | --------------------- | ------------------------------------------------------------ |
 | `agentic_analysis.py` | The task, its environment and the launcher (`__main__`)      |
 | `af_opencode.js`      | The OpenCode plugin every turn runs with                     |
+| `facility.md`         | The facility's rules for every agent, formatted each turn    |
 | `af_profiling.py`     | The profiler hook installed into each analysis's environment |
 | `af_dask.py`          | The Dask cluster helper installed into the same environment  |
 | `af_ray.py`           | The Ray jobs helper installed into the same environment      |
@@ -39,7 +40,7 @@ Before each turn the runner configures OpenCode afresh from the proxy's
   configuration (`PERMISSION`); before each turn, what OpenCode would load
   over it or over JFC's `CLAUDE.md` files (`CONFIGS`), from the analysis or
   `$HOME`, goes to the workspace's `opencode/quarantine`;
-- `FACILITY`, which the agent and every subagent read beside the analysis's
+- `facility.md`, which the agent and every subagent read beside the analysis's
   `CLAUDE.md`: how this facility runs subagents, bounds and finds commands,
   keeps an analysis's files, splits and reviews figures and treats PDFs, reads CMS data through XCache with the grid proxy the task pods
   hold, processes it on
@@ -64,7 +65,8 @@ Before each turn the runner configures OpenCode afresh from the proxy's
   three helpers into the analysis's environment at the turn's start, and back
   into it before any command after a rebuild took them out; and records
   each request and command as it starts and what the subagents do, which the
-  task's log follows.
+  task's log follows, and the replies of the agent's that OpenCode went on
+  from, which the run's output keeps.
 
 A turn whose plugin has not loaded within `LOADED` seconds, or that says
 nothing for `STALL` seconds, is ended, and its attempt fails. What a turn
@@ -140,13 +142,11 @@ A directory `analyses/<name>` with an `analysis.toml`:
 
 ## Tuning
 
-All in `agentic_analysis.py`:
+In `agentic_analysis.py`, each with a comment on what it bounds:
 
-- `JFC` pins the methodology by commit, and `PYTHON` the version every
-  analysis runs.
-- `AGENTS` puts each JFC role on a role of the proxy's; `PERMISSION`, `SEATS`
-  and `FACILITY` are what every agent works under.
-- `env` holds what a task pod reserves; `RETRIES` and the timeout of `advance`
-  bound a run, `RESUMES` its resumes of a cut-off reply, `COMMAND_HOURS` a
-  foreground command of the agent's and `COMMAND_MINUTES` one that sets no
-  timeout, and `LOADED` and `STALL` a turn's start and its silences.
+- `JFC`, `PYTHON`, `AGENTS`, `PERMISSION`, `SEATS`;
+- `RESUMES`, `SETUP_SECONDS`, `COMMAND_HOURS`, `COMMAND_MINUTES`, `LOADED`,
+  `STALL`.
+
+`env` holds what a task pod reserves, and `RETRIES` and the timeout of `advance`
+bound a run. What every agent works under is `facility.md`.

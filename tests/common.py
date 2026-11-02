@@ -5,6 +5,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import yaml
+
 REPO = Path(__file__).resolve().parents[1]
 
 
@@ -15,6 +17,11 @@ def load_script(path, module_name):
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def load_all(path):
+    """The documents of a YAML file."""
+    return [doc for doc in yaml.safe_load_all(path.read_text()) if doc]
 
 
 def mount_configmap(volume, version, files):

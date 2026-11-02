@@ -5,6 +5,7 @@ publishes badges for."""
 
 import json
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -53,6 +54,22 @@ def test_classify(cs, released_drift, validated_drift, ci_state, expected):
     status, ahead = cs.classify(released_drift, validated_drift, ci_state)
     assert status == expected
     assert ahead == (0 if expected == "released" else released_drift)
+
+
+def test_every_image_ci_builds_has_its_dockerfile_and_inputs(cs):
+    workflow = yaml.safe_load((REPO / cs.CI_IMAGES_WORKFLOW).read_text())
+    matrix = workflow["jobs"]["build-aux-images"]["strategy"]["matrix"]["include"]
+    assert matrix
+    for image in matrix:
+        dockerfile = Path(image["dockerfile"])
+        assert (REPO / dockerfile).is_file()
+        inputs = subprocess.run(
+            [REPO / ".github/workflows/image-inputs.sh", "--paths", image["name"]],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        assert str(dockerfile.parent) in inputs
 
 
 def test_every_status_has_a_colour(cs):

@@ -74,8 +74,8 @@ def client(workers: int = 50, cores: float = 1, memory: float = 4) -> Any:
     """A dask.distributed Client of the analysis's cluster, which grows to at
     most `workers` workers while there is work and shrinks to none without.
     A cluster this call starts has workers of `cores` cores and `memory` GiB.
-    The analysis's scripts share one cluster; it ends an hour after the last
-    of them."""
+    The analysis's scripts share one cluster; it ends once it has run no tasks
+    for the gateway's idle timeout."""
     from dask_gateway import Gateway
 
     gateway = Gateway(auth=AccountAuth())

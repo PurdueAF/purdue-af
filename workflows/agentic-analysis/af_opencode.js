@@ -10,6 +10,7 @@ const shown = new Map(); // session -> images in its context
 const pictures = new Map(); // callID of an image read -> its session
 const finished = new Map(); // session -> why its last step ended
 const texts = new Map(); // session -> the text of its last step
+const said = new Map(); // session -> the text of its last step that had any, a summary aside, since its last compaction
 const replies = new Map(); // session -> the replies OpenCode compacted it after and had it go on from
 const compactions = new Set(); // IDs of the compaction parts seen
 const endings = new Map(); // session -> whether its last compaction came after the reply that ended its turn
@@ -302,7 +303,7 @@ export default {
           stand(callID);
           const child = output.metadata?.sessionId;
           // A task that failed left its replies to the next result of its session.
-          for (const reply of (replies.get(child) ?? []).filter(Boolean))
+          for (const reply of replies.get(child) ?? [])
             output.output +=
               "\n\nOpenCode compacted the subagent's session after the reply " +
               "below and had it go on, so the result above is what it said " +
@@ -336,30 +337,38 @@ export default {
           // Published again after its summary step, with the tail it keeps.
           else if (part.type === "compaction" && !compactions.has(part.id)) {
             compactions.add(part.id);
-            const reply = (texts.get(part.sessionID) ?? []).join("\n\n");
+            const own = (texts.get(part.sessionID) ?? []).join("\n\n");
             // A compaction after the step that ended a reply, which OpenCode then has go on; one first seen after its summary was begun by an earlier turn, mid-work.
             const ended = Boolean(
               part.auto &&
               !part.overflow &&
               !summarizing.has(part.sessionID) &&
-              reason &&
-              reason !== "tool-calls" &&
-              reason !== "unknown",
+              !settings.ongoing.includes(reason ?? ""),
             );
             // A reply cut at its output limit, or a last step that said nothing, is not one to end on.
             endings.set(
               part.sessionID,
-              ended && reason !== "length" && reply !== "",
+              ended && reason !== "length" && own !== "",
             );
-            if (ended)
+            // The human gets the main session's last message; a subagent's other steps are not its result.
+            const reply = parents.has(part.sessionID)
+              ? own
+              : (said.get(part.sessionID) ?? "");
+            said.delete(part.sessionID);
+            if (ended && reply) {
               replies.set(part.sessionID, [
                 ...(replies.get(part.sessionID) ?? []),
                 reply,
               ]);
+              record({ kind: "reply", session: part.sessionID, text: reply });
+            }
           } else if (part.metadata?.compaction_continue && !nudges.has(part.id))
             nudges.set(part.id, endings.get(part.sessionID));
           if (part.type === "step-finish") {
             finished.set(part.sessionID, part.reason);
+            const text = (texts.get(part.sessionID) ?? []).join("\n\n");
+            if (text && !summarizing.has(part.sessionID))
+              said.set(part.sessionID, text);
             if (part.reason === "length" && parents.has(part.sessionID))
               record({
                 kind: "cut",

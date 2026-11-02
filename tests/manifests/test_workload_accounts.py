@@ -3,14 +3,10 @@ declaration is in the af-accounts ConfigMap of the Flux root that deploys both
 gateways, beside the volume and the token Secret of its app."""
 
 import yaml
-from common import REPO
+from common import REPO, load_all
 
 APPS = REPO / "apps"
 FLUX = REPO / "flux"
-
-
-def load_all(path):
-    return [doc for doc in yaml.safe_load_all(path.read_text()) if doc]
 
 
 def listed(path):

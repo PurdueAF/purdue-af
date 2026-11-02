@@ -1,3 +1,4 @@
+# The H→4ℓ exercise of the JFC tutorial: https://github.com/jfc-mit/jfc-tutorial-nrp-clariphy
 name = "h4l"
 kind = "measurement"
 repo = "https://github.com/violatingcp/h4l_agent_test.git"
