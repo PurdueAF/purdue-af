@@ -1,42 +1,9 @@
 # Admin-only instance: anonymous access is disabled.
 
-# RWO block storage: SQLite needs file locks CephFS cannot provide.
-persistence:
-  enabled: true
-  type: pvc
-  size: 20Gi
-  storageClassName: ${singlenode_storage_class}
-  accessModes:
-    - ReadWriteOnce
-
-# No sidecar reads other namespaces, so the chart's ClusterRole would be empty.
-rbac:
-  namespaced: true
-
 ingress:
-  enabled: ${enable_ingresses}
-  ingressClassName: public
   path: /grafana-private
-  pathType: Prefix
-  hosts:
-    - cms.geddes.rcac.purdue.edu
   annotations:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
-
-service:
-  type: ClusterIP
-  port: 80
-  targetPort: 3000
-
-securityContext:
-  runAsNonRoot: true
-  runAsUser: 472
-  fsGroup: 472
-  fsGroupChangePolicy: OnRootMismatch
-
-# Disable init chown; rely on fsGroup on RBD
-initChownData:
-  enabled: false
 
 resources:
   requests:
@@ -46,17 +13,9 @@ resources:
     cpu: 1000m
     memory: 2Gi
 
-# RWO + SQLite: never run two pods against the same DB.
-deploymentStrategy:
-  type: Recreate
-
 grafana.ini:
   server:
     root_url: https://cms.geddes.rcac.purdue.edu/grafana-private/
-    serve_from_sub_path: true
-  database:
-    wal: true
-    query_retries: 10
   dashboards:
     default_home_dashboard_path: /var/lib/grafana/dashboards/private/users-overview.json
   auth.anonymous:
@@ -67,10 +26,8 @@ dashboardProviders:
     apiVersion: 1
     providers:
       - name: "private"
-        orgId: 1
         folder: "Private Dashboards"
         type: file
-        disableDeletion: false
         updateIntervalSeconds: 10
         allowUiUpdates: true
         options:
@@ -83,17 +40,12 @@ dashboardsConfigMaps:
 datasources:
   private-datasources.yaml:
     apiVersion: 1
-    # Delete-then-re-add is how a uid changes: .claude/rules/dashboards.md.
-    deleteDatasources:
-      - name: pyroscope
-        orgId: 1
     datasources:
       - name: prometheus-hammer
         uid: prometheus-hammer
         type: prometheus
         url: http://grafana.cms.rcac.purdue.edu:9090
         access: proxy
-        isDefault: false
       # uid pinned: pyroscope.json references it by uid.
       - name: pyroscope
         uid: pyroscope
@@ -108,14 +60,5 @@ datasources:
         type: loki
         url: http://loki.cms.svc.cluster.local:3100
         access: proxy
-        isDefault: false
         jsonData:
           maxLines: 1000
-
-nodeSelector:
-  cms-af-prod: "true"
-tolerations:
-  - key: "hub.jupyter.org/dedicated"
-    operator: "Equal"
-    value: "cms-af"
-    effect: "NoSchedule"

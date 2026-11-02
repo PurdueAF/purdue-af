@@ -183,7 +183,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"create_dask_cluster|scale_dask_cluster|stop_dask_cluster|start_af_session|stop_af_session|restart_af_session\", outcome=\"success\"}[$__range]))) or vector(0)",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"$facility_change_tools\", outcome=\"success\"}[$__range]))) or vector(0)",
           "instant": true,
           "range": false,
           "refId": "A"
@@ -494,42 +494,49 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"list_dask_clusters|list_dask_cluster_options|create_dask_cluster|get_dask_cluster_info|get_dask_worker_count|get_dask_cluster_usage|scale_dask_cluster|stop_dask_cluster\"}[$__rate_interval])))",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"$dask_tools\"}[$__rate_interval])))",
           "legendFormat": "Dask clusters",
           "range": true,
           "refId": "A"
         },
         {
           "editorMode": "code",
-          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"list_af_profiles|get_session_status|start_af_session|stop_af_session|restart_af_session|wait_for_session\"}[$__rate_interval])))",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"$session_tools\"}[$__rate_interval])))",
           "legendFormat": "Session",
           "range": true,
           "refId": "B"
         },
         {
           "editorMode": "code",
-          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"query_notebook_logs|query_dask_logs\"}[$__rate_interval])))",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"$logs_tools\"}[$__rate_interval])))",
           "legendFormat": "Logs",
           "range": true,
           "refId": "C"
         },
         {
           "editorMode": "code",
-          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"query_storage_usage\"}[$__rate_interval])))",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"$storage_tools\"}[$__rate_interval])))",
           "legendFormat": "Storage",
           "range": true,
           "refId": "D"
         },
         {
           "editorMode": "code",
-          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"get_facility_health\"}[$__rate_interval])))",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"$health_tools\"}[$__rate_interval])))",
           "legendFormat": "Health",
           "range": true,
           "refId": "E"
         },
         {
           "editorMode": "code",
-          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool!~\"list_dask_clusters|list_dask_cluster_options|create_dask_cluster|get_dask_cluster_info|get_dask_worker_count|get_dask_cluster_usage|scale_dask_cluster|stop_dask_cluster|list_af_profiles|get_session_status|start_af_session|stop_af_session|restart_af_session|wait_for_session|query_notebook_logs|query_dask_logs|query_storage_usage|get_facility_health\"}[$__rate_interval])))",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"$ray_tools\"}[$__rate_interval])))",
+          "legendFormat": "Ray",
+          "range": true,
+          "refId": "G"
+        },
+        {
+          "editorMode": "code",
+          "expr": "round(sum(increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool!~\"$dask_tools|$session_tools|$logs_tools|$storage_tools|$health_tools|$ray_tools\"}[$__rate_interval])))",
           "legendFormat": "Ungrouped",
           "range": true,
           "refId": "F"
@@ -692,7 +699,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"list_dask_clusters|list_dask_cluster_options|create_dask_cluster|get_dask_cluster_info|get_dask_worker_count|get_dask_cluster_usage|scale_dask_cluster|stop_dask_cluster\"}[$__range]))",
+          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"$dask_tools\"}[$__range]))",
           "format": "table",
           "instant": true,
           "range": false,
@@ -700,7 +707,7 @@
         },
         {
           "editorMode": "code",
-          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"list_af_profiles|get_session_status|start_af_session|stop_af_session|restart_af_session|wait_for_session\"}[$__range]))",
+          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"$session_tools\"}[$__range]))",
           "format": "table",
           "instant": true,
           "range": false,
@@ -708,7 +715,7 @@
         },
         {
           "editorMode": "code",
-          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"query_notebook_logs|query_dask_logs\"}[$__range]))",
+          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"$logs_tools\"}[$__range]))",
           "format": "table",
           "instant": true,
           "range": false,
@@ -716,7 +723,7 @@
         },
         {
           "editorMode": "code",
-          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"query_storage_usage\"}[$__range]))",
+          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"$storage_tools\"}[$__range]))",
           "format": "table",
           "instant": true,
           "range": false,
@@ -724,7 +731,7 @@
         },
         {
           "editorMode": "code",
-          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"get_facility_health\"}[$__range]))",
+          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"$health_tools\"}[$__range]))",
           "format": "table",
           "instant": true,
           "range": false,
@@ -732,7 +739,15 @@
         },
         {
           "editorMode": "code",
-          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"list_dask_clusters|list_dask_cluster_options|create_dask_cluster|get_dask_cluster_info|get_dask_worker_count|get_dask_cluster_usage|scale_dask_cluster|stop_dask_cluster|list_af_profiles|get_session_status|start_af_session|stop_af_session|restart_af_session|wait_for_session|query_notebook_logs|query_dask_logs|query_storage_usage|get_facility_health\"}[$__range]))",
+          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"$ray_tools\"}[$__range]))",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "G"
+        },
+        {
+          "editorMode": "code",
+          "expr": "sum by (username) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\"}[$__range]))",
           "format": "table",
           "instant": true,
           "range": false,
@@ -757,7 +772,8 @@
               "Time 3": true,
               "Time 4": true,
               "Time 5": true,
-              "Time 6": true
+              "Time 6": true,
+              "Time 7": true
             },
             "includeByName": {},
             "indexByName": {},
@@ -768,7 +784,8 @@
               "Value #C": "Logs",
               "Value #D": "Storage",
               "Value #E": "Health",
-              "Value #F": "Total"
+              "Value #F": "Total",
+              "Value #G": "Ray"
             }
           }
         }
@@ -904,7 +921,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "round(sum by (tool) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"create_dask_cluster|scale_dask_cluster|stop_dask_cluster|start_af_session|stop_af_session|restart_af_session\", outcome=\"success\"}[$__rate_interval])))",
+          "expr": "round(sum by (tool) (increase(purdue_af_mcp_tool_calls_total{username=~\"$user\", tool=~\"$facility_change_tools\", outcome=\"success\"}[$__rate_interval])))",
           "legendFormat": "{{tool}}",
           "range": true,
           "refId": "A"
@@ -1570,6 +1587,55 @@
         "regex": "",
         "sort": 1,
         "type": "query"
+      },
+      {
+        "name": "dask_tools",
+        "type": "constant",
+        "hide": 2,
+        "skipUrlSync": true,
+        "query": "list_dask_clusters|list_dask_cluster_options|create_dask_cluster|get_dask_cluster_info|get_dask_worker_count|get_dask_cluster_usage|scale_dask_cluster|stop_dask_cluster"
+      },
+      {
+        "name": "session_tools",
+        "type": "constant",
+        "hide": 2,
+        "skipUrlSync": true,
+        "query": "list_af_profiles|get_session_status|start_af_session|stop_af_session|restart_af_session|wait_for_session"
+      },
+      {
+        "name": "logs_tools",
+        "type": "constant",
+        "hide": 2,
+        "skipUrlSync": true,
+        "query": "query_notebook_logs|query_dask_logs"
+      },
+      {
+        "name": "storage_tools",
+        "type": "constant",
+        "hide": 2,
+        "skipUrlSync": true,
+        "query": "query_storage_usage"
+      },
+      {
+        "name": "health_tools",
+        "type": "constant",
+        "hide": 2,
+        "skipUrlSync": true,
+        "query": "get_facility_health"
+      },
+      {
+        "name": "ray_tools",
+        "type": "constant",
+        "hide": 2,
+        "skipUrlSync": true,
+        "query": "get_ray_capacity|submit_ray_job|list_ray_jobs|get_ray_job|get_ray_cluster|start_ray_cluster|stop_ray_cluster|stop_ray_job|delete_ray_job"
+      },
+      {
+        "name": "facility_change_tools",
+        "type": "constant",
+        "hide": 2,
+        "skipUrlSync": true,
+        "query": "create_dask_cluster|scale_dask_cluster|stop_dask_cluster|start_af_session|stop_af_session|restart_af_session|submit_ray_job|start_ray_cluster|stop_ray_cluster|stop_ray_job|delete_ray_job"
       }
     ]
   },

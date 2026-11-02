@@ -20,6 +20,9 @@ spec:
       retries: -1
   valuesFrom:
     - kind: ConfigMap
+      name: grafana-common-config
+      valuesKey: values.yaml
+    - kind: ConfigMap
       name: grafana-config
       valuesKey: values.yaml
     - kind: ConfigMap

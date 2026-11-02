@@ -387,7 +387,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max(up{job=\"jupyterhub\",instance=\"cms.geddes.rcac.purdue.edu\"}) or vector(0)",
+          "expr": "max(up{job=\"jupyterhub\"}) or vector(0)",
           "legendFormat": "JupyterHub",
           "datasource": {
             "type": "prometheus",
@@ -1010,14 +1010,6 @@
           "format": "table"
         },
         {
-          "refId": "B",
-          "expr": "sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\"))",
-          "legendFormat": "",
-          "range": false,
-          "instant": true,
-          "format": "table"
-        },
-        {
           "refId": "C",
           "expr": "sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"hard\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\")) - sum by (resource)(label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.cpu\"}, \"resource\", \"a CPU\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"requests.memory\"} / 2^30, \"resource\", \"b Memory\", \"resource\", \".*\") or label_replace(kube_resourcequota{namespace=\"cms\", type=\"used\", resource=\"pods\"}, \"resource\", \"c Pods\", \"resource\", \".*\"))",
           "legendFormat": "",
@@ -1283,18 +1275,6 @@
         {
           "refId": "A",
           "expr": "(sum by (resource)(kube_node_status_allocatable{resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"}) > 0)",
-          "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": false,
-          "instant": true,
-          "format": "table"
-        },
-        {
-          "refId": "B",
-          "expr": "sum by (resource)(kube_pod_container_resource_requests{namespace=\"cms\",resource=~\"nvidia.*\"} * on(node) group_left() kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",

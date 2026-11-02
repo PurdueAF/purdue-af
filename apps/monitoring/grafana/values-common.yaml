@@ -1,0 +1,55 @@
+# What both instances share; the first valuesFrom entry on each HelmRelease.
+
+# RWO block storage: SQLite needs file locks CephFS cannot provide.
+persistence:
+  enabled: true
+  type: pvc
+  size: 20Gi
+  storageClassName: ${singlenode_storage_class}
+  accessModes:
+    - ReadWriteOnce
+
+# No sidecar reads other namespaces, so the chart's ClusterRole would be empty.
+rbac:
+  namespaced: true
+
+ingress:
+  enabled: ${enable_ingresses}
+  ingressClassName: public
+  pathType: Prefix
+  hosts:
+    - cms.geddes.rcac.purdue.edu
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 472
+  fsGroup: 472
+  fsGroupChangePolicy: OnRootMismatch
+
+# Disable init chown; rely on fsGroup on RBD
+initChownData:
+  enabled: false
+
+# RWO + SQLite: never run two pods against the same DB.
+deploymentStrategy:
+  type: Recreate
+
+grafana.ini:
+  server:
+    serve_from_sub_path: true
+  database:
+    wal: true
+    query_retries: 10
+
+nodeSelector:
+  cms-af-prod: "true"
+tolerations:
+  - key: "hub.jupyter.org/dedicated"
+    operator: "Equal"
+    value: "cms-af"
+    effect: "NoSchedule"

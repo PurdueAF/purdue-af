@@ -7,12 +7,9 @@ the same as one stray timeout. The row is the share of CephFS mount attempts on
 AF nodes that succeeded, so it reaches red exactly when nothing mounts.
 """
 
-import json
 import re
 
-from common import REPO
-
-DEFAULT = REPO / "apps/monitoring/grafana/dashboards/default.json"
+from dashboard_helpers import panel
 
 FATAL = {"DeadlineExceeded", "Unavailable", "Internal", "ResourceExhausted"}
 
@@ -26,19 +23,9 @@ TERM = re.compile(
 SKELETON = "1 - X / clamp_min(X, 1)"
 
 
-def _painted(failed, attempted):
-    """What SKELETON evaluates to for a failed count out of an attempted one."""
-    return 1 - failed / max(attempted, 1)
-
-
-def _panel(title):
-    doc = json.loads(DEFAULT.read_text())
-    (panel,) = [p for p in doc["panels"] if p.get("title") == title]
-    return panel
-
-
-def _target(panel, legend):
-    (target,) = [t for t in panel["targets"] if t.get("legendFormat") == legend]
+def _target(legend):
+    components = panel("default.json", "Components")
+    (target,) = [t for t in components["targets"] if t.get("legendFormat") == legend]
     return target
 
 
@@ -48,7 +35,7 @@ def _statuses(selector):
 
 
 def test_geddes_storage_is_a_failed_over_attempted_ratio():
-    expr = _target(_panel("Components"), "Geddes storage")["expr"]
+    expr = _target("Geddes storage")["expr"]
     terms = list(TERM.finditer(expr))
     assert len(terms) == 2, expr
     assert TERM.sub("X", expr) == SKELETON, expr
@@ -67,30 +54,26 @@ def test_geddes_storage_is_a_failed_over_attempted_ratio():
 
 
 def test_geddes_storage_spans_the_full_panel_range():
-    steps = _panel("Components")["fieldConfig"]["defaults"]["thresholds"]["steps"]
+    components = panel("default.json", "Components")
+    steps = components["fieldConfig"]["defaults"]["thresholds"]["steps"]
     assert [s["color"] for s in steps] == ["red", "orange", "green"]
     assert [s["value"] for s in steps] == [None, 0.0001, 1]
 
-    assert _painted(0, 0) == 1  # an idle window is not a failing one
-    assert _painted(0, 40) == 1  # every mount succeeded
-    assert _painted(13, 13) == 0  # every mount failed: an outage, painted red
-    assert 0 < _painted(5, 15) < 1  # some failed: partial, painted orange
-
 
 def test_geddes_registry_reads_the_probe_and_is_blank_without_it():
-    target = _target(_panel("Components"), "Geddes registry")
+    target = _target("Geddes registry")
     assert target["expr"] == "min(af_registry_up)"
     assert target["datasource"]["uid"] == "prometheus"
 
 
 def test_xcache_reads_the_probe_and_is_blank_without_it():
-    target = _target(_panel("Components"), "XCache")
+    target = _target("XCache")
     assert target["expr"] == "min(af_xcache_read_ok)"
     assert target["datasource"]["uid"] == "prometheus"
 
 
 def test_dask_gateway_row_needs_the_controller_ready():
     """The api keeps answering while the controller is hung."""
-    expr = _target(_panel("Components"), "Dask Gateway")["expr"]
+    expr = _target("Dask Gateway")["expr"]
     assert expr.startswith("(min(kube_deployment_status_replicas_available{"), expr
     assert 'deployment=~"(api|controller)-dask-gateway"' in expr, expr

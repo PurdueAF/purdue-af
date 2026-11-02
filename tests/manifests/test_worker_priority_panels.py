@@ -4,14 +4,13 @@ Each names the class its gateway gives the workers past the guaranteed ones; a
 class renamed in the gateway alone would count every worker as guaranteed.
 """
 
-import json
 import re
 
 import pytest
 import yaml
 from common import REPO
+from dashboard_helpers import panel
 
-DASHBOARDS = REPO / "apps/monitoring/grafana/dashboards"
 DASK_RELEASE = REPO / "apps/dask-gateway/helmrelease.yaml"
 RAY_CONFIG = REPO / "apps/ray-train/config.yaml"
 
@@ -22,14 +21,9 @@ def _classes():
     return {"Dask Gateway": dask, "Ray on Geddes": ray}
 
 
-def _stat(title, dashboard="default.json"):
-    doc = json.loads((DASHBOARDS / dashboard).read_text())
-    (panel,) = [p for p in doc["panels"] if p["type"] == "stat" and p["title"] == title]
-    return panel
-
-
 def _exprs(title):
-    return {t["legendFormat"]: t["expr"] for t in _stat(title)["targets"]}
+    targets = panel("default.json", title)["targets"]
+    return {t["legendFormat"]: t["expr"] for t in targets}
 
 
 def test_split_names_the_class_each_gateway_assigns():
@@ -57,7 +51,7 @@ def test_both_halves_count_the_same_running_pods():
 def test_the_stats_are_typeset_alike_with_ray_under_dask(dashboard):
     """Automatic text sizes follow each panel's own digits, so the sizes are fixed."""
     dask, *rays = (
-        _stat(title, dashboard)
+        panel(dashboard, title)
         for title in ("Dask Gateway", "Ray on Geddes", "Ray on NRP")
     )
     assert dask["options"]["text"].keys() == {"titleSize", "valueSize"}

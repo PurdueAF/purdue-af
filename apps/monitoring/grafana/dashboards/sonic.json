@@ -362,9 +362,6 @@
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "fillOpacity": 10
-          },
           "max": 1,
           "min": 0,
           "thresholds": {
@@ -434,9 +431,6 @@
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "fillOpacity": 10
-          },
           "max": 1,
           "min": 0,
           "thresholds": {
@@ -505,9 +499,6 @@
         "defaults": {
           "color": {
             "mode": "palette-classic"
-          },
-          "custom": {
-            "fillOpacity": 10
           },
           "max": 1,
           "min": 0,
