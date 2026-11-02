@@ -19,7 +19,8 @@ after what it tests (`docs/` asserts the site's navigation against its pages). T
 ## Conventions
 
 - Shared plumbing is [`common.py`](common.py): `REPO` (repository root) and
-  `load_script()` for importing files whose names are not importable.
+  `load_script()` for importing files whose names are not importable. Flat
+  source directories are on `pythonpath` in [`pyproject.toml`](pyproject.toml).
 - Per-suite fixtures go in that directory's `conftest.py`; per-suite helpers in
   a uniquely named `*_helpers.py` (`hub_helpers.py`, `script_helpers.py`),
   because several modules called `conftest` cannot be imported from test code.

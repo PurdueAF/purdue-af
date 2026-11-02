@@ -38,6 +38,37 @@ def test_ldap_lookup_binds_in_plaintext_for_the_e2e_mock(monkeypatch, fake_ldap)
     assert fake_ldap["sessions"] == [(False, "bind")]
 
 
+def test_ldap_lookup_bounds_a_silent_directory_and_closes_the_connection(
+    monkeypatch, fake_ldap
+):
+    ns = load(monkeypatch)
+    ns["ldap_lookup"]("alice")
+    assert fake_ldap["timeouts"] == [(ns["LDAP_TIMEOUT_S"], ns["LDAP_TIMEOUT_S"])]
+    assert fake_ldap["unbinds"] == 1
+
+
+@pytest.mark.parametrize(
+    "tls, step", [("true", "start_tls"), ("false", "bind"), ("true", "search")]
+)
+def test_ldap_lookup_closes_the_connection_when_it_fails(
+    monkeypatch, fake_ldap, tls, step
+):
+    monkeypatch.setenv("AF_LDAP_TLS", tls)
+    fake_ldap["failures"][step] = TimeoutError("no answer")
+    ns = load(monkeypatch)
+    with pytest.raises(TimeoutError):
+        ns["ldap_lookup"]("alice")
+    assert fake_ldap["unbinds"] == 1
+
+
+def test_ldap_lookup_closes_the_connection_of_a_missing_account(monkeypatch, fake_ldap):
+    ns = load(monkeypatch)
+    fake_ldap["missing_dns"].add(f"uid=nobody,{ALL_PEOPLE}")
+    with pytest.raises(RuntimeError, match="no LDAP entry"):
+        ns["ldap_lookup"]("nobody")
+    assert fake_ldap["unbinds"] == 1
+
+
 def test_ldap_lookup_reads_the_dn_instead_of_searching(monkeypatch, fake_ldap):
     """A base-scope read of the account's DN, never a filtered search."""
     ns = load(monkeypatch)

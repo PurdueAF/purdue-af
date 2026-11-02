@@ -34,3 +34,12 @@ package = false
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["."]
+# Relative to this file. A dashed script goes through common.load_script instead.
+pythonpath = [
+    "../docker/agentic-interface",
+    "../docker/af-node-monitor",
+    "../docker/supersonic-model-manager",
+    "../apps/ray-train",
+    "../apps/jupyterhub/jupyterhub/extraFiles",
+    "../workflows/agentic-analysis",
+]

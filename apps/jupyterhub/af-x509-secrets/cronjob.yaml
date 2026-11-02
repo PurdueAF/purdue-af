@@ -10,6 +10,8 @@ spec:
   failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
+      # Forbid: a hung run would block every later one.
+      activeDeadlineSeconds: 900
       template:
         spec:
           enableServiceLinks: false
@@ -69,7 +71,7 @@ spec:
           volumes:
             - name: grid-secret
               secret:
-                secretName: grid-certs-secret # Installed via servicex command line
+                secretName: grid-certs-secret # README.md
 
             # The init container copies the certs here with the permissions voms-proxy-init needs.
             - name: grid-certs-rw-copy

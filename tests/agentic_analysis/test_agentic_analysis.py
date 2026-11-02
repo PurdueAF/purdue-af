@@ -72,8 +72,6 @@ def _load():
     stubs = {"flyte": flyte, "flyte.errors": flyte.errors, "flyte.remote": flyte.remote}
     saved = {name: sys.modules.get(name) for name in stubs}
     sys.modules.update(stubs)
-    # The launcher and the task find af_profiling beside agentic_analysis.py.
-    sys.path.insert(0, str(WORKFLOW))
     try:
         return load_script(
             WORKFLOW / "agentic_analysis.py", "agentic_analysis_flows"

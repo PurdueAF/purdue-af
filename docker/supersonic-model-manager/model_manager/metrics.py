@@ -8,6 +8,7 @@ dashboard happens to reach.
 import asyncio
 import logging
 import math
+from typing import Any
 
 import httpx
 
@@ -46,7 +47,7 @@ def _queries() -> dict:
     }
 
 
-def _finite(raw):
+def _finite(raw: Any) -> float | None:
     try:
         value = float(raw)
     except (TypeError, ValueError):
@@ -64,7 +65,7 @@ async def _instant_query(client: httpx.AsyncClient, query: str) -> dict:
     if payload.get("status") != "success":
         raise RuntimeError(payload.get("error", "Prometheus query failed"))
 
-    out = {}
+    out: dict[str, float] = {}
     for series in payload.get("data", {}).get("result", []):
         model = series.get("metric", {}).get("model")
         if not model:
@@ -90,10 +91,10 @@ async def collect_metrics() -> dict:
     except Exception as exc:  # pragma: no cover - client construction only
         return {"models": {}, "error": str(exc), "configured": True}
 
-    models = {}
+    models: dict[str, dict[str, float]] = {}
     errors = []
     for key, result in zip(queries.keys(), results):
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             errors.append(f"{key}: {type(result).__name__}")
             continue
         for model, value in result.items():

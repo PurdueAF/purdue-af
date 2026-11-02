@@ -45,9 +45,6 @@ from common import (
 )
 from yarl import URL
 
-# gpu_queries.py is in the gateway's ConfigMap, beside gateway.py.
-sys.path.insert(0, str(REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles"))
-sys.path.insert(0, str(REPO / "apps" / "ray-train"))
 gw = load_script(REPO / "apps" / "ray-train" / "gateway.py", "ray_train_gateway")
 nrp_gpus = sys.modules["nrp_gpus"]
 
@@ -3690,8 +3687,14 @@ def test_the_fake_kubernetes_allows_what_the_gateways_role_does():
     assert routed == granted
 
 
-def test_ldap_ids_reads_the_account_at_its_dn(monkeypatch):
-    searched = []
+class LDAPException(Exception):
+    """Not an OSError, as ldap3's LDAPSessionTerminatedByServerError is not."""
+
+
+@pytest.fixture
+def directory(monkeypatch):
+    """A fake ldap3: holds user-a, `failures` names what raises, `unbinds` counts."""
+    state = SimpleNamespace(searched=[], unbinds=0, failures={})
 
     class Connection:
         def __init__(self, server, version, authentication, receive_timeout):
@@ -3699,14 +3702,22 @@ def test_ldap_ids_reads_the_account_at_its_dn(monkeypatch):
             self.entries = []
 
         def start_tls(self):
-            pass
+            if "start_tls" in state.failures:
+                raise state.failures["start_tls"]
 
         def search(self, search_base, search_filter, search_scope, attributes):
-            searched.append((search_base, search_scope))
+            if "search" in state.failures:
+                raise state.failures["search"]
+            state.searched.append((search_base, search_scope))
             attrs = {"uidNumber": 5001, "gidNumber": 500}
             self.entries = (
                 [{"attributes": attrs}] if search_base.startswith("uid=user-a,") else []
             )
+
+        def unbind(self):
+            state.unbinds += 1
+            if "unbind" in state.failures:
+                raise state.failures["unbind"]
 
         def response_to_json(self):
             return json.dumps({"entries": self.entries})
@@ -3714,13 +3725,31 @@ def test_ldap_ids_reads_the_account_at_its_dn(monkeypatch):
     fake = types.SimpleNamespace(
         BASE="BASE", Connection=Connection, Server=lambda **kw: kw
     )
+    errors = types.SimpleNamespace(LDAPException=LDAPException)
     monkeypatch.setitem(sys.modules, "ldap3", fake)
+    monkeypatch.setitem(sys.modules, "ldap3.core.exceptions", errors)
+    return state
 
+
+def test_ldap_ids_reads_the_account_at_its_dn(directory):
     assert gw.ldap_ids("user-a") == (5001, 500)
-    assert searched == [(f"uid=user-a,{gw.LDAP_BASE}", "BASE")]
+    assert directory.searched == [(f"uid=user-a,{gw.LDAP_BASE}", "BASE")]
+    assert directory.unbinds == 1
     with pytest.raises(gw.Refused) as e:
         gw.ldap_ids("nobody")
     assert e.value.code == grpc.StatusCode.PERMISSION_DENIED
+    assert directory.unbinds == 2
+
+
+@pytest.mark.parametrize("step", ["start_tls", "search", "unbind"])
+@pytest.mark.parametrize("error", [LDAPException("gone"), TimeoutError("no answer")])
+def test_a_directory_that_fails_refuses_the_call_as_unavailable(directory, step, error):
+    directory.failures[step] = error
+    with pytest.raises(gw.Refused) as e:
+        gw.ldap_ids("user-a")
+    assert e.value.code == grpc.StatusCode.UNAVAILABLE
+    assert e.value.__cause__ is error
+    assert directory.unbinds == 1
 
 
 def test_a_clusters_head_is_its_kuberay_service():

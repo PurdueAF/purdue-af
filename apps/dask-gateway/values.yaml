@@ -133,14 +133,17 @@ gateway:
           attrs = ['uidNumber','gidNumber']
           s = Server(host= url ,use_ssl= True, get_info= 'ALL', connect_timeout= 10)
           conn = Connection(s, version = 3, authentication = "ANONYMOUS", receive_timeout= 10)
-          conn.start_tls()
-          conn.search(
-              search_base = "uid={0},{1}".format(username, baseDN),
-              search_filter = "(objectClass=*)",
-              search_scope = BASE,
-              attributes = attrs
-          )
-          entries = json.loads(conn.response_to_json())[u'entries']
+          try:
+              conn.start_tls()
+              conn.search(
+                  search_base = "uid={0},{1}".format(username, baseDN),
+                  search_filter = "(objectClass=*)",
+                  search_scope = BASE,
+                  attributes = attrs
+              )
+              entries = json.loads(conn.response_to_json())[u'entries']
+          finally:
+              conn.unbind()
           if not entries:
               raise ValueError("no LDAP entry for " + username)
           result = entries[0][u'attributes']

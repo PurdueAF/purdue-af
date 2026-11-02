@@ -548,6 +548,7 @@ def pooled_account(af_id: int) -> str:
 def ldap_ids(account: str) -> tuple[int, int]:
     """UID/GID of an account, read by its DN as set-user-info.py does."""
     from ldap3 import BASE, Connection, Server
+    from ldap3.core.exceptions import LDAPException
 
     conn = Connection(
         Server(
@@ -560,14 +561,24 @@ def ldap_ids(account: str) -> tuple[int, int]:
         authentication="ANONYMOUS",
         receive_timeout=LDAP_TIMEOUT_S,
     )
-    conn.start_tls()
-    conn.search(
-        search_base=f"uid={account},{LDAP_BASE}",
-        search_filter="(objectClass=*)",
-        search_scope=BASE,
-        attributes=["uidNumber", "gidNumber"],
-    )
-    entries = json.loads(conn.response_to_json())["entries"]
+    try:
+        try:
+            conn.start_tls()
+            conn.search(
+                search_base=f"uid={account},{LDAP_BASE}",
+                search_filter="(objectClass=*)",
+                search_scope=BASE,
+                attributes=["uidNumber", "gidNumber"],
+            )
+            entries = json.loads(conn.response_to_json())["entries"]
+        finally:
+            conn.unbind()
+    except (LDAPException, OSError) as e:
+        log.warning("LDAP lookup failed: reason=%s", type(e).__name__)
+        raise Refused(
+            grpc.StatusCode.UNAVAILABLE,
+            "The LDAP directory did not answer: try again in a minute.",
+        ) from e
     if not entries:
         raise Refused(
             grpc.StatusCode.PERMISSION_DENIED, f"There is no LDAP account {account}."

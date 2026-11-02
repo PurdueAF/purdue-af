@@ -10,6 +10,7 @@ lacks RBAC, so the dashboard still works.
 import logging
 import re
 from pathlib import Path
+from typing import Any
 
 # Not the official Kubernetes client: it pulls in cryptography, whose Rust
 # extension aborts the interpreter on import in this image.
@@ -46,7 +47,7 @@ _SUFFIXES = {
 _unavailable_logged = False
 
 
-def parse_quantity(value) -> int:
+def parse_quantity(value: Any) -> int:
     """Parse a Kubernetes resource quantity ('1Gi', '500M') into bytes."""
     if value is None:
         return 0
@@ -71,7 +72,7 @@ def api_available() -> bool:
     return bool(_api_base()) and TOKEN_FILE.is_file()
 
 
-def _get(path: str, params=None):
+def _get(path: str, params: dict[str, str] | None = None) -> Any:
     """GET a cluster resource, returning the decoded JSON or None."""
     global _unavailable_logged
     if not api_available():

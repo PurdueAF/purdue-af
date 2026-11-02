@@ -112,7 +112,7 @@ class Settings:
     )
     refresh_seconds: int = field(default_factory=lambda: _int("REFRESH_SECONDS", 15, 3))
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.triton_namespace:
             self.triton_namespace = self.namespace
         if self.triton_discovery not in ("kubernetes", "static"):

@@ -7,7 +7,6 @@ gateway and only the gateway reaches the clusters, and the Hub hands the
 gateway exactly the token and scopes it uses.
 """
 
-import sys
 import tomllib
 from pathlib import Path
 
@@ -21,9 +20,6 @@ OPERATOR_VALUES = REPO / "apps" / "ray" / "operator" / "values.yaml"
 EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
 CORE = REPO / "flux" / "core-production" / "kustomization.yaml"
 GLOBAL_ENV = REPO / "pixi" / "global" / "pixi.toml"
-# Its ConfigMap holds gateway.py, the modules it imports and gpu_queries.py.
-sys.path.insert(0, str(HUB_VALUES.parent / "extraFiles"))
-sys.path.insert(0, str(APP))
 
 
 @pytest.fixture(scope="module")

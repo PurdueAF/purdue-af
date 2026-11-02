@@ -1,5 +1,5 @@
 #!/bin/sh
-# Back up the hub sqlite DB to depot storage, keeping the 5 most recent.
+# Back up the hub sqlite DB to depot storage, keeping the 14 most recent.
 set -eu
 
 BACKUP_DIR=/depot/cms/purdue-af/backups
@@ -35,9 +35,15 @@ if ! kubectl exec -n cms "$HUB_POD" -- test -f "$DB_PATH"; then
 fi
 
 # SQLite's online backup: a file copy of a database the hub is writing can be torn.
+# kubectl exec's stdout also carries what the node's runtime prints, so the database
+# travels framed, and only bytes matching the pod's checksum become a backup.
+TRANSFER="${BACKUP_PATH}.transfer"
+PARTIAL="${BACKUP_PATH}.partial"
+trap 'rm -f "$TRANSFER" "$PARTIAL"' EXIT
+
 echo "Backing up database from pod ${HUB_POD} to ${BACKUP_PATH}..."
 if ! kubectl exec -n cms "$HUB_POD" -- python3 -c '
-import os, sqlite3, sys, tempfile
+import base64, hashlib, os, sqlite3, sys, tempfile
 
 src = sqlite3.connect(sys.argv[1], timeout=60)
 fd, tmp = tempfile.mkstemp(suffix=".sqlite")
@@ -45,28 +51,36 @@ os.close(fd)
 try:
     dst = sqlite3.connect(tmp)
     src.backup(dst)
+    check = dst.execute("PRAGMA integrity_check").fetchone()[0]
     dst.close()
+    if check != "ok":
+        sys.exit(f"integrity_check: {check}")
     with open(tmp, "rb") as f:
-        sys.stdout.buffer.write(f.read())
+        body = f.read()
+    print("BACKUP-BEGIN", hashlib.sha256(body).hexdigest())
+    print(base64.encodebytes(body).decode(), end="")
+    print("BACKUP-END")
 finally:
     os.unlink(tmp)
-' "$DB_PATH" >"$BACKUP_PATH"; then
+' "$DB_PATH" >"$TRANSFER"; then
 	echo "ERROR: Failed to back up database from pod"
-	rm -f "$BACKUP_PATH"
 	exit 1
 fi
 
-if [ -s "$BACKUP_PATH" ]; then
-	echo "Database backup completed successfully: ${BACKUP_PATH}"
-	echo "Cleaning up old backups (keeping last 5)..."
-	cd "$BACKUP_DIR"
-	ls -t jupyterhub-*.sqlite | tail -n +6 | xargs -r rm -f
-	echo "Current backups:"
-	ls -la jupyterhub-*.sqlite 2>/dev/null || echo "No backups found"
-else
-	echo "WARNING: Database file is empty or does not exist, removing backup file"
-	rm -f "$BACKUP_PATH"
+sed -n '/^BACKUP-BEGIN /,/^BACKUP-END$/{/^BACKUP-/d;p;}' "$TRANSFER" | base64 -d >"$PARTIAL"
+WANT=$(sed -n 's/^BACKUP-BEGIN //p' "$TRANSFER")
+GOT=$(sha256sum "$PARTIAL" | cut -d' ' -f1)
+if [ -z "$WANT" ] || [ "$GOT" != "$WANT" ] || ! grep -q '^BACKUP-END$' "$TRANSFER"; then
+	echo "ERROR: transferred database does not match the pod's checksum"
 	exit 1
 fi
+
+mv "$PARTIAL" "$BACKUP_PATH"
+echo "Database backup completed successfully: ${BACKUP_PATH}"
+echo "Cleaning up old backups (keeping last 14)..."
+cd "$BACKUP_DIR"
+ls -t jupyterhub-*.sqlite | tail -n +15 | xargs -r rm -f
+echo "Current backups:"
+ls -la jupyterhub-*.sqlite 2>/dev/null || echo "No backups found"
 
 echo "Database backup job completed at $(date)"

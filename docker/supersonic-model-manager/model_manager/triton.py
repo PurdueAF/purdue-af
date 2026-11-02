@@ -104,7 +104,7 @@ async def collect_state() -> dict:
         )
 
     # model name -> {server name -> {state, version, reason}}
-    models = {}
+    models: dict[str, dict[str, dict]] = {}
     for server in results:
         for entry in server["models"]:
             models.setdefault(entry["name"], {})[server["name"]] = {

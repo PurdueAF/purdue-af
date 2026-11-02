@@ -2,6 +2,7 @@
 # apps/monitoring/prometheus/values.yaml, so series carry Flux's ${...} values literally.
 rule_files:
   - rules.yml
+  - recording.yml
 
 evaluation_interval: 1m
 
@@ -562,4 +563,168 @@ tests:
         eval_time: 12h
         exp_samples:
           - labels: 'ALERTS{alertname="AFVolumeWillFill",alertstate="firing",component="data",persistentvolumeclaim="filling",severity="warning"}'
+            value: 1
+
+  - name: the hub backup alert waits a day past the last success
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_status_last_successful_time{namespace="cms",cronjob="jupyterhub-database-backup"}'
+        values: 0x1600
+    alert_rule_test:
+      - alertname: AFHubBackupStale
+        eval_time: 24h30m
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFHubBackupStale",alertstate="firing"}
+        eval_time: 25h30m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFHubBackupStale",alertstate="firing",component="delivery",cronjob="jupyterhub-database-backup",namespace="cms",severity="warning"}'
+            value: 1
+
+  - name: a CronJob with its own rule does not fire the general one
+    interval: 4m
+    input_series:
+      - series: 'kube_cronjob_status_last_successful_time{namespace="cms",cronjob="jupyterhub-database-backup"}'
+        values: 0x800
+      - series: 'kube_cronjob_status_last_successful_time{namespace="cms",cronjob="af-x509-secrets"}'
+        values: 0x800
+      - series: 'kube_cronjob_status_last_successful_time{namespace="cms",cronjob="interlink-nrp-token-renewal"}'
+        values: 0x800
+      - series: 'kube_cronjob_status_last_successful_time{namespace="cms",cronjob="af-users-graph-updater"}'
+        values: 0x800
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFCronJobStale",alertstate="firing"}
+        eval_time: 49h
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFCronJobStale",alertstate="firing",component="delivery",cronjob="af-users-graph-updater",namespace="cms",severity="warning"}'
+            value: 1
+
+  - name: a CronJob that never succeeded counts from its creation
+    interval: 4m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="cms",cronjob="new-job"}'
+        values: 0x800
+    alert_rule_test:
+      - alertname: AFCronJobStale
+        eval_time: 47h
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFCronJobStale",alertstate="firing"}
+        eval_time: 49h
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFCronJobStale",alertstate="firing",component="delivery",cronjob="new-job",namespace="cms",severity="warning"}'
+            value: 1
+
+  - name: the NRP token alert keeps its three days through the shared record
+    interval: 4m
+    input_series:
+      - series: 'kube_cronjob_status_last_successful_time{namespace="cms",cronjob="interlink-nrp-token-renewal"}'
+        values: 0x1200
+    alert_rule_test:
+      - alertname: AFNrpTokenRenewalFailing
+        eval_time: 72h
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFNrpTokenRenewalFailing",alertstate="firing"}
+        eval_time: 73h30m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFNrpTokenRenewalFailing",alertstate="firing",component="scale-out",cronjob="interlink-nrp-token-renewal",namespace="cms",severity="warning"}'
+            value: 1
+
+  - name: the grid proxy alert covers one missed six-hourly run
+    interval: 5m
+    input_series:
+      - series: 'kube_cronjob_status_last_successful_time{namespace="cms",cronjob="x509-secrets"}'
+        values: 0x100
+    alert_rule_test:
+      - alertname: AFGridProxyNotRenewed
+        eval_time: 7h
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFGridProxyNotRenewed",alertstate="firing"}
+        eval_time: 7h15m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFGridProxyNotRenewed",alertstate="firing",component="data",cronjob="x509-secrets",namespace="cms",severity="warning"}'
+            value: 1
+
+  - name: an image pull that flips between reasons keeps its timer
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_waiting_reason{namespace="cms",pod="p",container="c",reason="ErrImagePull"}'
+        values: 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1
+      - series: 'kube_pod_container_status_waiting_reason{namespace="cms",pod="p",container="c",reason="ImagePullBackOff"}'
+        values: 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFImagePullFailing",alertstate="firing"}
+        eval_time: 12m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFImagePullFailing",alertstate="firing",component="delivery",container="c",pod="p",severity="warning"}'
+            value: 1
+
+  - name: an ordinary wait is not an image pull failure
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_waiting_reason{namespace="cms",pod="p",container="c",reason="ContainerCreating"}'
+        values: 1x20
+    alert_rule_test:
+      - alertname: AFImagePullFailing
+        eval_time: 15m
+        exp_alerts: []
+
+  - name: disk pressure fires only on a node that has it
+    interval: 1m
+    input_series:
+      - series: 'kube_node_status_condition{node="n1",condition="DiskPressure",status="true"}'
+        values: 1x10
+      - series: 'kube_node_status_condition{node="n2",condition="DiskPressure",status="true"}'
+        values: 0x10
+      - series: 'kube_node_status_condition{node="n3",condition="DiskPressure",status="true"}'
+        values: 1x10
+      - series: 'kube_node_spec_taint{node="n1",key="hub.jupyter.org/dedicated",value="cms-af"}'
+        values: 1x10
+      - series: 'kube_node_spec_taint{node="n2",key="hub.jupyter.org/dedicated",value="cms-af"}'
+        values: 1x10
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFNodeDiskPressure",alertstate="firing"}
+        eval_time: 7m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFNodeDiskPressure",alertstate="firing",component="compute",condition="DiskPressure",node="n1",severity="error",status="true"}'
+            value: 1
+
+  - name: low local disk reads the container layer disk
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{job="node-exporter",instance="a",mountpoint="/var/lib/docker"}'
+        values: 5x40
+      - series: 'node_filesystem_size_bytes{job="node-exporter",instance="a",mountpoint="/var/lib/docker"}'
+        values: 100x40
+      - series: 'node_filesystem_avail_bytes{job="node-exporter",instance="b",mountpoint="/var/lib/docker"}'
+        values: 20x40
+      - series: 'node_filesystem_size_bytes{job="node-exporter",instance="b",mountpoint="/var/lib/docker"}'
+        values: 100x40
+      - series: 'node_filesystem_avail_bytes{job="node-exporter",instance="b",mountpoint="/eoscache"}'
+        values: 1x40
+      - series: 'node_filesystem_size_bytes{job="node-exporter",instance="b",mountpoint="/eoscache"}'
+        values: 100x40
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="AFNodeDiskLow",alertstate="firing"}) by (instance)
+        eval_time: 35m
+        exp_samples:
+          - labels: '{instance="a"}'
+            value: 1
+
+  - name: a registry that stops answering alerts after ten minutes
+    interval: 1m
+    input_series:
+      - series: af_registry_up{instance="m"}
+        values: 0x15
+    alert_rule_test:
+      - alertname: AFRegistryDown
+        eval_time: 5m
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFRegistryDown",alertstate="firing"}
+        eval_time: 12m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFRegistryDown",alertstate="firing",component="access",instance="m",severity="warning"}'
             value: 1

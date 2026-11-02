@@ -491,7 +491,6 @@ def test_a_slow_client_cannot_hold_the_server(server, monkeypatch, trickle):
 def test_the_exporter_reads_what_the_probe_serves(server):
     """probe_agent and node_healthcheck meet only over HTTP; if they disagree on
     the path or the encoding, every mount reads as unknown."""
-    sys.path.insert(0, os.path.dirname(pa.__file__))
     import node_healthcheck as nh
 
     pa.PUBLISHED.set({"ok": True, "timestamp": 7.0, "node": "node-a"})

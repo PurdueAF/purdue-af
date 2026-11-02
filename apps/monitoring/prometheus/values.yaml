@@ -335,6 +335,18 @@ serverFiles:
               [__meta_kubernetes_service_label_app_kubernetes_io_component]
             action: keep
             regex: envoy
+  recording_rules.yml:
+    groups:
+      - name: af-cronjobs
+        rules:
+          # Since its last success, or since it was created if it never succeeded.
+          - record: af:cronjob_seconds_since_success
+            expr: >
+              time() - max by (namespace, cronjob) (
+                kube_cronjob_status_last_successful_time{namespace="cms"}
+                or kube_cronjob_created{namespace="cms"}
+              )
+
   alerting_rules.yml:
     groups:
       - name: af-pod-monitor
@@ -432,6 +444,17 @@ serverFiles:
       # Can users get in? ---------------------------------------------------
       - name: af-access
         rules:
+          - alert: AFRegistryDown
+            expr: af_registry_up == 0
+            for: 10m
+            labels:
+              severity: warning
+              component: access
+            annotations:
+              summary: The image registry is not answering, so new sessions may fail to start
+              description: >
+                Pods that need an image they have not cached cannot start. See
+                docker/REGISTRY.md for the proxy projects.
           # Scoped to this cluster's hub: the job's one target is production's host on every cluster.
           - alert: AFHubDown
             expr: up{job="jupyterhub", instance="${jupyterhub_host}"} == 0
@@ -514,6 +537,37 @@ serverFiles:
       # Do users have worker capacity? -------------------------------------
       - name: af-compute
         rules:
+          - alert: AFNodeDiskPressure
+            expr: >
+              (kube_node_status_condition{condition="DiskPressure",status="true"} == 1)
+              * on (node) group_left ()
+              kube_node_spec_taint{key="hub.jupyter.org/dedicated",value="cms-af"}
+            for: 5m
+            labels:
+              severity: error
+              component: compute
+            annotations:
+              summary: "Node {{ $labels.node }} is out of local disk and may evict sessions"
+              description: >
+                Kubelet evicts pods at full disk, sessions with running kernels
+                included. /tmp in sessions and Dask workers is this disk. Check:
+                kubectl -n cms get pods -o wide, for the pods on the node.
+          # /var/lib/docker holds every container's writable layer, /tmp included; targets are the cms-af nodes.
+          - alert: AFNodeDiskLow
+            expr: >
+              node_filesystem_avail_bytes{job="node-exporter",mountpoint="/var/lib/docker"}
+              / node_filesystem_size_bytes{job="node-exporter",mountpoint="/var/lib/docker"}
+              < 0.1
+            for: 30m
+            labels:
+              severity: warning
+              component: compute
+            annotations:
+              summary: "A node's local disk is over 90% full"
+              description: >
+                {{ $labels.instance }} holds container layers and /tmp, and
+                kubelet evicts pods, sessions included, once it fills. Check what
+                is large on the node before that.
           # Mount metrics are null on NotReady nodes, so a drain would otherwise look healthy.
           - alert: AFProdNodesNotReady
             expr: >
@@ -772,8 +826,7 @@ serverFiles:
                 work, so Dask scaling stalled until the restart. Check: kubectl
                 -n cms logs deploy/controller-dask-gateway --previous
           - alert: AFNrpTokenRenewalFailing
-            # Since its last success, or since it was created if it never succeeded.
-            expr: time() - max by (cronjob) (kube_cronjob_status_last_successful_time{namespace="cms",cronjob="interlink-nrp-token-renewal"} or kube_cronjob_created{namespace="cms",cronjob="interlink-nrp-token-renewal"}) > 3 * 86400
+            expr: af:cronjob_seconds_since_success{cronjob="interlink-nrp-token-renewal"} > 3 * 86400
             for: 1h
             labels:
               severity: warning
@@ -845,6 +898,19 @@ serverFiles:
                 storage-loki-0 is full: chunk flushes fail with "no space left on
                 device" and every query 500s. Logs arriving now are lost: Alloy
                 buffers only briefly.
+          - alert: AFGridProxyNotRenewed
+            expr: af:cronjob_seconds_since_success{cronjob=~"af-x509-secrets|x509-secrets"} > 7 * 3600
+            for: 10m
+            labels:
+              severity: warning
+              component: data
+            annotations:
+              summary: The facility's grid proxy is not being renewed, so ServiceX requests may fail
+              description: >
+                A failed VOMS call removes the proxy Secret in the same run, and
+                any other failure lets the proxy lapse. Check: kubectl -n cms get
+                jobs, and apps/jupyterhub/af-x509-secrets/README.md for the
+                certificate behind it.
           - alert: AFKubeStateMetricsDown
             expr: up{job="kube-state-metrics"} == 0
             for: 10m
@@ -948,6 +1014,47 @@ serverFiles:
                 Check: kubectl -n cms logs deploy/prometheus-server | grep "Error reloading config"
       - name: af-delivery
         rules:
+          - alert: AFHubBackupStale
+            expr: af:cronjob_seconds_since_success{cronjob="jupyterhub-database-backup"} > 86400
+            for: 1h
+            labels:
+              severity: warning
+              component: delivery
+            annotations:
+              summary: The hub database has had no verified backup for a day
+              description: >
+                The script fails unless the copy matches the hub pod's checksum,
+                so a stale backup is a failed or missing run. Check: kubectl -n
+                cms logs job/<newest jupyterhub-database-backup job>
+          - alert: AFCronJobStale
+            expr: >
+              af:cronjob_seconds_since_success{cronjob!~"interlink-nrp-token-renewal|af-x509-secrets|x509-secrets|jupyterhub-database-backup"}
+              > 2 * 86400
+            for: 10m
+            labels:
+              severity: warning
+              component: delivery
+            annotations:
+              summary: "CronJob {{ $labels.cronjob }} has not succeeded for two days"
+              description: >
+                A bad image or a hung Job, which concurrencyPolicy: Forbid leaves
+                blocking every later run. Check: kubectl -n cms get jobs
+          - alert: AFImagePullFailing
+            expr: >
+              max by (pod, container) (
+                kube_pod_container_status_waiting_reason{namespace="cms",reason=~"ErrImagePull|ImagePullBackOff|InvalidImageName|RegistryUnavailable"}
+                or kube_pod_init_container_status_waiting_reason{namespace="cms",reason=~"ErrImagePull|ImagePullBackOff|InvalidImageName|RegistryUnavailable"}
+              ) == 1
+            for: 10m
+            labels:
+              severity: warning
+              component: delivery
+            annotations:
+              summary: "Pod {{ $labels.pod }} cannot pull its image"
+              description: >
+                A manifest applies with no wait, so its root stays Ready, and a
+                Recreate Deployment has already removed the old pod. Check:
+                kubectl -n cms describe pod {{ $labels.pod }}
           - alert: AFFluxRootNotReady
             expr: af_flux_ready{kind=~"Kustomization|GitRepository"} == 0
             for: 5m

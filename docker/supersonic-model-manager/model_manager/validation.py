@@ -98,7 +98,7 @@ def parse_config(config_file: Path) -> dict:
     except OSError as exc:
         return {"_error": str(exc)}
 
-    def scalar(field_name: str):
+    def scalar(field_name: str) -> str | None:
         pattern = r'"([^"]*)"'
         # An unindented match is top-level; fall back to the first match anywhere.
         top = re.search(rf"^{field_name}\s*:\s*{pattern}", text, re.MULTILINE)
@@ -115,7 +115,9 @@ def parse_config(config_file: Path) -> dict:
     }
 
 
-def _expected_artifact(platform: str, backend: str, default_filename: str):
+def _expected_artifact(
+    platform: str, backend: str, default_filename: str
+) -> tuple[str | None, str | None]:
     """(name, kind) of the file Triton will look for inside a version dir."""
     if default_filename:
         return default_filename, "any"

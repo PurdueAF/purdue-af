@@ -5,9 +5,8 @@ SKILL.md — project-scoped for Claude Code users of this repo, and linked from
 the user docs for everyone else.
 """
 
-from pathlib import Path
+from common import REPO
 
-REPO = Path(__file__).resolve().parents[2]
 SKILL = REPO / ".claude" / "skills" / "purdue-af-agentic-interface" / "SKILL.md"
 
 

@@ -97,7 +97,8 @@ your own initiative.
 invisible to every worker. `/work/users/<username>/` is the usual home for a
 project; use `/depot` when Slurm jobs have to read it. Writing many files to
 `/depot` at once degrades it for everyone, so stage to `/tmp` on the worker and
-copy once. None of `/home`, `/work` or `/depot` is unlimited and the last two
+copy each file out as soon as it is written: `/tmp` is the node's local disk,
+shared with everyone on it and gone with the pod. None of `/home`, `/work` or `/depot` is unlimited and the last two
 are shared, so check `query_storage_usage` before writing a large output rather
 than after filling a volume.
 

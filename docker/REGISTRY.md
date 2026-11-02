@@ -43,6 +43,7 @@ comes from outside it.
   pointing at `https://ghcr.io` (no credentials), with its access level set
   to **Public** — user pods carry no geddes pull secrets, so a private
   project would 401 on every spawn.
+- `dockerhub-proxy-cache` is the same kind of project pointing at Docker Hub.
 
 Verify from a cluster node:
 

@@ -1,13 +1,11 @@
 """Tests for apps/ray-train/nrp_jobs.py: the RayJob a submission becomes on NRP."""
 
 import json
-import sys
 
 import pytest
 import yaml
 from common import REPO, load_script
 
-sys.path.insert(0, str(REPO / "apps" / "ray-train"))
 gpus = load_script(REPO / "apps" / "ray-train" / "nrp_gpus.py", "nrp_gpus")
 nrp = load_script(REPO / "apps" / "ray-train" / "nrp_jobs.py", "nrp_jobs")
 

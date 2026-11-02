@@ -13,28 +13,36 @@ LDAP_HOST = os.environ.get("AF_LDAP_HOST", "geddes-auth.rcac.purdue.edu")
 LDAP_TLS = os.environ.get("AF_LDAP_TLS", "true").lower() != "false"
 BASE_DN = "ou=AllPeople,dc=geddes,dc=rcac,dc=purdue,dc=edu"
 ATTRS = ["uidNumber", "gidNumber"]
-
-
-def _connect() -> Any:
-    s = Server(host=LDAP_HOST, use_ssl=LDAP_TLS, get_info="ALL")
-    conn = Connection(s, version=3, authentication="ANONYMOUS")
-    if LDAP_TLS:
-        conn.start_tls()
-    else:
-        conn.bind()
-    return conn
+LDAP_TIMEOUT_S = 10
 
 
 def ldap_lookup(username: str) -> tuple[int, int]:
     """UID/GID of the account at uid=<username>,<BASE_DN>."""
-    conn = _connect()
-    conn.search(
-        search_base=f"uid={username},{BASE_DN}",
-        search_filter="(objectClass=*)",
-        search_scope=BASE,
-        attributes=ATTRS,
+    conn = Connection(
+        Server(
+            host=LDAP_HOST,
+            use_ssl=LDAP_TLS,
+            get_info="ALL",
+            connect_timeout=LDAP_TIMEOUT_S,
+        ),
+        version=3,
+        authentication="ANONYMOUS",
+        receive_timeout=LDAP_TIMEOUT_S,
     )
-    entries = json.loads(conn.response_to_json())["entries"]
+    try:
+        if LDAP_TLS:
+            conn.start_tls()
+        else:
+            conn.bind()
+        conn.search(
+            search_base=f"uid={username},{BASE_DN}",
+            search_filter="(objectClass=*)",
+            search_scope=BASE,
+            attributes=ATTRS,
+        )
+        entries = json.loads(conn.response_to_json())["entries"]
+    finally:
+        conn.unbind()
     if not entries:
         raise RuntimeError(f"no LDAP entry for {username}")
     result = entries[0]["attributes"]

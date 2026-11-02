@@ -16,9 +16,10 @@ import time
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import BinaryIO
 
 from .config import settings
-from .validation import is_version_name, validate_model_dir
+from .validation import ValidationResult, is_version_name, validate_model_dir
 
 STAGING_DIRNAME = ".uploads"
 MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,255}$")
@@ -164,7 +165,7 @@ def scan_models() -> list:
     return entries
 
 
-def storage_usage(pvc_capacity_bytes=None) -> dict:
+def storage_usage(pvc_capacity_bytes: int | None = None) -> dict:
     """How full the claim is, and how much of that the models account for.
 
     The two are not the same when the repository is a subdirectory of a claim
@@ -258,7 +259,7 @@ def _is_junk(relative: Path) -> bool:
     return False
 
 
-def copy_with_limit(stream, target: Path, written: int = 0) -> int:
+def copy_with_limit(stream: BinaryIO, target: Path, written: int = 0) -> int:
     """Stream onto the PVC, never into RAM; ``written`` is the upload's running total."""
     limit = settings.max_upload_bytes
     with open(target, "wb") as out:
@@ -361,12 +362,12 @@ def _resolve_model_root(staging: Path, max_depth: int = 5) -> Path:
 class ValidationFailed(RepositoryError):
     """The staged model does not satisfy Triton's layout rules."""
 
-    def __init__(self, result):
+    def __init__(self, result: ValidationResult) -> None:
         self.result = result
         super().__init__(" ".join(result.errors))
 
 
-def _validate(source: Path, name: str):
+def _validate(source: Path, name: str) -> ValidationResult:
     """Run Triton-compliance checks, raising on anything that would not load."""
     result = validate_model_dir(source, name)
     if not result.ok:
@@ -446,7 +447,7 @@ class DirectoryUpload:
         self.root.mkdir()
         self.written = 0
 
-    def add_file(self, relative_path: str, stream) -> None:
+    def add_file(self, relative_path: str, stream: BinaryIO) -> None:
         rel = _safe_relpath(relative_path)
         if _is_junk(rel):
             return
