@@ -14,7 +14,7 @@ awkward-pandas = "*"
 # distributed <2026.8.0 cannot stop a bokeh >=3.10 dashboard; dask-awkward holds distributed <2025.4.0.
 bokeh = "3.9.*"
 cabinetry = "*"
-cms-combine = "==11.0.0"
+cms-combine = "==11.1.0"
 coffea = "2026.9.0.*"
 correctionlib="*"
 dask = "*"
