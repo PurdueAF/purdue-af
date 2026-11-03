@@ -1,6 +1,7 @@
 app:
   image: geddes2-registry.rcac.purdue.edu/cms/servicex_app
   tag: local
+  checksImage: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/ncsa/checks:main@sha256:0b738bbc8d70d2dd93fce63fb2a8a1a41440b50f19af16578f68469103bddbae
   allowedImagePrefixes:
     - "geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/"
     - "geddes2-registry.rcac.purdue.edu/cms/"

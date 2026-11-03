@@ -333,6 +333,14 @@
       automerge: false,
     },
     {
+      // krab's PostgreSQL holds its PVC on 18: the same major hold, in its own group.
+      matchDatasources: ['docker'],
+      matchPackageNames: ['docker.io/library/postgres'],
+      matchFileNames: ['apps/krab/**'],
+      allowedVersions: '/^18([.-]|$)/',
+      groupName: 'krab-postgres',
+    },
+    {
       // ServiceX's PostgreSQL and RabbitMQ: versions belong to the chart's
       // subcharts, and this catalog is frozen upstream.
       matchDatasources: ['docker'],
