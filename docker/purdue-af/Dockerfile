@@ -94,7 +94,7 @@ RUN echo "auth requisite pam_deny.so" >> /etc/pam.d/su && \
 FROM system AS stack
 
 # renovate: datasource=github-releases depName=prefix-dev/pixi extractVersion=^v(?<version>.*)$
-ARG PIXI_VERSION="0.83.0" # read by ci-pixi-*.yml
+ARG PIXI_VERSION="0.84.0" # read by ci-pixi-*.yml
 
 ENV PIXI_HOME="/opt/pixi" \
     BASE_ENV_DIR="/opt/pixi/.pixi/envs/base-env"
@@ -125,15 +125,15 @@ RUN mkdir -p "${PIXI_HOME}/bin" && \
 # Coding-agent CLIs in their own prefix, out of reach of a pixi rebuild. jupyter-ai's
 # Claude/Codex personas appear only when the *-acp adapters are on PATH.
 # renovate: datasource=npm depName=@anthropic-ai/claude-code
-ARG CLAUDE_CODE_VERSION="2.1.309"
+ARG CLAUDE_CODE_VERSION="2.1.317"
 # renovate: datasource=npm depName=@openai/codex
-ARG CODEX_VERSION="0.164.0"
+ARG CODEX_VERSION="0.166.0"
 # renovate: datasource=npm depName=opencode-ai
-ARG OPENCODE_VERSION="1.19.4"
+ARG OPENCODE_VERSION="1.19.5"
 # renovate: datasource=npm depName=@agentclientprotocol/claude-agent-acp
-ARG CLAUDE_AGENT_ACP_VERSION="0.94.0"
+ARG CLAUDE_AGENT_ACP_VERSION="0.100.0"
 # renovate: datasource=npm depName=@agentclientprotocol/codex-acp
-ARG CODEX_ACP_VERSION="2.2.2"
+ARG CODEX_ACP_VERSION="2.5.0"
 ENV NPM_GLOBAL="/opt/npm-global"
 # hadolint ignore=DL3016  # versions ARE pinned, via the ARGs above
 RUN PATH="${BASE_ENV_DIR}/bin:${PATH}" \
