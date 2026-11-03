@@ -246,11 +246,16 @@ RUN nvcc --version >/dev/null && \
 # start.sh as a real session runs it: refits the user, outlives a failing hook, keeps its exports.
 # hadolint ignore=DL3002
 USER root
-RUN rm -f /usr/local/bin/before-notebook.d/* && \
+# hadolint ignore=DL3004
+RUN { sudo -n -u jovyan true && echo "sudo before refit: ok" || echo "sudo before refit: failed"; } && \
+    rm -f /usr/local/bin/before-notebook.d/* && \
     printf 'false\nexport SMOKE_EXPORT=kept\n' > /usr/local/bin/before-notebook.d/smoke.sh && \
     mkdir -p /home/alice && \
     NB_USER=alice NB_UID=1234 NB_GID=1234 CHOWN_HOME=yes \
-        start.sh bash -c 'echo "$(id -un):$(id -u):$(id -g):${SMOKE_EXPORT}"' > /tmp/start.log 2>&1 || { cat /tmp/start.log; exit 1; } ; \
+        start.sh bash -c 'echo "$(id -un):$(id -u):$(id -g):${SMOKE_EXPORT}"' > /tmp/start.log 2>&1 || { \
+        cat /tmp/start.log; getent passwd root alice; awk -F: '$1 == "root" || $1 == "alice" {$2 = "-"; print}' /etc/shadow; \
+        getent shadow root alice >/dev/null; echo "getent shadow rc=$?"; \
+        ls -l /etc/shadow /etc/passwd; grep -E '^(Cap(Eff|Prm|Bnd)|NoNewPrivs)' /proc/self/status; exit 1; } ; \
     cat /tmp/start.log; \
     grep -qx 'alice:1234:1234:kept' /tmp/start.log && \
     grep -q 'WARNING: .*smoke.sh:1: exit status 1' /tmp/start.log && \
