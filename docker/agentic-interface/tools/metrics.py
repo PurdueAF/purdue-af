@@ -98,7 +98,46 @@ async def component_problems() -> tuple[dict[str, float], list[str]]:
     return problems, unread
 
 
-def _value(value: float, unit: Optional[str]) -> str:
+def _mapped(value: float, mappings: list[dict[str, Any]]) -> Optional[str]:
+    """The word a panel's value mappings give a value, as Grafana shows it."""
+    for mapping in mappings:
+        options = mapping.get("options") or {}
+        if mapping.get("type") == "value":
+            key = f"{value:g}"
+            text = (options.get(key) or {}).get("text")
+        elif mapping.get("type") == "range":
+            low, high = options.get("from"), options.get("to")
+            inside = (low is None or value >= low) and (high is None or value <= high)
+            text = (options.get("result") or {}).get("text") if inside else None
+        else:
+            text = None
+        if text:
+            return str(text)
+    return None
+
+
+def _named_mappings(panel: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """Value mappings a panel gives single series by name, which override its own."""
+    named: dict[str, list[dict[str, Any]]] = {}
+    overrides = (panel.get("fieldConfig") or {}).get("overrides") or []
+    for override in overrides:
+        matcher = override.get("matcher") or {}
+        if matcher.get("id") != "byName":
+            continue
+        for prop in override.get("properties") or []:
+            if prop.get("id") == "mappings":
+                named.setdefault(str(matcher.get("options")), []).extend(
+                    prop.get("value") or []
+                )
+    return named
+
+
+def _value(
+    value: float, unit: Optional[str], mappings: Optional[list[dict[str, Any]]] = None
+) -> str:
+    word = _mapped(value, mappings or [])
+    if word:
+        return word
     if unit == "percentunit":
         return f"{value * 100:.0f}%"
     if unit == "percent":
@@ -109,7 +148,13 @@ def _value(value: float, unit: Optional[str]) -> str:
     return f"{text} {unit}" if unit in ("s", "ms") else text
 
 
-def _series(rows: list[dict[str, Any]], legend: str, unit: Optional[str]) -> list[str]:
+def _series(
+    rows: list[dict[str, Any]],
+    legend: str,
+    unit: Optional[str],
+    mappings: Optional[list[dict[str, Any]]] = None,
+    named: Optional[dict[str, list[dict[str, Any]]]] = None,
+) -> list[str]:
     """One line per series, or none when any of them has a label not allowed."""
     lines = []
     for labels, value in prom_vector(rows):
@@ -121,9 +166,9 @@ def _series(rows: list[dict[str, Any]], legend: str, unit: Optional[str]) -> lis
         shown = LEGEND_LABEL.sub(lambda m: str(labels.get(m[1], "")), legend)
         if shown in ("", "__auto"):
             shown = ", ".join(str(labels[name]) for name in sorted(names))
-        lines.append(
-            f"{shown}: {_value(value, unit)}" if shown else _value(value, unit)
-        )
+        own = (named or {}).get(shown, [])
+        text = _value(value, unit, own + (mappings or []))
+        lines.append(f"{shown}: {text}" if shown else text)
     return lines
 
 
@@ -131,14 +176,16 @@ async def _panel(
     limit: asyncio.Semaphore, panel: dict[str, Any]
 ) -> tuple[list[str], bool]:
     """The lines of a panel, and whether every query could be asked."""
-    unit = (panel.get("fieldConfig") or {}).get("defaults", {}).get("unit")
+    defaults = (panel.get("fieldConfig") or {}).get("defaults", {})
+    unit, mappings = defaults.get("unit"), defaults.get("mappings")
+    named = _named_mappings(panel)
     lines: list[str] = []
     answered = True
     for (client, url), query, legend in _queries(panel):
         async with limit:
             rows, problem = await prom_query(shared_client(client), url, query)
         answered = answered and problem is None
-        lines += _series(rows, legend, unit)
+        lines += _series(rows, legend, unit, mappings, named)
     return lines, answered
 
 

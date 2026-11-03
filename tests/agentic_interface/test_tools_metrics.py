@@ -143,6 +143,73 @@ async def test_instance_addresses_are_dropped(tool):
     assert "10.0.0.1" not in out
 
 
+@pytest.mark.parametrize(
+    ("value", "shown"), [(1, "OK"), (0.95, "partial"), (0, "down"), (7, "OK")]
+)
+def test_a_status_row_shows_the_dashboards_word_not_a_number(value, shown):
+    mappings = [
+        {"type": "range", "options": {"from": 1, "to": 1e9, "result": {"text": "OK"}}},
+        {
+            "type": "range",
+            "options": {"from": 0.0001, "to": 0.9999, "result": {"text": "partial"}},
+        },
+        {"type": "range", "options": {"from": -1, "to": 0, "result": {"text": "down"}}},
+    ]
+    assert metrics._value(value, None, mappings) == shown
+
+
+def test_a_value_mapping_names_its_value():
+    mappings = [{"type": "value", "options": {"1": {"text": "healthy"}}}]
+    assert metrics._value(1.0, None, mappings) == "healthy"
+    assert metrics._value(2.0, None, mappings) == "2"
+
+
+@respx.mock
+async def test_a_series_shows_the_word_its_own_override_gives(dashboard, monkeypatch):
+    status = panel("Sync", "daemon", "daemon")
+    status["fieldConfig"]["overrides"] = [
+        {
+            "matcher": {"id": "byName", "options": "daemon"},
+            "properties": [
+                {
+                    "id": "mappings",
+                    "value": [
+                        {"type": "value", "options": {"1": {"text": "alive"}}},
+                        {"type": "value", "options": {"0": {"text": "STALLED"}}},
+                    ],
+                }
+            ],
+        }
+    ]
+    path = metrics.DASHBOARD_PATH
+    with open(path, "w") as out:
+        json.dump({"panels": [{"type": "row", "title": "Pixi"}, status]}, out)
+    respx.get(PROM).mock(
+        return_value=Response(200, json={"data": {"result": [sample(0)]}})
+    )
+    tool = register_tools(metrics).tools["get_facility_metrics"]
+    assert "- Sync: daemon: STALLED" in await tool(section="Pixi")
+
+
+@respx.mock
+async def test_the_real_components_rows_read_as_words(monkeypatch):
+    path = REPO / "apps" / "monitoring" / "grafana" / "dashboards" / "default.json"
+    monkeypatch.setattr(metrics, "DASHBOARD_PATH", str(path))
+    tool = register_tools(metrics).tools["get_facility_metrics"]
+    rows = [sample(0.95)]
+    respx.get(PROM).mock(return_value=Response(200, json={"data": {"result": rows}}))
+    respx.get(RANCHER).mock(return_value=Response(200, json={"data": {"result": rows}}))
+    section = next(
+        name
+        for name, panels in metrics.sections().items()
+        if any(p.get("title") == metrics.COMPONENTS_PANEL for p in panels)
+    )
+    out = await tool(section=section)
+    block = out.split("- Components:")[1].split("\n- ")[0]
+    assert "partial" in block
+    assert "0.95" not in block and "%" not in block
+
+
 @respx.mock
 async def test_allowed_labels_name_the_series(tool):
     rows = {"free": [sample(4, node="a"), sample(0, node="b")]}

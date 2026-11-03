@@ -194,7 +194,8 @@ def _row_lines(rows: dict[str, float], unread: list[str]) -> list[str]:
         if value <= 0
     ]
     lines += [
-        f"- **{name}** is at {value * 100:.0f}% on the facility dashboard."
+        f"- **{name}** is partly failing on the facility dashboard: some of its "
+        "checks fail."
         for name, value in rows.items()
         if value > 0
     ]
