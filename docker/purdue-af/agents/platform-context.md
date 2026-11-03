@@ -157,8 +157,10 @@ they are installed.
 
 CERNBox is mounted with `eos-connect`, a shell alias for
 `source /etc/jupyter/eos-connect.sh`; aliases exist only in interactive shells,
-so use the `source` form from a script. The session image has CUDA 12.4 and
-cuDNN 8.9.7.29; ML packages must match those versions.
+so use the `source` form from a script. Conda-forge and pip CUDA builds bring
+their own CUDA runtime and cuDNN; install CUDA 12 builds, because the GPU nodes'
+driver runs no CUDA 13. The image's toolkit, which `nvcc --version` shows, matters
+only for compiling CUDA code.
 
 ### Data access
 

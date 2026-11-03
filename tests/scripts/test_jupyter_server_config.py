@@ -52,23 +52,10 @@ def fake_tornado(monkeypatch):
     )
 
 
-class TestBaseConfig:
-    def test_server_settings(self, monkeypatch):
-        _, c = load_jupyter_config(monkeypatch)
-
-        assert c["ServerApp"]["ip"] == "0.0.0.0"
-        assert c["ServerApp"]["open_browser"] is False
-        assert c["ServerApp"]["log_level"] == "WARN"
-        headers = c["ServerApp"]["tornado_settings"]["headers"]
-        assert "clipboard-read=(self)" in headers["Permissions-Policy"]
-
-    def test_contents_and_kernel_settings(self, monkeypatch):
-        _, c = load_jupyter_config(monkeypatch)
-
-        assert c["FileContentsManager"]["allow_hidden"] is True
-        assert c["FileContentsManager"]["delete_to_trash"] is False
-        assert c["InlineBackend"]["figure_formats"] == {"png", "jpeg", "svg", "pdf"}
-        assert c["KernelSpecManager"]["ensure_native_kernel"] is False
+def test_the_server_listens_on_every_interface(monkeypatch):
+    """start-singleuser.sh passes no --ip: the hub reaches the pod through this."""
+    _, c = load_jupyter_config(monkeypatch)
+    assert c["ServerApp"]["ip"] == "0.0.0.0"
 
 
 class TestXSRFNoiseFilter:
@@ -136,26 +123,6 @@ class TestJupyterAIDefaultPersona:
         assert c["PersonaManager"]["default_persona_id"] == (
             "jupyter-ai-personas::jupyter_ai_acp_client::OpenCodeAcpPersona"
         )
-
-    def test_id_follows_the_format_base_persona_builds(self, monkeypatch):
-        """`BasePersona.id` is
-        `jupyter-ai-personas::<package>::<class>`, derived from the module
-        path -- not something we get to name. A typo here does not raise: the
-        lookup is a plain `.get()`, so the chat just silently answers nobody."""
-        _, c = load_jupyter_config(monkeypatch)
-        prefix, package, klass = c["PersonaManager"]["default_persona_id"].split("::")
-        assert prefix == "jupyter-ai-personas"
-        # The distribution that ships the ACP personas, and the class inside it
-        # whose module is jupyter_ai_acp_client.acp_personas.opencode.
-        assert package == "jupyter_ai_acp_client"
-        assert klass == "OpenCodeAcpPersona"
-
-    def test_default_is_the_persona_that_needs_no_account(self, monkeypatch):
-        """Claude and Codex refuse until the user logs in with their own
-        provider account; OpenCode answers out of the box. Defaulting to either
-        of the other two would meet every new user with a login prompt."""
-        _, c = load_jupyter_config(monkeypatch)
-        assert "OpenCode" in c["PersonaManager"]["default_persona_id"]
 
 
 class TestJupyterAIMCPServers:

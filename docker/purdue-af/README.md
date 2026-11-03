@@ -5,19 +5,18 @@ The image every AF session runs, built on the CUDA devel base named in the
 
 Contents beyond the CUDA base: the pixi `base-env` (`pixi/base/` — JupyterLab,
 code-server, kernels), OSG grid clients (`voms-clients-cpp`, gfal2, xrootd),
-the Slurm client with Hammer configs, CVMFS/XRootD site config, and the coding
-agents.
+the Slurm client with Hammer configs, and the coding agents.
 
 ## Files
 
 | Path | What it is |
 | --- | --- |
 | `Dockerfile` | the build; the `smoke` stage holds the build-time checks |
-| `jupyter/` | `start.sh` and the hook runner, server config |
+| `jupyter/` | `start.sh`, which runs the hooks and starts the server as the user; server config |
 | `scripts/` | the `before-notebook.d` hooks, `af-as-user.sh`, `managed-block.py` |
 | `agents/platform-context.md` | the facility context every in-session agent reads |
 | `pixi-wrapper` | the `pixi` on a session's PATH |
-| `configs/`, `osg/`, `xml/` | CERN krb5/CA defaults, OSG RPMs, CMS site config |
+| `configs/`, `osg/` | CERN krb5/CA defaults, OSG RPMs |
 | `code-server/` | the interface-controls extension |
 
 ## Coding agents
@@ -49,6 +48,7 @@ OS updates soak on `:pre-release` first: the build cache reuses `dnf upgrade`
 until that ID changes.
 
 Before running **Release image**, verify on a test session: GPU visibility
-(`nvidia-smi`, torch), that a 0-GPU session sees no GPUs, `eos-connect.sh`
-(kinit against CERN.CH), grid workflows (`voms-proxy-init`, gfal2, xrootd), and
-Slurm (`sbatch`/`squeue`).
+(`nvidia-smi`, and `/work/pixi/global/.pixi/envs/default/bin/python
+pixi/global/check-gpu.py` from a checkout), that a 0-GPU session sees no GPUs,
+`eos-connect.sh` (kinit against CERN.CH), grid workflows (`voms-proxy-init`,
+gfal2, xrootd), and Slurm (`sbatch`/`squeue`).

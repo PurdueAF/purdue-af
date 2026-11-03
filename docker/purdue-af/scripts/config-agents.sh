@@ -7,6 +7,8 @@
 # No config stores the token: JUPYTERHUB_API_TOKEN rotates on every spawn and
 # the home is persistent, so each CLI expands the variable at connect time.
 
+source /usr/local/bin/af-as-user.sh
+
 _config_agents() {
 	# Same name as the repo .mcp.json and jupyter_server_config.py.
 	local MCP_NAME MCP_URL AUTH_HEADER SKILL_SRC AGENT_SECTION PYTHON NEW_HOME
@@ -18,7 +20,7 @@ _config_agents() {
 	AUTH_HEADER='Authorization: Bearer ${JUPYTERHUB_API_TOKEN}'
 	SKILL_SRC="/opt/purdue-af/skills"
 	AGENT_SECTION="/opt/purdue-af/agents/platform-context.md"
-	# `su` resets PATH, and Rocky 8's system python3 is 3.6.
+	# Rocky 8's system python3 is 3.6.
 	PYTHON="/opt/pixi/.pixi/envs/base-env/bin/python3"
 	[[ -x "${PYTHON}" ]] || PYTHON="python3"
 
@@ -29,14 +31,10 @@ _config_agents() {
 	NEW_HOME="/home/${NB_USER}"
 
 	# The startup hooks run as root; drop to the session user so the configs land
-	# in their home with their ownership. Tests run this unprivileged.
-	_as_user() {
-		if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
-			su "${NB_USER}" -c "$1"
-		else
-			bash -c "$1"
-		fi
-	}
+	# in their home with their ownership.
+	_as_user() { af_as_user bash -c "$1"; }
+
+	af_repair_ownership "${NEW_HOME}/.claude" "${NEW_HOME}/.codex"
 
 	# `mcp add` owns the merge into files that also hold user state
 	# (~/.claude.json, ~/.codex/config.toml) — never rewrite those wholesale.
@@ -105,10 +103,8 @@ _config_agents() {
 
 	# Claude Code skills bundled in the image.
 	if [[ -d "${SKILL_SRC}" ]]; then
-		if cp -r "${SKILL_SRC}/." "${NEW_HOME}/.claude/skills/" 2>/dev/null ||
-			{ mkdir -p "${NEW_HOME}/.claude/skills" &&
-				cp -r "${SKILL_SRC}/." "${NEW_HOME}/.claude/skills/"; }; then
-			chown -R "${NB_USER}:users" "${NEW_HOME}/.claude" 2>/dev/null || true
+		if af_as_user mkdir -p "${NEW_HOME}/.claude/skills" &&
+			af_as_user cp -r "${SKILL_SRC}/." "${NEW_HOME}/.claude/skills/"; then
 			echo "config-agents: installed bundled skills into ${NEW_HOME}/.claude/skills"
 		else
 			echo "config-agents: WARNING could not install bundled skills" >&2
@@ -127,16 +123,9 @@ _config_agents() {
 				echo "config-agents: WARNING could not update ${target}" >&2
 			fi
 		done
-		# The skill copy above runs as root; ~/.codex may be root-owned too.
-		chown -R "${NB_USER}:users" "${NEW_HOME}/.claude" "${NEW_HOME}/.codex" \
-			2>/dev/null || true
 	else
 		echo "config-agents: no bundled agent section, skipping" >&2
 	fi
-
-	# The AF block must not also sit in opencode's AGENTS.md: it would load twice.
-	_as_user "'${PYTHON}' /usr/local/bin/managed-block.py --remove '${NEW_HOME}/.config/opencode/AGENTS.md'" ||
-		echo "config-agents: WARNING could not retire ${NEW_HOME}/.config/opencode/AGENTS.md" >&2
 
 	return 0
 }

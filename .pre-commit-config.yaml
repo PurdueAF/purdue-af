@@ -44,8 +44,8 @@ repos:
         additional_dependencies: ["mvdan.cc/sh/v3/cmd/shfmt@v3.14.1"]
         entry: shfmt -w
         types: [shell]
-        # Leaves slurm/'s extensionless site scripts (slist) verbatim.
-        files: \.sh$
+        # slurm/ is carried verbatim.
+        exclude: ^slurm/
 
       # actionlint skips run blocks when shellcheck is not on PATH.
       - id: actionlint

@@ -10,6 +10,7 @@ import subprocess
 
 import pytest
 from common import REPO
+from script_helpers import image_file, sandboxed
 
 SCRIPT = REPO / "docker" / "purdue-af" / "scripts" / "run-as-root.sh"
 HELPER = REPO / "docker" / "purdue-af" / "scripts" / "af-as-user.sh"
@@ -37,17 +38,17 @@ def home_setup(tmp_path):
     home = tmp_path / "home" / "jovyan"
     home.mkdir(parents=True)
 
-    body = SCRIPT.read_text()
-    cut = body.index('mkdir -p "/work/users/$NB_USER"')
-    section = body[:cut].replace(
-        "source /usr/local/bin/af-as-user.sh", f"source {HELPER}"
+    body = sandboxed(
+        SCRIPT,
+        {
+            "source /usr/local/bin/af-as-user.sh": f"source {HELPER}",
+            # Reads /etc/secrets and would su to a user we do not have.
+            "if [ -f /etc/secrets/munge/munge.key ]; then": "if false; then",
+        },
     )
+    section = body[: body.index('mkdir -p "/work/users/$NB_USER"')]
     section = re.sub(
         r"^NEW_HOME=.*$", f'NEW_HOME="{home}"', section, count=1, flags=re.M
-    )
-    # The munge block reads /etc/secrets and would su to a user we do not have.
-    section = section.replace(
-        "if [ -f /etc/secrets/munge/munge.key ]; then", "if false; then"
     )
 
     script = tmp_path / "run-as-root-home.sh"
@@ -135,12 +136,11 @@ def test_an_unwritable_dot_local_does_not_kill_the_session(run_hook, tmp_path):
 
 
 def test_the_shared_helper_is_shipped_and_sourced():
-    """Both hooks source it by absolute path, so a missing COPY is a crash at
+    """The hooks source it by absolute path, so a missing COPY is a crash at
     spawn time, not a build failure — and config-extensions.sh is not part of
     the build smoke check (it reaches the network)."""
-    dockerfile = (REPO / "docker" / "purdue-af" / "Dockerfile").read_text()
-    assert "scripts/af-as-user.sh /usr/local/bin/" in dockerfile
-    for hook in ("run-as-root.sh", "config-extensions.sh"):
+    assert image_file("/usr/local/bin/af-as-user.sh") == HELPER
+    for hook in ("run-as-root.sh", "config-extensions.sh", "config-agents.sh"):
         body = (REPO / "docker" / "purdue-af" / "scripts" / hook).read_text()
         assert "source /usr/local/bin/af-as-user.sh" in body, hook
         assert "af_as_user " in body, hook

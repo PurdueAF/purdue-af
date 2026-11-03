@@ -1,39 +1,7 @@
 #!/usr/bin/env python3
-"""Automated hands for the shared global pixi env: keeps /work/pixi/global
-in sync with the repo's pixi/global/{pixi.toml,pixi.lock}.
+"""Keeps /work/pixi/global in sync with the repo; see README.md.
 
-Deliberately does EXACTLY what an admin does by hand — update the two
-manifest files, run `pixi install --locked`, confirm the env imports —
-nothing else. /work/pixi/global stays a plain pixi project directory
-(no symlinks, no build copies, no versioned dirs); the only addition on
-the share is a persistent package cache at /work/pixi/.cache.
-
-Safety model:
-  - Correctness of the LOCK is guaranteed upstream: ci-pixi-global.yml
-    solves and import-smokes every lock change inside the AF image, and the
-    manifests reach this daemon via the Flux `experimental` channel, which
-    tracks the `main-validated` branch — advanced ONLY by the ci.yml publish
-    stage behind the ci-ok gate. Unblessed content cannot arrive here.
-  - The in-place `pixi install --locked` is transactional per-package and,
-    with a warm cache on the same filesystem, mostly hardlink swaps: the
-    update window is short and its failure modes are infra-only (retried
-    with backoff; a failed attempt leaves pixi to converge on retry).
-  - After every install (and periodically), check-env.py import-smokes the
-    live env; failure ⇒ env_healthy=0 (alerts) + forced re-sync.
-  - Drift = the live manifests differ from the mounted desired ones (byte
-    comparison), or this process has not installed the desired ones yet.
-    That record is in memory — no state files — so a failed install stays
-    drift (in_sync=0, retried after FAIL_COOLDOWN) and every start runs
-    `pixi install --locked` once, a fast no-op on a current env. Manual
-    edits in the live dir count as drift and are reverted within
-    POLL_SECONDS; for hands-on work, `touch /work/pixi/global/.sync-pause`
-    stops the daemon touching the env until the file is removed (surfaced
-    in metrics), and resuming re-installs.
-
-Desired state arrives via a ConfigMap mounted at CONFIG_DIR — kubelet
-refreshes the mount in place (~1 min after Flux applies), so the daemon
-needs no restart. Metrics + /healthz on METRICS_PORT. Runs inside the
-purdue-af image (same pixi + EL8 userland as user sessions). Stdlib only.
+Stdlib only: it runs on the session image's python3.
 """
 
 import hashlib
@@ -54,19 +22,18 @@ from typing import Any
 
 log = logging.getLogger("pixi-global-sync")
 
-WORK_ROOT = Path(os.environ.get("WORK_ROOT", "/work/pixi"))
-CONFIG_DIR = Path(os.environ.get("CONFIG_DIR", "/config"))
-PIXI_BIN = os.environ.get("PIXI_BIN", "/opt/pixi/bin/pixi")
-ENV_NAME = os.environ.get("ENV_NAME", "default")
-POLL_SECONDS = int(os.environ.get("POLL_SECONDS", "60"))
-VERIFY_SECONDS = int(os.environ.get("VERIFY_SECONDS", "21600"))  # 6 h
-BUILD_TIMEOUT = int(os.environ.get("BUILD_TIMEOUT", "5400"))  # 90 min
-VALIDATE_TIMEOUT = int(os.environ.get("VALIDATE_TIMEOUT", "1800"))
-FAIL_COOLDOWN = int(os.environ.get("FAIL_COOLDOWN", "1800"))
-LOCK_STALE_SECONDS = int(os.environ.get("LOCK_STALE_SECONDS", "600"))
-# A heartbeat that stops changing (live ones refresh every 30 s) is dead.
-LOCK_FROZEN_SECONDS = int(os.environ.get("LOCK_FROZEN_SECONDS", "90"))
-METRICS_PORT = int(os.environ.get("METRICS_PORT", "9099"))
+WORK_ROOT = Path("/work/pixi")
+CONFIG_DIR = Path("/config")
+PIXI_BIN = "/opt/pixi/bin/pixi"
+ENV_NAME = "default"
+POLL_SECONDS = 60
+VERIFY_SECONDS = 6 * 3600
+BUILD_TIMEOUT = 90 * 60
+VALIDATE_TIMEOUT = 30 * 60
+FAIL_COOLDOWN = 30 * 60
+# A heartbeat unchanged this long is dead; the loop refreshes it every POLL_SECONDS.
+LOCK_FROZEN_SECONDS = 90
+METRICS_PORT = 9099
 
 CODE = Path(__file__)
 LIVE_DIR = WORK_ROOT / "global"
@@ -79,7 +46,6 @@ METRICS: dict[str, float] = {
     "paused": 0.0,  # 1 = .sync-pause present, daemon hands-off
     "env_healthy": 1.0,  # 0 after a failed verify, until healed
     "last_success_timestamp_seconds": 0.0,
-    "last_attempt_timestamp_seconds": 0.0,
     "syncs_total": 0.0,
     "sync_failures_total": 0.0,
     "last_sync_duration_seconds": 0.0,
@@ -189,23 +155,12 @@ def write_heartbeat() -> None:
     tmp.replace(heartbeat_path())
 
 
-def should_take_over(
-    heartbeat: dict[str, Any] | None, now: float, stale_seconds: float | None = None
-) -> bool:
-    stale_seconds = LOCK_STALE_SECONDS if stale_seconds is None else stale_seconds
-    if heartbeat is None:
-        return True
-    try:
-        return (now - float(heartbeat["ts"])) > stale_seconds
-    except (KeyError, TypeError, ValueError):
-        return True
-
-
 class FrozenHeartbeatObserver:
-    """A LIVE lock holder rewrites its heartbeat every 30 s, so the ts field
-    keeps changing. If we observe the SAME ts for longer than `threshold`,
-    the holder is dead (e.g. SIGKILLed mid-install before it could release)
-    — safe to take over long before the absolute-age staleness kicks in."""
+    """A LIVE lock holder keeps rewriting its heartbeat, so the ts field keeps
+    changing. The SAME ts for longer than `threshold` means the holder is dead
+    (e.g. SIGKILLed mid-install before it could release). A missing or torn
+    heartbeat is ts=None, which freezes the same way, so a holder between its
+    mkdir and its first write is not taken over."""
 
     def __init__(self, threshold: float) -> None:
         self.threshold = threshold
@@ -232,11 +187,8 @@ def acquire_lock() -> None:
                 heartbeat = json.loads(heartbeat_path().read_text())
             except (OSError, ValueError):
                 heartbeat = None
-            now = time.time()
-            if should_take_over(heartbeat, now):
-                log.warning("taking over stale lock (heartbeat=%s)", heartbeat)
-                write_heartbeat()
-                return
+            if not isinstance(heartbeat, dict):
+                heartbeat = {}
             if observer.frozen(heartbeat.get("ts"), time.monotonic()):
                 log.warning(
                     "lock holder %s (pid %s) is dead — heartbeat frozen for "
@@ -247,15 +199,11 @@ def acquire_lock() -> None:
                 )
                 write_heartbeat()
                 return
-            age = now - float(heartbeat.get("ts", now))
             log.info(
-                "lock held by %s (pid %s), heartbeat %.0fs old — waiting "
-                "(takeover on frozen>%ss or age>%ss)",
+                "lock held by %s (pid %s) — waiting (takeover on frozen>%ss)",
                 heartbeat.get("holder"),
                 heartbeat.get("pid"),
-                age,
                 LOCK_FROZEN_SECONDS,
-                LOCK_STALE_SECONDS,
             )
             time.sleep(30)
 
@@ -439,7 +387,6 @@ def reconcile(force: bool = False) -> bool:
         short_hash(installed["pixi.lock"] if installed else None),
         short_hash(desired["pixi.lock"]),
     )
-    metric_set("last_attempt_timestamp_seconds", time.time())
     metric_inc("syncs_total")
     _installed["manifests"] = None
     started = time.time()

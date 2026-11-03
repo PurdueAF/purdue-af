@@ -3,7 +3,7 @@ ci-pixi-base.yml, ci-pixi-global.yml and the image build. Import-name
 derivation, per-package subprocess outcome and the exit-code decision."""
 
 import json
-import runpy
+import os
 import subprocess
 import sys
 
@@ -141,6 +141,17 @@ class TestPypiToplevels:
     def test_not_installed(self, check_env, dists):
         assert check_env.pypi_toplevels("absent") is None
 
+    def test_an_unreadable_dist_does_not_fail_the_lookup(self, check_env, dists):
+        """A failed check wipes the live env, so one bad METADATA must not."""
+
+        class Unreadable:
+            @property
+            def metadata(self):
+                raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+
+        dists += [Unreadable(), _Dist("wanted", "wanted\n")]
+        assert check_env.pypi_toplevels("wanted") == ["wanted"]
+
 
 def _completed(returncode, stdout="", stderr=""):
     return subprocess.CompletedProcess([], returncode, stdout, stderr)
@@ -212,20 +223,20 @@ def env_dir(tmp_path):
     return tmp_path
 
 
+def _python(env_dir):
+    return env_dir / ".pixi" / "envs" / "default" / "bin" / "python"
+
+
 def _run_main(check_env, monkeypatch, env_dir, pypi, failing=()):
     calls = []
-
-    def fake_resolver(cmd, **kwargs):
-        assert cmd[0] == str(env_dir / ".pixi/envs/default/bin/python")
-        assert cmd[2:] == ["--_resolve-pypi", "dbs3-client"]
-        return _completed(0, json.dumps(pypi))
 
     def fake_import(python, modules, timeout):
         calls.append(modules)
         return (modules[0] not in failing, 0.1, "boom")
 
-    monkeypatch.setattr(check_env.subprocess, "run", fake_resolver)
+    monkeypatch.setattr(check_env, "pypi_toplevels", pypi.__getitem__)
     monkeypatch.setattr(check_env, "import_check", fake_import)
+    monkeypatch.setattr(sys, "executable", str(_python(env_dir)))
     monkeypatch.setattr(
         sys, "argv", ["check-env.py", "--manifest", str(env_dir / "pixi.toml")]
     )
@@ -285,12 +296,43 @@ class TestMain:
         with pytest.raises(SystemExit, match="has `pixi install` run"):
             check_env.main()
 
+    def test_refuses_another_interpreter(self, check_env, monkeypatch, env_dir):
+        monkeypatch.setattr(
+            sys, "argv", ["x", "--manifest", str(env_dir / "pixi.toml")]
+        )
+        with pytest.raises(SystemExit, match="run this with .*bin/python"):
+            check_env.main()
 
-def test_resolve_pypi_mode(monkeypatch, capsys):
-    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--_resolve-pypi", "pytest", "nope"])
-    with pytest.raises(SystemExit) as exc:
-        runpy.run_path(str(SCRIPT), run_name="__main__")
-    assert exc.value.code == 0
-    resolved = json.loads(capsys.readouterr().out)
-    assert "pytest" in resolved["pytest"]
-    assert resolved["nope"] is None
+    def test_accepts_a_symlink_to_the_env_python(
+        self, check_env, monkeypatch, env_dir, tmp_path_factory
+    ):
+        alias = tmp_path_factory.mktemp("alias") / "python"
+        alias.symlink_to(_python(env_dir))
+        rc, _ = _run_main(check_env, monkeypatch, env_dir, {"dbs3-client": ["dbs"]})
+        assert rc == 0
+        monkeypatch.setattr(sys, "executable", str(alias))
+        assert check_env.main() == 0
+
+
+def test_resolves_pypi_in_the_running_interpreter(tmp_path):
+    site = tmp_path / "site"
+    (site / "real_dist-1.0.dist-info").mkdir(parents=True)
+    (site / "real_dist-1.0.dist-info" / "METADATA").write_text("Name: real-dist\n")
+    (site / "real_dist-1.0.dist-info" / "top_level.txt").write_text("real_dist\n")
+    (site / "real_dist.py").touch()
+    python = tmp_path / ".pixi" / "envs" / "default" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.symlink_to(sys.executable)
+    (python.parent.parent / "conda-meta").mkdir()
+    manifest = tmp_path / "pixi.toml"
+    manifest.write_text('[pypi-dependencies]\nreal-dist = "*"\nno-such-dist = "*"\n')
+    proc = subprocess.run(
+        [str(python), str(SCRIPT), "--manifest", str(manifest)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env=dict(os.environ, PYTHONPATH=str(site)),
+    )
+    assert "PASS  real-dist" in proc.stdout
+    assert "FAILURES: no-such-dist\n" in proc.stdout
+    assert proc.returncode == 1

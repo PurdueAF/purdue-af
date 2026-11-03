@@ -6,10 +6,10 @@ it must survive a home it cannot fully clean."""
 
 import os
 import subprocess
-from pathlib import Path
 
 import pytest
 from common import REPO
+from script_helpers import sandboxed, startup_hooks
 
 SCRIPT = REPO / "docker" / "purdue-af" / "scripts" / "clean-session-state.sh"
 
@@ -85,8 +85,9 @@ def run_hook(tmp_path, home):
     under /home/$NB_USER — which the sandbox stands in for."""
     script = tmp_path / "clean-session-state.sh"
     script.write_text(
-        SCRIPT.read_text().replace(
-            '_CSS_HOME="/home/${NB_USER}"', f'_CSS_HOME="{home.parent}/${{NB_USER}}"'
+        sandboxed(
+            SCRIPT,
+            {'_CSS_HOME="/home/${NB_USER}"': f'_CSS_HOME="{home.parent}/${{NB_USER}}"'},
         )
     )
 
@@ -199,12 +200,4 @@ def test_the_hook_is_installed_and_runs_before_the_others():
     """It has to be in before-notebook.d to run at all, and run-hooks sources
     that directory in sorted order — the name puts it ahead of config-agents.sh
     so the previous session's locks are gone before anything reads them."""
-    dockerfile = (REPO / "docker" / "purdue-af" / "Dockerfile").read_text()
-    (copy,) = [
-        line.split()
-        for line in dockerfile.replace("\\\n", " ").splitlines()
-        if line.startswith("COPY") and line.endswith("/before-notebook.d/")
-    ]
-    hooks = sorted(Path(word).name for word in copy[1:-1] if word.endswith(".sh"))
-    assert hooks[0] == "clean-session-state.sh"
-    assert "config-agents.sh" in hooks
+    assert startup_hooks()[0] == SCRIPT

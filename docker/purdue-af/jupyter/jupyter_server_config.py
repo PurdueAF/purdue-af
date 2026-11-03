@@ -1,11 +1,11 @@
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
-# mypy: ignore-errors
 import logging
 import os
 import sys
+from typing import Any
 
-c = get_config()  # noqa: F821
+c: Any = get_config()  # type: ignore[name-defined]  # noqa: F821
 c.ServerApp.ip = "0.0.0.0"
 c.ServerApp.open_browser = False
 # Quieter default logging
@@ -21,15 +21,12 @@ c.FileContentsManager.allow_hidden = True
 
 
 class _SuppressXSRFSkipNoise(logging.Filter):
-    def filter(self, record):
+    def filter(self, record: logging.LogRecord) -> bool:
         return "Skipping XSRF check for insecure request" not in record.getMessage()
 
 
 # XSRF skip lines go to tornado.application, not ServerApp
 logging.getLogger("tornado.application").addFilter(_SuppressXSRFSkipNoise())
-
-# to output both image/svg+xml and application/pdf plot formats in the notebook file
-c.InlineBackend.figure_formats = {"png", "jpeg", "svg", "pdf"}
 
 # https://github.com/jupyter/notebook/issues/3130
 c.FileContentsManager.delete_to_trash = False
@@ -57,10 +54,10 @@ _AF_MCP_URL = (
 )
 
 
-def _builtin_mcp_servers():
+def _builtin_mcp_servers() -> list[dict[str, Any]]:
     """The MCP servers every persona gets, before the user's own
     `.jupyter/mcp_settings.json` is merged on top."""
-    servers = [
+    servers: list[dict[str, Any]] = [
         {
             "type": "http",
             "name": _JUPYTER_MCP_NAME,
@@ -90,13 +87,13 @@ c.MCPExtensionApp.mcp_port = _JUPYTER_MCP_PORT
 c.PersonaManager.builtin_mcp_servers = _builtin_mcp_servers()
 
 
-def _patch_websocket_protocol_ping_units():
+def _patch_websocket_protocol_ping_units() -> None:
     """WebSocketMixin uses ms; Tornado protocol expects seconds (see tornado.websocket)."""
     from tornado.websocket import WebSocketHandler
 
     _orig = WebSocketHandler.get_websocket_protocol
 
-    def _wrapped(self):
+    def _wrapped(self: WebSocketHandler) -> Any:
         proto = _orig(self)
         if proto is None:
             return None
@@ -115,13 +112,13 @@ def _patch_websocket_protocol_ping_units():
             p.ping_timeout = p.ping_interval
         return proto
 
-    WebSocketHandler.get_websocket_protocol = _wrapped
+    setattr(WebSocketHandler, "get_websocket_protocol", _wrapped)
 
 
 _patch_websocket_protocol_ping_units()
 
 
-def _start_profiling():
+def _start_profiling() -> None:
     server = os.environ.get("PYROSCOPE_SERVER")
     if not server:
         return

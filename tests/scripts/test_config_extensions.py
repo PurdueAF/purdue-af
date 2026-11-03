@@ -5,6 +5,7 @@ code-server is stubbed: it reports a fixed extension list and records the argv
 of every install, so the tests assert the exact commands a session would run.
 """
 
+import json
 import re
 import subprocess
 
@@ -12,9 +13,6 @@ import pytest
 from common import REPO
 
 SCRIPT = REPO / "docker" / "purdue-af" / "scripts" / "config-extensions.sh"
-
-# Newest openai.chatgpt build verified to parse under code-server's Node 22.
-PINNED_CHATGPT = "openai.chatgpt@26.820.71523"
 
 # Mirrors the real CLI: `--list-extensions` prints bare ids, and only adding
 # `--show-versions` appends `@version`. An installer that forgets the second
@@ -133,15 +131,14 @@ def test_unrelated_extensions_do_not_satisfy_a_pin(run_install):
     assert len(installs) == 1
 
 
-def test_chatgpt_is_pinned_in_the_script():
+def test_agent_extensions_are_installed_and_chatgpt_is_pinned():
     """A floating openai.chatgpt install is what broke the Codex view."""
-    line = re.search(
-        r"^\s*_cs_install_if_missing\s+(openai\.chatgpt\S*)\s*$",
-        SCRIPT.read_text(),
-        re.MULTILINE,
+    specs = re.findall(
+        r"^\s*_cs_install_if_missing\s+(\S+)\s*$", SCRIPT.read_text(), re.MULTILINE
     )
-    assert line, "openai.chatgpt install line not found"
-    assert line.group(1) == PINNED_CHATGPT
+    versions = dict(spec.partition("@")[::2] for spec in specs)
+    assert "anthropic.claude-code" in versions
+    assert versions["openai.chatgpt"], "openai.chatgpt must carry an @version"
 
 
 def _user_settings_section():
@@ -255,3 +252,118 @@ def test_a_home_without_continue_is_untouched(tmp_path):
     home.mkdir(parents=True)
     assert _retire_continue(tmp_path, home) == ""
     assert list(home.iterdir()) == []
+
+
+# --- the bundled extension -------------------------------------------------
+
+BUNDLED_ID = "purdueaf.purdue-af-interface-controls"
+
+
+def _bundled_section():
+    text = SCRIPT.read_text()
+    return text[
+        text.index("\t# The bundled extension") : text.index(
+            "fi\n\n# A home that still"
+        )
+    ]
+
+
+@pytest.fixture()
+def run_bundled(tmp_path):
+    """Run the bundled-extension block with a code-server that logs its arguments."""
+    extensions = tmp_path / "ext"
+    extensions.mkdir()
+    image = tmp_path / "image"
+    image.mkdir()
+    vsix = image / "bundled.vsix"
+    vsix.write_text("vsix")
+    (image / "bundled.vsix.sha256").write_text("hash-1\n")
+    log = tmp_path / "code-server.log"
+    code_server = tmp_path / "code-server"
+
+    def _run(exit_code=0):
+        log.write_text("")
+        code_server.write_text(
+            f'#!/bin/bash\nprintf \'%s\\n\' "$*" >> "{log}"\n'
+            f'case "$*" in *--install-extension*) exit {exit_code};; esac\n'
+        )
+        code_server.chmod(0o755)
+        section = _bundled_section().replace(
+            "/opt/purdue-af/code-server/purdue-af-interface-controls.vsix", str(vsix)
+        )
+        program = "\n".join(
+            [
+                'af_as_user() { "$@"; }',
+                f'CODE_SERVER_BIN="{code_server}"',
+                f'CODE_EXTENSIONSDIR="{extensions}"',
+                f'CODE_USERDATADIR="{tmp_path}/data"',
+                section,
+                "echo SURVIVED",
+            ]
+        )
+        result = subprocess.run(
+            ["bash", "-c", f"set -e\n{program}"],
+            capture_output=True,
+            text=True,
+            env={"PATH": "/usr/bin:/bin"},
+        )
+        assert "SURVIVED" in result.stdout, result.stderr
+        return log.read_text(), result
+
+    return _run, extensions, image
+
+
+def _register(extensions, stamp="hash-1\n"):
+    (extensions / f"{BUNDLED_ID}-0.1.0").mkdir()
+    (extensions / "extensions.json").write_text(
+        json.dumps([{"identifier": {"id": BUNDLED_ID}}])
+    )
+    (extensions / ".purdue-af-interface-controls.sha256").write_text(stamp)
+
+
+def test_the_first_start_installs_and_stamps(run_bundled):
+    run, extensions, _ = run_bundled
+    calls, _ = run()
+    assert "--install-extension" in calls
+    assert "--force" in calls
+    stamp = extensions / ".purdue-af-interface-controls.sha256"
+    assert stamp.read_text() == "hash-1\n"
+
+
+def test_a_current_extension_costs_no_cli_call(run_bundled):
+    run, extensions, _ = run_bundled
+    _register(extensions)
+    calls, _ = run()
+    assert calls == ""
+
+
+def test_a_new_build_is_reinstalled(run_bundled):
+    run, extensions, _ = run_bundled
+    _register(extensions, stamp="hash-0\n")
+    calls, _ = run()
+    assert f"--uninstall-extension {BUNDLED_ID}" in calls
+    assert "--install-extension" in calls
+
+
+def test_a_stamp_without_the_extension_does_not_count(run_bundled):
+    """The stamp outlives an uninstall from the editor, which edits extensions.json."""
+    run, extensions, _ = run_bundled
+    _register(extensions)
+    (extensions / "extensions.json").write_text("[]")
+    calls, _ = run()
+    assert "--install-extension" in calls
+
+
+def test_a_registration_without_its_directory_does_not_count(run_bundled):
+    run, extensions, _ = run_bundled
+    _register(extensions)
+    (extensions / f"{BUNDLED_ID}-0.1.0").rmdir()
+    calls, _ = run()
+    assert "--install-extension" in calls
+
+
+def test_a_failed_install_is_reported_and_retried_next_start(run_bundled):
+    run, extensions, _ = run_bundled
+    _, result = run(exit_code=1)
+    assert "ERROR" in result.stderr
+    assert not (extensions / ".purdue-af-interface-controls.sha256").exists()

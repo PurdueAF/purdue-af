@@ -1,16 +1,4 @@
 #!/bin/bash
-base_env_dir=/opt/pixi/.pixi/envs/base-env/
-
-# Configure JupyterLab overrides (disable PyPI extension manager)
-mkdir -p $base_env_dir/share/jupyter/lab/settings
-cat >$base_env_dir/share/jupyter/lab/settings/overrides.json <<'OVERRIDES_EOF'
-{
-  "@jupyterlab/extensionmanager-extension:plugin": {
-    "enabled": false
-  }
-}
-OVERRIDES_EOF
-
 # Configure topbar extension
 NEW_HOME=/home/$NB_USER
 
@@ -66,7 +54,7 @@ echo '{
     ]
 }' | af_as_user tee $TOPBAR_CONFIG_PATH/top-bar.jupyterlab-settings >/dev/null
 
-CODE_SERVER_BIN="${base_env_dir%/}/bin/code-server"
+CODE_SERVER_BIN=/opt/pixi/.pixi/envs/base-env/bin/code-server
 # A broken code-server skips the editor setup, never the session.
 code_server_ok=1
 if [ ! -x "$CODE_SERVER_BIN" ]; then
@@ -80,6 +68,8 @@ if [ "$code_server_ok" = 1 ]; then
 	export CODE_EXTENSIONSDIR="$NEW_HOME/.local/share/code-server/extensions"
 	export CODE_USERDATADIR="$NEW_HOME/.local/share/code-server"
 	CODE_SERVER_USER_SETTINGS="$CODE_USERDATADIR/User"
+
+	af_repair_ownership "$CODE_USERDATADIR" "$CODE_EXTENSIONSDIR"
 
 	# Fails only on a full quota or dangling symlink: skip the editor then.
 	if ! af_as_user mkdir -p \
@@ -153,71 +143,35 @@ EOF
 	# Pinned: newer builds emit `using` declarations code-server's Node cannot parse.
 	_cs_install_if_missing openai.chatgpt@26.820.71523
 
-	# Install Purdue AF code-server UI controls via VSIX (proper extensions.json registration)
+	# The bundled extension: only when the image's build differs from the installed
+	# one. Uninstalling first also clears a registration whose directory is gone,
+	# which --force alone refuses.
 	PAF_CS_EXT_VSIX="/opt/purdue-af/code-server/purdue-af-interface-controls.vsix"
 	PAF_CS_EXT_ID="purdueaf.purdue-af-interface-controls"
+	PAF_CS_EXT_STAMP="$CODE_EXTENSIONSDIR/.purdue-af-interface-controls.sha256"
 
-	_cs_clear_extension_state() {
-		local ext_id="$1"
-		af_as_user python - "$CODE_EXTENSIONSDIR" "$ext_id" <<'PY'
-import glob
-import json
-import os
-import sys
-
-extensions_dir, ext_id = sys.argv[1], sys.argv[2].lower()
-
-for path in glob.glob(os.path.join(extensions_dir, f"{ext_id}-*")):
-    print(f"Removing stale extension directory: {path}")
-    import shutil
-    shutil.rmtree(path, ignore_errors=True)
-
-meta_path = os.path.join(extensions_dir, "extensions.json")
-if os.path.isfile(meta_path):
-    try:
-        with open(meta_path, "r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except Exception:
-        data = None
-    if isinstance(data, list):
-        filtered = [
-            item for item in data
-            if str(((item.get("identifier") or {}).get("id") or "")).lower() != ext_id
-        ]
-        if filtered != data:
-            with open(meta_path, "w", encoding="utf-8") as handle:
-                json.dump(filtered, handle)
-
-obsolete_path = os.path.join(extensions_dir, ".obsolete")
-if os.path.isfile(obsolete_path):
-    try:
-        with open(obsolete_path, "r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except Exception:
-        data = None
-    if isinstance(data, dict):
-        stale = [key for key in data if key.lower().startswith(ext_id)]
-        for key in stale:
-            print(f"Removing stale obsolete entry: {key}")
-            data.pop(key, None)
-        with open(obsolete_path, "w", encoding="utf-8") as handle:
-            json.dump(data, handle)
-PY
+	_cs_bundled_is_current() {
+		af_as_user bash -c 'cmp -s "$1" "$2" &&
+			grep -qF "\"$3\"" "$4/extensions.json" &&
+			compgen -G "$4/$3-*" >/dev/null' _ \
+			"$PAF_CS_EXT_VSIX.sha256" "$PAF_CS_EXT_STAMP" "$PAF_CS_EXT_ID" "$CODE_EXTENSIONSDIR"
 	}
 
-	if [ -f "$PAF_CS_EXT_VSIX" ]; then
-		_cs_clear_extension_state "$PAF_CS_EXT_ID"
+	if [ ! -f "$PAF_CS_EXT_VSIX" ]; then
+		echo "WARNING: bundled Purdue AF code-server VSIX not found at ${PAF_CS_EXT_VSIX}" >&2
+	elif _cs_bundled_is_current; then
+		echo "Purdue AF code-server extension is current, skipping."
+	else
 		af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
 			--uninstall-extension "$PAF_CS_EXT_ID" >/dev/null 2>&1 || true
-		af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
-			--install-extension "$PAF_CS_EXT_VSIX"
-		echo "Installed Purdue AF code-server extension from ${PAF_CS_EXT_VSIX}"
-	else
-		echo "WARNING: bundled Purdue AF code-server VSIX not found at ${PAF_CS_EXT_VSIX}" >&2
+		if af_as_user "$CODE_SERVER_BIN" --extensions-dir "$CODE_EXTENSIONSDIR" --user-data-dir "$CODE_USERDATADIR" \
+			--install-extension "$PAF_CS_EXT_VSIX" --force; then
+			af_as_user cp "$PAF_CS_EXT_VSIX.sha256" "$PAF_CS_EXT_STAMP" || true
+			echo "Installed Purdue AF code-server extension from ${PAF_CS_EXT_VSIX}"
+		else
+			echo "ERROR: could not install ${PAF_CS_EXT_VSIX}" >&2
+		fi
 	fi
-
-	# Repairs root-owned homes; never fatal (a depot-backed ~/.local is out of root's reach).
-	chown -R $NB_USER:users "$CODE_EXTENSIONSDIR" "$CODE_USERDATADIR" || true
 
 fi
 

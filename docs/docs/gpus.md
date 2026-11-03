@@ -36,10 +36,11 @@ The GPUs installed at the facility are listed in [Hardware](hardware.md).
 
 !!! note
 
-    If you selected a GPU, your session will have `CUDA 12.4` and `cudnn 8.9.7.29`
-    libraries loaded. Take this into account if you need to install particular
-    versions of ML libraries — these libraries are notoriously sensitive to the
-    CUDA version.
+    Each environment brings its own CUDA and cuDNN libraries, so install ML
+    packages into the environment that uses them. Install CUDA 12 builds: the GPU
+    nodes' driver runs no CUDA 13 (`nvidia-smi` shows its limit). `nvcc --version`
+    shows the session's CUDA toolkit, which matters only when you compile CUDA
+    code.
 
 !!! important
 
@@ -74,9 +75,9 @@ see [Training on GPUs with Ray](guide-ray-train.md).
 
 ## GPU support in common ML libraries
 
-* **PyTorch** — does not require any special installation, as long as its version
-  supports `CUDA 12.4` and `cudnn 8.9.x` (this is already true for the
-  [global Pixi environment](software.md)).
+* **PyTorch** — already GPU-enabled in the [global Pixi environment](software.md).
+  In your own environment, install a CUDA 12 build, which brings its own CUDA
+  runtime and cuDNN.
   See the [PyTorch CUDA semantics documentation](https://pytorch.org/docs/stable/notes/cuda.html).
 
 * **XGBoost** — enable GPU support by setting the `device` parameter to `cuda`.
