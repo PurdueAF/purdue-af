@@ -57,6 +57,7 @@ postgres:
   image:
     registry: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache
     repository: library/postgres
+    tag: "18.6-alpine"
   storage:
     requestedSize: 10Gi
     className: ${singlenode_storage_class}

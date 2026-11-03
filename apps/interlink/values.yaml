@@ -4,7 +4,6 @@ interlink:
   enabled: true
   socket: unix:///var/run/interlink.sock
   logging:
-    verboseLogging: false
     errorsOnlyLogging: true
 
 plugin:

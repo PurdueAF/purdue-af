@@ -15,14 +15,9 @@ BACKUP_DIR = "/backups"
 OUTPUT_PATH = "/data/purdue-af-registered-users.png"
 
 PLOT_STYLE = {
-    "font.family": "sans-serif",
     "font.size": 12,
-    "axes.linewidth": 0.8,
     "axes.edgecolor": "#E0E0E0",
-    "axes.facecolor": "white",
-    "figure.facecolor": "white",
     "grid.color": "#F0F0F0",
-    "grid.linestyle": "-",
     "grid.linewidth": 0.5,
     "grid.alpha": 0.8,
     "xtick.color": "#666666",
@@ -72,7 +67,6 @@ def plot_registered_users(stats: RegistrationStats, output_path: str) -> None:
     first_date, last_date = reg_dates[0], reg_dates[-1]
     current_users = cumulative_users[-1]
 
-    plt.style.use("default")
     plt.rcParams.update(PLOT_STYLE)
 
     fig, ax = plt.subplots(figsize=(16, 4))
@@ -105,13 +99,9 @@ def plot_registered_users(stats: RegistrationStats, output_path: str) -> None:
     ax.spines["bottom"].set_linewidth(0.8)
 
     ax.tick_params(axis="both", colors="#666666", labelsize=10)
-    ax.tick_params(axis="x", rotation=0)
 
     ax.set_ylim(0, current_users * 1.05)
     ax.set_xlim(first_date - timedelta(days=5), last_date + timedelta(days=5))
-
-    ax.set_xlabel("")
-    ax.set_ylabel("")
 
     ax.text(
         0.98,
