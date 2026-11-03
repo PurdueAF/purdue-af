@@ -10,7 +10,7 @@ app:
     - "gitlab-registry.cern.ch/"
   resources:
     requests:
-      cpu: 2
+      cpu: 250m
       memory: 2Gi
     limits:
       cpu: 4
@@ -115,8 +115,8 @@ rabbitmq:
     existingPasswordSecret: servicex-secrets-eos
   resources:
     requests:
-      cpu: 2
-      memory: 4Gi
+      cpu: 250m
+      memory: 1Gi
     limits:
       cpu: 2
       memory: 4Gi

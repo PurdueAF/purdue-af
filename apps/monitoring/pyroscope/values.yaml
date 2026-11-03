@@ -12,8 +12,8 @@ pyroscope:
       cpu: 8
       memory: 16Gi
     requests:
-      cpu: 4
-      memory: 8Gi
+      cpu: 250m
+      memory: 1Gi
 
   persistence:
     enabled: true
