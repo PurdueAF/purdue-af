@@ -6,19 +6,14 @@ hub's, so everything the culler needs must be passed explicitly."""
 
 import re
 
-from common import REPO, load_yaml
+from common import EXTRA_FILES, REPO, hub_values, load_yaml
 
-HUB = REPO / "apps/jupyterhub/jupyterhub"
-SCRIPT = HUB / "extraFiles/cull-gpu-sessions.py"
+SCRIPT = EXTRA_FILES / "cull-gpu-sessions.py"
 PROMETHEUS = REPO / "apps/monitoring/prometheus/values.yaml"
 
 
-def hub_values():
-    return load_yaml(HUB / "values.yaml")["hub"]
-
-
 def culler_service():
-    return hub_values()["services"]["gpu-culler"]
+    return hub_values()["hub"]["services"]["gpu-culler"]
 
 
 def test_service_gets_the_apiserver_from_its_own_environment():
@@ -35,8 +30,8 @@ def test_command_points_at_the_mounted_configmap():
     command = culler_service()["command"]
     script = next(a for a in command if a.endswith("cull-gpu-sessions.py"))
 
-    mounts = {m["name"]: m for m in hub_values()["extraVolumeMounts"]}
-    volumes = {v["name"]: v for v in hub_values()["extraVolumes"]}
+    mounts = {m["name"]: m for m in hub_values()["hub"]["extraVolumeMounts"]}
+    volumes = {v["name"]: v for v in hub_values()["hub"]["extraVolumes"]}
     mount = mounts["gpu-culler-script"]
 
     assert script == f"{mount['mountPath']}/{SCRIPT.name}"
@@ -44,7 +39,7 @@ def test_command_points_at_the_mounted_configmap():
 
 
 def test_role_grants_the_scopes_the_cull_pass_uses():
-    role = hub_values()["loadRoles"]["gpu-culler"]
+    role = hub_values()["hub"]["loadRoles"]["gpu-culler"]
     assert role["services"] == ["gpu-culler"]
     assert {"read:servers", "delete:servers"} <= set(role["scopes"])
 

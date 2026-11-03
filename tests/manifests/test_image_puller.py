@@ -2,9 +2,8 @@
 on demand, on the nodes those pods land on."""
 
 import pytest
-from common import REPO, load_yaml
+from common import HUB_VALUES, REPO, load_yaml
 
-HUB_VALUES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
 RAY_CLUSTER = REPO / "apps" / "ray-train" / "raycluster.yaml"
 DASK_VALUES = REPO / "apps" / "dask-gateway" / "values.yaml"
 

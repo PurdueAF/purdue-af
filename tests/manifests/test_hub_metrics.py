@@ -4,14 +4,9 @@ and apps/monitoring/prometheus.
 /hub/metrics answers only a token with read:metrics. z2jh generates each hub
 service's token and keeps it in the `hub` Secret as hub.services.<name>.apiToken."""
 
-from common import REPO, load_yaml
+from common import EXTRA_FILES, REPO, hub_values, load_yaml
 
-HUB = REPO / "apps/jupyterhub/jupyterhub"
 PROMETHEUS = REPO / "apps/monitoring/prometheus/values.yaml"
-
-
-def hub_values():
-    return load_yaml(HUB / "values.yaml")["hub"]
 
 
 def prometheus_values():
@@ -27,17 +22,19 @@ def metrics_service():
     """The one hub service whose role grants read:metrics."""
     (name,) = {
         service
-        for role in hub_values()["loadRoles"].values()
+        for role in hub_values()["hub"]["loadRoles"].values()
         if "read:metrics" in role["scopes"]
         for service in role.get("services", [])
     }
-    assert name in hub_values()["services"]
+    assert name in hub_values()["hub"]["services"]
     return name
 
 
 def test_the_hub_does_not_turn_metrics_auth_off():
-    assert "authenticate_prometheus" not in hub_values()["config"].get("JupyterHub", {})
-    for snippet in (HUB / "extraFiles").glob("*.py"):
+    assert "authenticate_prometheus" not in hub_values()["hub"]["config"].get(
+        "JupyterHub", {}
+    )
+    for snippet in EXTRA_FILES.glob("*.py"):
         assert "authenticate_prometheus" not in snippet.read_text(), snippet.name
 
 
