@@ -96,11 +96,8 @@ The best storage volume depends on the size of the output:
 
 !!! warning "Don't stress Depot from many jobs at once"
 
-    Avoid writing many files to Depot at the same time, as it may slow Depot down
-    for everyone. If your jobs produce large outputs, first save them into
-    `/tmp/<username>/` on the individual Slurm jobs / Dask workers, and then copy
-    them over to EOS as soon as each is written — see
-    [Writing to EOS](guide-eos-write.md).
+    Writing many files to Depot at the same time slows it down for everyone, so
+    write large outputs to EOS as above.
 
 ## Shared project directories
 

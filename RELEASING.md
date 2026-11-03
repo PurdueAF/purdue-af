@@ -3,38 +3,18 @@
 Two version streams are minted by hand, one automatically; everything else is
 CI-owned. Never create a version tag or move a channel tag by hand.
 
-| Stream                                                | Scheme                            | Minted by                              | Reaches the cluster                                    |
-| ----------------------------------------------------- | --------------------------------- | -------------------------------------- | ------------------------------------------------------ |
-| **Platform** (the core Flux root)                     | CalVer `YYYY.M.SEQ` (`2026.7.8`)  | **Release platform** workflow          | next core Flux reconcile (~1 min)                      |
-| **purdue-af image**                                   | semver `v0.X.Y` (`v0.13.0`)       | **Release image** workflow             | at the next platform release                           |
-| **agentic-interface image**                           | semver `agentic-interface-vX.Y.Z` | `ci.yml` publish stage — **automatic** | same pipeline — experimental Flux reconcile (~1 min)   |
-| Continuous (`:latest`, `:pre-release`, `sha-`)        | moving tags                       | `ci.yml` publish stage, behind `ci-ok` | on pod restart / session spawn                         |
-| Experimental Flux source (`main-validated`)           | moving branch                     | `ci.yml` publish stage, behind `ci-ok` | experimental Flux reconcile (~1 min)                   |
-
-The monitor images (af-pod-monitor, af-node-monitor), supersonic-model-manager,
-agentic-analysis and ray-nrp have no release step at all: every green pipeline
-on `main` moves `:latest`. The interLink plugin images publish under their upstream
-refs, `:$PLUGIN_REF`, which the interLink values pin; bumping a `PLUGIN_REF`
-is that image's release (their READMEs:
-[slurm](docker/interlink-slurm-plugin/README.md),
-[kubernetes](docker/interlink-kubernetes-plugin/README.md)). The agentic-interface
-image also publishes to `:latest` continuously, but its Deployment pins a
-released semver tag — the pod moves only when an auto-release rewrites the pin.
-The hub's pre-release profile pulls `:pre-release` on every spawn, so a merged
-`docker/purdue-af` change reaches those sessions without a release; the default
-profile is pinned to the released semver tag.
-
-## How changes reach the cluster
-
-| Change                                            | Path to the cluster                                                                                                         |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Core component (hub config, monitoring, cronjobs) | push to `main` → CI green → mint new platform tag (manual) → core Flux reconciles (~1 min)                                  |
-| Core component on the geddes2 cluster             | push to `main` → geddes2 Flux reconciles (~1 min) — its root tracks `main` itself, with no CI gate                          |
-| AF image content (Dockerfile, `pixi/base`)        | push to `main` → CI builds + e2e → `:pre-release` moves → mint new image version (manual), then a new platform tag (manual) |
-| Experimental component                            | push to `main` → CI green → publish advances `main-validated` → experimental Flux reconciles (~1 min)                       |
-| Global env (`pixi/global`)                        | push to `main` → CI validates the lock → `pixi-global-sync` applies it to `/work/pixi/global`                               |
-| agentic-interface image                           | push to `main` → CI green → publish auto-releases the next version and advances `main-validated` → Flux rolls pod (~1 min)  |
-| Monitor images (af-pod-monitor, af-node-monitor)  | push to `main` → CI green → `:latest` moves → new spawns pull af-pod-monitor; a node keeps the af-node-monitor it first pulled |
+| Stream                                         | Scheme                                     | Minted by                                                | Reaches the cluster                                                                                                    |
+| ---------------------------------------------- | ------------------------------------------ | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Platform** (the core Flux root)              | CalVer `YYYY.M.SEQ` (`2026.7.8`)           | **Release platform** workflow                            | next core Flux reconcile (~1 min)                                                                                      |
+| geddes2 core root                              | tracks `main` itself                       | a push to `main`, with no CI gate                        | geddes2 Flux reconcile (~1 min)                                                                                        |
+| **purdue-af image** (Dockerfile, `pixi/base`)  | semver `v0.X.Y` (`v0.13.0`)                | **Release image** workflow                               | default profile at the next platform release; the pre-release profile pulls `:pre-release` on every spawn             |
+| **agentic-interface image**                    | semver `agentic-interface-vX.Y.Z`          | `ci.yml` publish stage — **automatic**                   | same pipeline — experimental Flux reconcile (~1 min); its Deployment pins the released tag, never `:latest`            |
+| Experimental Flux source (`main-validated`)    | moving branch                              | `ci.yml` publish stage, behind `ci-ok`                   | experimental Flux reconcile (~1 min)                                                                                   |
+| Continuous (`:latest`, `:pre-release`, `sha-`) | moving tags                                | `ci.yml` publish stage, behind `ci-ok`                   | on pod restart / session spawn                                                                                         |
+| `:latest`-only images                          | `:latest`                                  | `ci.yml` publish stage, behind `ci-ok` — no release step | af-pod-monitor at the next spawn; af-node-monitor, supersonic-model-manager, agentic-analysis and ray-nrp on pod restart; a node keeps the af-node-monitor it first pulled |
+| interLink plugin images                        | upstream ref `:$PLUGIN_REF`                | a `PLUGIN_REF` bump                                      | when the interLink values pin the new ref ([slurm](docker/interlink-slurm-plugin/README.md), [kubernetes](docker/interlink-kubernetes-plugin/README.md)) |
+| Global env (`pixi/global`)                     | the CI-owned lock                          | CI validates the lock                                    | `pixi-global-sync` applies it to `/work/pixi/global`                                                                   |
+| Upstream sources                               | branches and moving tags outside this repo | upstream commits                                         | next reconcile or pod restart, with no commit here: krab's chart and code location image, servicex-eos's fork chart and its `:local` images. No rollback below applies |
 
 Every commit runs one pipeline ([ci.yml](.github/workflows/ci.yml)) and
 nothing is published unless every stage passed for that exact commit. The

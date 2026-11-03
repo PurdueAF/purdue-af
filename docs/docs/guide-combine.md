@@ -116,7 +116,7 @@ conda install root=6.34 gsl boost-cpp vdt eigen tbb cmake ninja
 # add these dependencies to it and rebuild the environment, instead of installing them here.
 
 # configure and build with CMake
-cmake -S . -B build -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_INSTALL_PYTHONDIR=lib/python3.12/site-packages -DUSE_VDT=OFF
+cmake -S . -B build -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_INSTALL_PYTHONDIR=lib/python$(python -c 'import sys; print("%d.%d" % sys.version_info[:2])')/site-packages -DUSE_VDT=OFF
 cmake --build build -j$(nproc --ignore=2)
 cmake --install build
 ```

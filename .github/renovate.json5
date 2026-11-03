@@ -148,8 +148,8 @@
 
   packageRules: [
     {
-      // Images built here, tagged by the release workflows; the Docker Hub cache's
-      // images are renamed by registryAliases and do not match.
+      // geddes2-registry's own projects: see docker/REGISTRY.md. The Docker Hub
+      // cache's images are renamed by registryAliases and do not match.
       matchDatasources: ['docker'],
       matchPackageNames: ['geddes2-registry.rcac.purdue.edu/**'],
       enabled: false,

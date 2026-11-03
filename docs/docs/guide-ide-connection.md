@@ -60,13 +60,15 @@ as long as you have an AF session running.
         User USERNAME
         IdentityFile ~/.ssh/id_ed25519
         IdentitiesOnly yes
-        ProxyCommand websocat --binary -H="Authorization: token TOKEN" asyncstdio: wss://%h/user/USERNAME/sshd/
+        ProxyCommand websocat --binary -H="Authorization: token $(cat ~/.config/purdue-af/token)" asyncstdio: wss://%h/user/USERNAME/sshd/
     ```
 
 4. If you are on Windows, make two small changes to the entry above:
 
     * replace `websocat` with the full path to `websocat.exe` from the previous step;
-    * replace `asyncstdio:` with `stdio:`.
+    * replace `asyncstdio:` with `stdio:`;
+    * replace `$(cat ~/.config/purdue-af/token)` with `TOKEN`, since Windows does
+      not run the `ProxyCommand` through a shell.
 
 5. Replace `USERNAME` (**in two places!**) with your Purdue AF username:
 
@@ -74,15 +76,16 @@ as long as you have an AF session running.
     * If you are using a CERN account, this is your CERN username followed by `-cern`.
     * If you are using an FNAL account, this is your FNAL username followed by `-fnal`.
 
-You will also need to replace `TOKEN` with the JupyterHub token that you will
-obtain in the next step.
+The `ProxyCommand` reads the JupyterHub token from `~/.config/purdue-af/token`,
+which you save in the next step.
 
 ## 4. Start a Purdue AF session and obtain a JupyterHub token
 
 1. In your web browser, open [Purdue AF](https://cms.geddes.rcac.purdue.edu) and
    start a session.
 2. Obtain a [JupyterHub API token](guide-ssh-access.md#jupyterhub-api-token) and
-   use it to replace `TOKEN` in the `~/.ssh/config` file.
+   save it in `~/.config/purdue-af/token` as described there. On Windows, use it
+   to replace `TOKEN` in the `~/.ssh/config` file instead.
 
 ## 5. Configure SSH access on the Purdue AF side
 
@@ -124,14 +127,14 @@ chmod 600 ~/.ssh/authorized_keys
 
 ## 6. Verify home directory permissions on the AF side
 
-Your home directory must have exactly the following permissions:
+SSH keys work only if your home directory is not writable by group or others.
+`chmod 755 ~/` sets permissions that work:
 
 ```shell
+$ chmod 755 ~/
 $ ls -ld ~/
 drwxr-xr-x <username> ... ... ... /home/<username>/
 ```
-
-If the permissions are different, run `chmod 755 ~/` to fix them.
 
 ## 7. Connect from your IDE
 
@@ -165,9 +168,8 @@ the IDE window connected to the AF.
 If the connection fails, you can usually extract useful information from the IDE
 console. Some known caveats:
 
-* Your AF home directory must NOT be group-writable for SSH keys to work.
-  Check it with `ls -ld /home/<username>/` and make sure the group permissions do
-  not include `w`.
+* SSH keys are ignored when your home directory is writable by group or others;
+  see [step 6](#6-verify-home-directory-permissions-on-the-af-side).
 * If you see errors like `websocat: command not found`, check that the `websocat`
   command is available on your local machine: `which websocat`. If it is not
   available, you need to install websocat; if it is available but you are still
@@ -175,4 +177,5 @@ console. Some known caveats:
   use the full path to the websocat binary (for example,
   `/opt/homebrew/bin/websocat`).
 * If the connection stopped working after you restarted your session, your token
-  may have expired — request a new token (step 4) and update `~/.ssh/config`.
+  may have expired — request a new token (step 4) and save it in
+  `~/.config/purdue-af/token` (on Windows, in `~/.ssh/config`).
