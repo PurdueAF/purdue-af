@@ -28,18 +28,19 @@ conversation's text, never who wrote it, and a reply cannot mention anyone.
 
 ## Linking
 
-A person links their account by sending `link` in a direct message. The link works
+A person links their account by asking for it in a direct message, in any
+words, or with `link`. The link works
 once, for 24 hours. It opens a Hub login that shows a code, and the link is made only
 when that code comes back in a direct message from the same Mattermost user. Linking
 mints a 30-day Hub token noted "PurdueAF Agent on Mattermost" and retires that
-user's older ones. A person sends `link` again when it runs out, and `unlink` to stop;
+user's older ones. A person asks again when it runs out, and asks to unlink, or sends `unlink`, to stop;
 `unlink` forgets the token, which the Hub lists on its token page until it expires.
 
 Tokens are encrypted in `/state/links.enc` under `link-key`, keyed by Mattermost user id.
 `/metrics`, reachable only inside the cluster, gives how many accounts are linked.
 
 Each question first goes to the model alone with its author's own posts, to decide
-whether they ask about their own things. If so, it runs with the author's token and
+whether they ask to link, to unlink, or about their own things. If so, it runs with the author's token and
 `PERSONAL_TOOLS`, and the model reads only the author's posts and the bot's replies;
 otherwise it runs as above. The bot replies where it was asked.
 
