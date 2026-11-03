@@ -485,7 +485,8 @@ class TestDashboardComponents:
     async def test_a_partial_row_with_no_alert_is_impaired(self, dashboard):
         out = await self.report({"geddes": 0.5, "work": 1, "hub": 1})
         assert "**Impaired**" in out
-        assert "**Geddes storage** is at 50%" in out
+        assert "**Geddes storage** is partly failing" in out
+        assert "%" not in out.split("Your home")[0]
 
     async def test_a_row_an_alert_covers_is_not_said_twice(self, dashboard):
         firing = alert(
