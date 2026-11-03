@@ -9,7 +9,7 @@ on:
     workflows: [CI]
     types: [completed]
   schedule:
-    - cron: "17 * * * *" # picks up platform tags; those pushes cannot trigger workflows
+    - cron: "17 * * * *" # backstop for a release whose dispatch did not run
   workflow_dispatch:
 
 permissions:

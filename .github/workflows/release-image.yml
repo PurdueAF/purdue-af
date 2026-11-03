@@ -23,6 +23,7 @@ on:
 permissions:
   contents: write # release commit, git tag, GitHub Release
   packages: write # semver tag on ghcr
+  actions: write # dispatch Component status
 
 concurrency:
   group: release-image # never run two releases concurrently, never cancel one
@@ -131,3 +132,6 @@ jobs:
           " \
             2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
           echo "released purdue-af $VERSION -> $DIGEST" >> "$GITHUB_STEP_SUMMARY"
+      # A tag pushed with the workflow token triggers no workflow; a dispatch does.
+      - name: Refresh the README status badges
+        run: gh workflow run component-status.yml --ref main

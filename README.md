@@ -97,7 +97,7 @@ Reading the badges:
 - the trailing number is how many commits it has moved since it was released
 - a leading `X.Y.Z` is the released version, for images on a version stream
 
-Recomputed hourly and after every CI run on `main` by
+Recomputed after every CI run on `main`, after every release, and hourly by
 [`component-status.yml`](.github/workflows/component-status.yml); the badge
 data lives on the [`status`](https://github.com/PurdueAF/purdue-af/tree/status)
 branch, so keeping it current never touches `main`.
