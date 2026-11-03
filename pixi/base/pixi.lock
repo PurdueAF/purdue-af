@@ -422,13 +422,11 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/2f/9f/c79aa12d665c78a2dfa74f86eceb71527ef22ed1120de9cec2fe0ab996e6/jupyterlab_git_core-0.54.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/32/46/9cb0e58b2deb7f82b84065f37f3bffeb12413f947f9388e4cac22c4621ce/sortedcontainers-2.4.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/4a/cc/aa1a47f8c92280d37498a5ea56a2a36606d034383e3e6472d64cbb56cf85/msgspec-0.22.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/5b/a5/1a6b5b52cd14be5c0d024a51344e001b079b434a288b4c12838b5a9b2fb4/tornado_proxy_handlers-0.0.6-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/60/dd/75a852b276f29e131c33083cb57dfaf3996c94ac2e07b1c90cf5950b7505/nbdime-4.0.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6c/c0/a98505f18594f1bce828bb159cec0fcf9860562f1a2c85913409fc8f3d9e/fsspec-2026.9.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/71/e7/40fb618334dcdf7c5a316c0e7343c5cd82d3d866edc100d98e29bc945ecd/partd-1.4.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/80/ab/11a76c1e2126084fde2639514f24e6111b789b0bfa4fc6264a8975c7e1f1/zict-3.0.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/91/f3/fc82c9f22c851e68f17d26a8f3dd603f0bdfdc2005ab7e65961f9c870d2b/jupyterlab_iframe-0.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/94/c4/148eec071c341ba935a05f9bd61ddd08a7de8e9219f745b4dfd9868f1fef/jupyter_sshd_proxy-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a0/61/5c78b91c3143ed5c14207f463aecfc8f9dbb5092fb2869baf37c273b2705/gitdb-4.0.12-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a4/c7/8c4c9c8133c968a3b1e95637601837c73904aae7e329669f93fbe3454243/pyroscope_io-1.4.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
@@ -858,13 +856,11 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/2f/9f/c79aa12d665c78a2dfa74f86eceb71527ef22ed1120de9cec2fe0ab996e6/jupyterlab_git_core-0.54.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/32/46/9cb0e58b2deb7f82b84065f37f3bffeb12413f947f9388e4cac22c4621ce/sortedcontainers-2.4.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/4a/cc/aa1a47f8c92280d37498a5ea56a2a36606d034383e3e6472d64cbb56cf85/msgspec-0.22.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/5b/a5/1a6b5b52cd14be5c0d024a51344e001b079b434a288b4c12838b5a9b2fb4/tornado_proxy_handlers-0.0.6-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/60/dd/75a852b276f29e131c33083cb57dfaf3996c94ac2e07b1c90cf5950b7505/nbdime-4.0.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6c/c0/a98505f18594f1bce828bb159cec0fcf9860562f1a2c85913409fc8f3d9e/fsspec-2026.9.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/71/e7/40fb618334dcdf7c5a316c0e7343c5cd82d3d866edc100d98e29bc945ecd/partd-1.4.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/80/ab/11a76c1e2126084fde2639514f24e6111b789b0bfa4fc6264a8975c7e1f1/zict-3.0.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/91/f3/fc82c9f22c851e68f17d26a8f3dd603f0bdfdc2005ab7e65961f9c870d2b/jupyterlab_iframe-0.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/94/c4/148eec071c341ba935a05f9bd61ddd08a7de8e9219f745b4dfd9868f1fef/jupyter_sshd_proxy-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a0/61/5c78b91c3143ed5c14207f463aecfc8f9dbb5092fb2869baf37c273b2705/gitdb-4.0.12-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a4/c7/8c4c9c8133c968a3b1e95637601837c73904aae7e329669f93fbe3454243/pyroscope_io-1.4.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
@@ -6609,22 +6605,6 @@ packages:
   - tomli-w ; extra == 'toml'
   - pyyaml ; extra == 'yaml'
   requires_python: '>=3.10'
-- pypi: https://files.pythonhosted.org/packages/5b/a5/1a6b5b52cd14be5c0d024a51344e001b079b434a288b4c12838b5a9b2fb4/tornado_proxy_handlers-0.0.6-py2.py3-none-any.whl
-  name: tornado-proxy-handlers
-  version: 0.0.6
-  sha256: f258ddcb368865ea19e85d96641e1289385ae2835fab7f29f3c62460865a9d43
-  requires_dist:
-  - tornado>=6.0.2
-  - tornado>=6.0.2 ; extra == 'dev'
-  - black>=23 ; extra == 'dev'
-  - bump2version>=1.0.0 ; extra == 'dev'
-  - flake8>=3.7.8 ; extra == 'dev'
-  - flake8-black>=0.2.1 ; extra == 'dev'
-  - mock ; extra == 'dev'
-  - pytest>=4.3.0 ; extra == 'dev'
-  - pytest-cov>=2.6.1 ; extra == 'dev'
-  - sphinx>=1.8.4 ; extra == 'dev'
-  - sphinx-markdown-builder>=0.5.2 ; extra == 'dev'
 - pypi: https://files.pythonhosted.org/packages/60/dd/75a852b276f29e131c33083cb57dfaf3996c94ac2e07b1c90cf5950b7505/nbdime-4.0.4-py3-none-any.whl
   name: nbdime
   version: 4.0.4
@@ -6782,22 +6762,6 @@ packages:
   version: 3.1.2
   sha256: 9acb47f6afd73f60dc1df93bb801b472f05ff42fa6c84167d25cb206be1fbf4a
   requires_python: '>=3.8'
-- pypi: https://files.pythonhosted.org/packages/91/f3/fc82c9f22c851e68f17d26a8f3dd603f0bdfdc2005ab7e65961f9c870d2b/jupyterlab_iframe-0.5.0-py3-none-any.whl
-  name: jupyterlab-iframe
-  version: 0.5.0
-  sha256: b14b8adf42f78168d5f776a3d5d77ad340f5873b8c473345f888f6dbc9db6e74
-  requires_dist:
-  - jupyterlab>=4,<5
-  - requests>=2.22.0
-  - tornado-proxy-handlers>=0.0.4
-  - black>=23 ; extra == 'develop'
-  - check-manifest ; extra == 'develop'
-  - pytest ; extra == 'develop'
-  - pytest-cov ; extra == 'develop'
-  - ruff ; extra == 'develop'
-  - pytest ; extra == 'test'
-  - pytest-cov ; extra == 'test'
-  requires_python: '>=3.7'
 - pypi: https://files.pythonhosted.org/packages/94/c4/148eec071c341ba935a05f9bd61ddd08a7de8e9219f745b4dfd9868f1fef/jupyter_sshd_proxy-0.3.0-py3-none-any.whl
   name: jupyter-sshd-proxy
   version: 0.3.0
