@@ -13,7 +13,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "flyte", specifier = "==2.12.2" },
+    { name = "flyte", specifier = "==2.12.4" },
     { name = "httpx", specifier = "==0.28.1" },
 ]
 
@@ -265,7 +265,7 @@ wheels = [
 
 [[package]]
 name = "flyte"
-version = "2.12.2"
+version = "2.12.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
@@ -292,7 +292,7 @@ dependencies = [
     { name = "toml" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/09/98/fe974aef97e7bdb110d7b0c231f5173383c11da565ae751c37bad077ff96/flyte-2.12.2-py3-none-any.whl", hash = "sha256:1b90101f2435b0bccd50065d0f204bf72eec7b2571d57c78ecf14862e334a3e6", size = 1211791, upload-time = "2026-10-30T02:02:07.468Z" },
+    { url = "https://files.pythonhosted.org/packages/0a/50/ccd246d7446e4d535c27bb20883a92f6a755bd01dd70d50c9274c9cc74e4/flyte-2.12.4-py3-none-any.whl", hash = "sha256:13ad26643ba2966d2876494408899d986cf917f1d4765ede548ca6795c925f02", size = 1237823, upload-time = "2026-11-02T23:01:11.419Z" },
 ]
 
 [[package]]

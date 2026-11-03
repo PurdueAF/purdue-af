@@ -2,7 +2,7 @@
 # OpenCode with ripgrep and poppler.
 FROM python:3.12-slim
 
-COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /uvx /bin/
 COPY --from=ghcr.io/prefix-dev/pixi:0.83.0 /usr/local/bin/pixi /usr/local/bin/pixi
 
 # ripgrep: OpenCode's search tools, which otherwise fetch it at run time.
