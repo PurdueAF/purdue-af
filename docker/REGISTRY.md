@@ -29,7 +29,7 @@ rather than through `ghcr-proxy-cache`. `ci.yml` does not build them, and this
 repository holds neither their sources nor a build job for them: a new tag
 comes from outside it.
 
-| Image in `cms/` | Pinned by |
+| Image in `cms/` | Used by |
 | --- | --- |
 | `cmsaf-base-notebook` | `apps/jupyterhub/jupyterhub` |
 | `servicex_app` | `apps/servicex/servicex-eos` |

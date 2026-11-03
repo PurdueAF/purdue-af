@@ -32,7 +32,7 @@ are the following:
 
 === "Run 2 UL"
 
-    In this example we are going to produce $DY(pp\rightarrow ll)$
+    In this example we are going to produce DY (pp → ll)
     samples for the Run 2 Ultra Legacy (UL) campaign.
 
     The first step of production is generation of LHE files (python files with
@@ -440,7 +440,7 @@ Step 1 produces a `GEN-SIM` output file.
 
     `MiniAODv2`
 
-    This is supported in CMSSW versions starting from `CMSSW_10_6_27`.
+    This step uses `CMSSW_10_6_20`, the release of the McM request it reproduces.
 
     ```shell
     source /cvmfs/cms.cern.ch/cmsset_default.sh

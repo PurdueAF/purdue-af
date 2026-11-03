@@ -25,9 +25,9 @@ Purdue EOS is mounted read-only at `/eos/purdue` in the run pods and the Celery 
 run's `input_globs` can name files under `/eos/purdue/store`. The Celery workers also mount
 `/cvmfs` read-only, for the CMSSW setup in `run_cmssw.sh`.
 
-Upstream commits to that branch reach the cluster on the next reconcile; the chart comes from the
-branch and the code location image from its `worker-k8s-config` tag. `values.yaml` overrides the
-upstream `helm/values.yaml`, so a change there can need one here.
+The chart comes from that branch and the code location image from its `worker-k8s-config` tag;
+how their upstream commits reach the cluster is in [RELEASING.md](../../RELEASING.md).
+`values.yaml` overrides the upstream `helm/values.yaml`, so a change there can need one here.
 
 ## CERN credentials
 

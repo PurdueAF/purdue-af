@@ -30,12 +30,9 @@ right-click menu. There are two options:
 
 ## File exchange from the command line
 
-[SSH access to Purdue AF](guide-ssh-access.md) is possible; however, `scp` commands
-will **not** work for that address, since the AF SSH server does not support the
-SFTP protocol.
-
-In order to move files via `scp`, you need to establish a connection in the
-opposite direction: **SSH from Purdue AF into your local machine.**
+`scp` does not work through [SSH access to Purdue AF](guide-ssh-access.md). To
+move files with `scp`, connect in the opposite direction: **SSH from Purdue AF
+into your local machine.**
 
 * **macOS**: [enable "Remote Login"](https://support.apple.com/guide/mac-help/allow-a-remote-computer-to-access-your-mac-mchlp1066/mac).
 * **Ubuntu**: [remote SSH access instructions](https://help.ubuntu.com/stable/ubuntu-help/sharing-secure-shell.html.en).

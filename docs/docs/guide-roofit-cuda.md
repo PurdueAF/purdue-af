@@ -17,22 +17,19 @@ interface and PyROOT.
 ## Prerequisites
 
 1. [Start your AF session with a GPU](gpus.md).
-2. Load an LCG view with a CUDA-enabled ROOT build.
+2. In a terminal, load an LCG view with a CUDA-enabled ROOT build.
    [LCG "releases" and "views"](https://lcgdocs.web.cern.ch/lcgdocs/lcgreleases/introduction/)
    are software stacks distributed by CERN via CVMFS.
 
-    * In a Jupyter Notebook, select the `LCG_106b_cuda` kernel.
-    * In a terminal, run:
-
-        ```shell
-        source /cvmfs/sft.cern.ch/lcg/views/LCG_106b_cuda/x86_64-el8-gcc11-opt/setup.sh
-        ```
+    ```shell
+    source /cvmfs/sft.cern.ch/lcg/views/LCG_106b_cuda/x86_64-el8-gcc11-opt/setup.sh
+    ```
 
 !!! warning
 
     The CUDA-enabled ROOT build (`6.32.08`) is available only via the LCG
-    software stack; the ROOT in the global Pixi environment and in other kernels
-    does not include the CUDA backend.
+    software stack; the ROOT in the global Pixi environment does not include the
+    CUDA backend.
 
 ## Enabling the CUDA backend in RooFit
 
@@ -61,7 +58,6 @@ frame = mass.frame()
 # Breit Wigner
 bwWidth = rt.RooRealVar("bwz_Width", "widthZ", 2.5, 0, 30)
 bwmZ = rt.RooRealVar("bwz_mZ", "mZ", 91.2, 90, 92)
-sigma = rt.RooRealVar("sigma", "sigma", 2, 0.0, 5.0)
 bwWidth.setConstant(True)
 model1_1 = rt.RooBreitWigner("bwz", "BWZ", mass, bwmZ, bwWidth)
 

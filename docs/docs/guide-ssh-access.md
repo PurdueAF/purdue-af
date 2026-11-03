@@ -18,6 +18,17 @@ authenticate to Purdue AF with a JupyterHub API token. To obtain one, open
 (or, in JupyterLab, go to `File → Hub Control Panel` and click the `Token` tab),
 then click `Request new API token` and copy the token string.
 
+On your local machine, save the token in a file only you can read: run these
+two commands, paste the token, and press `Ctrl-D`.
+
+```shell
+mkdir -p ~/.config/purdue-af
+(umask 077; cat > ~/.config/purdue-af/token)
+```
+
+The SSH alias below and the IDE setup read the token from this file. When you
+request a new token, save it the same way.
+
 !!! warning "Treat the token like a password"
 
     The token gives full control over your AF session — do not share it or
@@ -46,11 +57,12 @@ then click `Request new API token` and copy the token string.
 4. **(Optional) Set up an alias in `.bashrc`**
 
     By adding the following line to `~/.bashrc` or `~/.bash_profile` on your local
-    machine, you can avoid copy-pasting the token every time. Note: you will need
-    the `sshpass` utility installed on the local machine.
+    machine, you can avoid copy-pasting the token every time. It reads the
+    [saved token file](#jupyterhub-api-token) and needs the `sshpass` utility
+    installed on the local machine.
 
     ```shell
-    alias purdue-af='sshpass -p <token> ssh <username>@jupyterhub-ssh.cms.geddes.rcac.purdue.edu'
+    alias purdue-af='sshpass -f ~/.config/purdue-af/token ssh <username>@jupyterhub-ssh.cms.geddes.rcac.purdue.edu'
     ```
 
     Now simply running the `purdue-af` command will immediately connect you to

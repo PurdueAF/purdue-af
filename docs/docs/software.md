@@ -76,23 +76,6 @@ have the `ipykernel` package installed and are stored in a
 [publicly readable directory](storage.md#storing-custom-pixi-or-conda-environments) —
 see [Creating Conda environments and Jupyter kernels](guide-conda.md).
 
-### ROOT C++ kernel
-
-This kernel provides an interactive interface to the ROOT command line, allowing
-you to execute ROOT macros and produce plots inside Jupyter notebooks.
-
-!!! note "See also"
-
-    [ROOT C++ notebook demo](https://github.com/PurdueAF/purdue-af-demos/blob/master/root-cpp.ipynb)
-
-### LCG kernels
-
-These kernels are based on LCG "views" loaded via CVMFS:
-
-- **`LCG_106b`** — the standard LCG software stack;
-- **`LCG_106b_cuda`** — contains the CUDA-enabled ROOT build and is suitable for
-  [running RooFit on GPUs](guide-roofit-cuda.md).
-
 ## Combine
 
 [Combine](https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit/) is

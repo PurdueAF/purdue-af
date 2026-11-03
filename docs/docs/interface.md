@@ -48,10 +48,6 @@ high energy physics for histogramming, fitting, and statistical analysis.
   ROOT (for example, `pixi shell` in `/work/pixi/global/`) and launch the ROOT
   console with `root -l`. Note that it is not possible to display canvases or
   open `TBrowser`, since the JupyterLab interface does not support X11 forwarding.
-* Alternatively, you can turn a Jupyter Notebook into a ROOT console by selecting
-  the [ROOT C++ kernel](software.md#root-c-kernel). Similarly to Python notebooks,
-  you can add text cells and execute cells in arbitrary order, and display ROOT
-  plots with the `TCanvas::Draw` method.
 * In Python, ROOT functionality is accessible via the
   [PyROOT](https://root.cern/manual/python/) package, available in the global
   environment. In a Jupyter Notebook, you can display ROOT plots using the
