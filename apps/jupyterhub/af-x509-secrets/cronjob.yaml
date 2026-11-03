@@ -52,7 +52,7 @@ spec:
                   mountPath: /proxy
           containers:
             - name: publish-proxy
-              image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/alpine/kubectl:1.34.1
+              image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/alpine/kubectl:1.34.2
               command: ["/bin/sh", "-c"]
               args:
                 - |
