@@ -299,42 +299,20 @@
       },
       "targets": [
         {
-          "refId": "A",
-          "expr": "max(up{job=\"jupyterhub\"}) or vector(0)",
-          "legendFormat": "JupyterHub",
+          "refId": "N",
+          "expr": "1 - (sum(increase(csi_operations_seconds_count{driver_name=~\"rook-ceph.*\",method_name=~\".*Node(Stage|Publish)Volume\",grpc_status_code=~\"DeadlineExceeded|Unavailable|Internal|ResourceExhausted\"}[30m]) and on(node) group by (node)(kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) or vector(0)) / clamp_min((sum(increase(csi_operations_seconds_count{driver_name=~\"rook-ceph.*\",method_name=~\".*Node(Stage|Publish)Volume\",grpc_status_code=~\"OK|DeadlineExceeded|Unavailable|Internal|ResourceExhausted\"}[30m]) and on(node) group by (node)(kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) or vector(0)), 1)",
+          "legendFormat": "Geddes storage",
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "prometheus-rancher"
           },
           "range": true,
           "instant": false
         },
         {
-          "refId": "B",
-          "expr": "(sum(kube_deployment_status_replicas_available{namespace=\"cms\",deployment=\"proxy\"}) > bool 0) or vector(0)",
-          "legendFormat": "Hub proxy",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": true,
-          "instant": false
-        },
-        {
-          "refId": "C",
-          "expr": "(min(kube_deployment_status_replicas_available{namespace=\"cms\",deployment=~\"(api|controller)-dask-gateway\"}) > bool 0) or vector(0)",
-          "legendFormat": "Dask Gateway",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": true,
-          "instant": false
-        },
-        {
-          "refId": "E",
-          "expr": "(sum(kube_deployment_status_replicas_available{namespace=\"cms\",deployment=\"agentic-interface\"}) > bool 0) or vector(0)",
-          "legendFormat": "Agentic interface",
+          "refId": "P",
+          "expr": "min(af_registry_up)",
+          "legendFormat": "Geddes registry",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -354,9 +332,9 @@
           "instant": false
         },
         {
-          "refId": "G",
-          "expr": "min(pixi_global_sync_env_healthy{job=\"pixi-global-sync\"}) or vector(0)",
-          "legendFormat": "Global pixi env",
+          "refId": "B",
+          "expr": "(sum(kube_deployment_status_replicas_available{namespace=\"cms\",deployment=\"proxy\"}) > bool 0) or vector(0)",
+          "legendFormat": "Hub proxy",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -365,9 +343,20 @@
           "instant": false
         },
         {
-          "refId": "H",
-          "expr": "sum(af_node_mount_valid{node_pool=\"prod\",mount_name=\"/depot/\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"/depot/\"} == 1)) / count(af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"/depot/\"})",
-          "legendFormat": "/depot",
+          "refId": "A",
+          "expr": "max(up{job=\"jupyterhub\"}) or vector(0)",
+          "legendFormat": "JupyterHub",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "M",
+          "expr": "min(label_replace(sum(af_session_responsive) / count(af_session_responsive), \"part\", \"probe\", \"\", \"\") or label_replace(sum((time() - (af_pod_monitor_last_pass_timestamp_seconds > 0)) < bool 900) / count(af_pod_monitor_last_pass_timestamp_seconds > 0), \"part\", \"fresh\", \"\", \"\"))",
+          "legendFormat": "Session responsiveness",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -379,6 +368,17 @@
           "refId": "I",
           "expr": "sum(af_node_mount_valid{node_pool=\"prod\",mount_name=\"/work/\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"/work/\"} == 1)) / count(af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"/work/\"})",
           "legendFormat": "/work",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "H",
+          "expr": "sum(af_node_mount_valid{node_pool=\"prod\",mount_name=\"/depot/\"} and on(node, mount_name, node_pool) (af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"/depot/\"} == 1)) / count(af_node_mount_result_fresh{node_pool=\"prod\",mount_name=\"/depot/\"})",
+          "legendFormat": "/depot",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -420,42 +420,42 @@
           "instant": false
         },
         {
+          "refId": "G",
+          "expr": "min(pixi_global_sync_env_healthy{job=\"pixi-global-sync\"}) or vector(0)",
+          "legendFormat": "Global pixi env",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "C",
+          "expr": "(min(kube_deployment_status_replicas_available{namespace=\"cms\",deployment=~\"(api|controller)-dask-gateway\"}) > bool 0) or vector(0)",
+          "legendFormat": "Dask Gateway",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "E",
+          "expr": "(sum(kube_deployment_status_replicas_available{namespace=\"cms\",deployment=\"agentic-interface\"}) > bool 0) or vector(0)",
+          "legendFormat": "Agentic interface",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "range": true,
+          "instant": false
+        },
+        {
           "refId": "L",
           "expr": "((time() - max(af_node_monitor_last_iteration_timestamp_seconds)) < bool 900) or vector(0)",
           "legendFormat": "Storage checks",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": true,
-          "instant": false
-        },
-        {
-          "refId": "M",
-          "expr": "min(label_replace(sum(af_session_responsive) / count(af_session_responsive), \"part\", \"probe\", \"\", \"\") or label_replace(sum((time() - (af_pod_monitor_last_pass_timestamp_seconds > 0)) < bool 900) / count(af_pod_monitor_last_pass_timestamp_seconds > 0), \"part\", \"fresh\", \"\", \"\"))",
-          "legendFormat": "Session responsiveness",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "range": true,
-          "instant": false
-        },
-        {
-          "refId": "N",
-          "expr": "1 - (sum(increase(csi_operations_seconds_count{driver_name=~\"rook-ceph.*\",method_name=~\".*Node(Stage|Publish)Volume\",grpc_status_code=~\"DeadlineExceeded|Unavailable|Internal|ResourceExhausted\"}[30m]) and on(node) group by (node)(kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) or vector(0)) / clamp_min((sum(increase(csi_operations_seconds_count{driver_name=~\"rook-ceph.*\",method_name=~\".*Node(Stage|Publish)Volume\",grpc_status_code=~\"OK|DeadlineExceeded|Unavailable|Internal|ResourceExhausted\"}[30m]) and on(node) group by (node)(kube_node_spec_taint{key=\"hub.jupyter.org/dedicated\",value=\"cms-af\"})) or vector(0)), 1)",
-          "legendFormat": "Geddes storage",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus-rancher"
-          },
-          "range": true,
-          "instant": false
-        },
-        {
-          "refId": "P",
-          "expr": "min(af_registry_up)",
-          "legendFormat": "Geddes registry",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
