@@ -2,11 +2,10 @@
 
 It comes from the hub's last_activity, the signal the cullers act on."""
 
-from common import REPO, generator, load_yaml
+from common import HUB_VALUES, REPO, generator, load_yaml
 from dashboard_helpers import dashboard
 
 SNIPPET = REPO / "apps/jupyterhub/jupyterhub/extraFiles/session-activity.py"
-HUB_VALUES = REPO / "apps/jupyterhub/jupyterhub/values.yaml"
 OVERLAYS = ("core-production", "core-geddes2")
 METRIC = "af_session_last_activity_seconds"
 

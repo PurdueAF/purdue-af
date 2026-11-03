@@ -404,6 +404,4 @@ proxy:
         value: "cms-af"
         effect: "NoSchedule"
 cull:
-  enabled: true
-  every: 600
   timeout: 1209600

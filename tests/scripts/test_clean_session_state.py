@@ -81,8 +81,8 @@ def home(tmp_path):
 
 @pytest.fixture()
 def run_hook(tmp_path, home):
-    """Source the hook the way start.sh does: `set -e`, NB_USER set, home
-    under /home/$NB_USER — which the sandbox stands in for."""
+    """Source the hook under `set -e`, stricter than start.sh, with NB_USER set
+    and the home under /home/$NB_USER — which the sandbox stands in for."""
     script = tmp_path / "clean-session-state.sh"
     script.write_text(
         sandboxed(
@@ -187,7 +187,7 @@ def test_undeletable_path_does_not_kill_the_session(run_hook, home):
         (home / ".copilot" / "logs").chmod(0o700)
 
     assert result.returncode == 0, (
-        "an undeletable path must not exit the hook; start.sh sources it under "
+        "an undeletable path must not fail the hook, sourced here under "
         f"`set -e`.\nstderr:\n{result.stderr}"
     )
     assert doomed.exists(), "the test did not actually make the rm fail"

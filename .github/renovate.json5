@@ -100,6 +100,14 @@
       datasourceTemplate: 'github-releases',
     },
     {
+      // The matplotlib the users-graph CronJob installs.
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)apps/af-utils/af-users-graph/cronjob\\.yaml$/'],
+      matchStrings: ['matplotlib==(?<currentValue>\\S+)'],
+      depNameTemplate: 'matplotlib',
+      datasourceTemplate: 'pypi',
+    },
+    {
       // The IRIS-HEP integration challenge revision (tests/integration_challenge/upstream.pin).
       customType: 'regex',
       managerFilePatterns: ['/(^|/)upstream\\.pin$/'],

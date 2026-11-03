@@ -50,7 +50,7 @@ spec:
               command: ["/bin/bash", "-c"]
               args:
                 - |
-                  pip install --no-cache-dir matplotlib
+                  pip install --no-cache-dir matplotlib==3.11.2
                   python /scripts/plot-af-users.py
               resources:
                 requests:

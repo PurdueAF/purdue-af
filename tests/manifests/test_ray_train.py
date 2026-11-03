@@ -11,10 +11,18 @@ import tomllib
 from pathlib import Path
 
 import pytest
-from common import CORE, EXPERIMENTAL, REPO, generator, load_all, load_script, load_yaml
+from common import (
+    CORE,
+    EXPERIMENTAL,
+    HUB_VALUES,
+    REPO,
+    generator,
+    load_all,
+    load_script,
+    load_yaml,
+)
 
 APP = REPO / "apps" / "ray-train"
-HUB_VALUES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
 OPERATOR_VALUES = REPO / "apps" / "ray" / "operator" / "values.yaml"
 GLOBAL_ENV = REPO / "pixi" / "global" / "pixi.toml"
 

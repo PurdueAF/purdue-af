@@ -128,8 +128,8 @@ def test_an_unwritable_dot_local_does_not_kill_the_session(run_hook, tmp_path):
         depot.chmod(0o700)
 
     assert result.returncode == 0, (
-        "run-as-root.sh is sourced under `set -e`; a non-zero exit here is a "
-        f"crash-looping notebook container.\nstderr:\n{result.stderr}"
+        "run-as-root.sh must not fail on an unwritable depot path, sourced here "
+        f"under `set -e`.\nstderr:\n{result.stderr}"
     )
     # The rest of the home setup still happened.
     assert (home / ".jupyter/lab/workspaces").is_dir()
