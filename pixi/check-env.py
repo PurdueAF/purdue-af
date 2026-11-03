@@ -8,13 +8,13 @@ conda-meta/*.json and importlib.metadata, and packages with no Python modules
 report "nopy" without failing. One subprocess per package, because import
 failures can depend on load order.
 
-Usage (with the ENV's python, so metadata resolves against it):
+Usage (with the ENV's python, so metadata resolves against it; any other
+interpreter is refused):
 
     cd /work/pixi/global
     pixi run python /path/to/pixi/check-env.py            # or:
-    .pixi/envs/default/bin/python /path/to/pixi/check-env.py
-
-    check-env.py --manifest /work/pixi/global/pixi.toml --env default -j 8
+    .pixi/envs/default/bin/python /path/to/pixi/check-env.py \
+        --manifest /work/pixi/global/pixi.toml --env default -j 8
 
 Exit code: 0 if every derived import succeeded, 1 otherwise.
 """
@@ -83,7 +83,11 @@ def pypi_toplevels(name: str) -> list[str] | None:
 
     norm = re.sub(r"[-_.]+", "-", name).lower()
     for dist in md.distributions():
-        dist_name = dist.metadata.get("Name") or ""
+        # A failure here wipes the live env, so an unrelated unreadable dist cannot be one.
+        try:
+            dist_name = dist.metadata.get("Name") or ""
+        except (OSError, ValueError):
+            continue
         if re.sub(r"[-_.]+", "-", dist_name).lower() != norm:
             continue
         tl = dist.read_text("top_level.txt")
@@ -173,6 +177,8 @@ def main() -> int:
     python = env_dir / "bin" / "python"
     if not python.exists():
         sys.exit(f"no interpreter at {python} — has `pixi install` run?")
+    if not os.path.samefile(sys.executable, python):
+        sys.exit(f"run this with {python}, not {sys.executable}")
 
     conda_deps, pypi_deps = parse_manifest(manifest)
     meta = conda_toplevels(env_dir)
@@ -180,12 +186,8 @@ def main() -> int:
     plan = {}  # package -> modules to import (None → not resolvable)
     for dep in conda_deps:
         plan[dep] = meta.get(dep)
-    resolver = subprocess.run(  # resolve pypi tops with the ENV python
-        [str(python), __file__, "--_resolve-pypi", *pypi_deps],
-        capture_output=True,
-        text=True,
-    )
-    plan.update(json.loads(resolver.stdout or "{}"))
+    for dep in pypi_deps:
+        plan[dep] = pypi_toplevels(dep)
 
     checks = {p: m for p, m in plan.items() if m}
     nopy = sorted(p for p, m in plan.items() if m is not None and not m)
@@ -224,8 +226,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--_resolve-pypi":
-        # internal mode, executed with the env's python
-        print(json.dumps({name: pypi_toplevels(name) for name in sys.argv[2:]}))
-        sys.exit(0)
     sys.exit(main())

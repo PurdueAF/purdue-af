@@ -6,6 +6,7 @@ under [`workflows/`](../../workflows).
 | File                       | What it is                                                                                                                                              |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `helmrelease.yaml`         | `flyte-binary` chart: one Deployment bundling the API, the task controller and the data proxy                                                           |
+| `helmrepo.yaml`            | The chart repository the HelmRelease pulls from                                                                                                         |
 | `values.yaml`              | Database, object store, and task-pod defaults                                                                                                           |
 | `postgres.yaml`            | Metadata database (runs, actions, cache)                                                                                                                |
 | `minio.yaml`               | Object store ([PGSTY Silo](https://github.com/pgsty/silo), a MinIO fork) for task inputs, outputs and code bundles, and the Job that creates its bucket |

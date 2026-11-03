@@ -18,8 +18,6 @@ ARG OS_UPGRADE_ID="2026-11-01"
 # Fix: https://github.com/koalaman/shellcheck/wiki/SC3014
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# JupyterHub singleuser image: stays root so the hub/KubeSpawner can set the
-# runtime UID; the spawned container does not run as root.
 # hadolint ignore=DL3002
 USER root
 
@@ -29,11 +27,12 @@ RUN echo "OS_UPGRADE_ID=${OS_UPGRADE_ID}" \
  && dnf clean all \
  && rm -rf /var/cache/dnf
 
+# Nothing below needs cuda.repo; it goes here to keep the upgrade's cached layer.
 RUN set -euo pipefail \
- && dnf -y install --disablerepo=cuda dnf-plugins-core epel-release \
+ && rm -f /etc/yum.repos.d/cuda.repo \
+ && dnf -y install dnf-plugins-core epel-release \
  && dnf config-manager --set-enabled powertools \
- && dnf -y install --disablerepo=cuda \
-      'dnf-command(config-manager)' \
+ && dnf -y install \
       sudo wget perl which git bzip2 bzip2-devel zlib-devel \
       openssh-server openssh-clients openssl-devel \
       emacs vim-enhanced jq xterm-resize \
@@ -44,12 +43,9 @@ RUN set -euo pipefail \
       boost-devel diffutils ncurses-compat-libs cmake \
       glibc-static libcurl-devel \
       gfal2-util-scripts python3-gfal2 gfal2-plugin-xrootd gfal2-plugin-http \
-      voms-clients-cpp myproxy patch \
+      voms-clients-cpp myproxy patch tini \
       # absent from the CUDA base: ps, kinit/klist (eos-connect.sh), gcc -latomic
       procps-ng psmisc krb5-workstation xz cpio libatomic \
- && dnf -y --disablerepo=cuda --enablerepo=epel install tini \
- # the only cuda-repo install: an exact version cannot pull obsoletes
- && dnf -y install libcudnn8-8.9.7.29-1+cuda12.2 \
  && dnf clean all \
  && ln -s /usr/bin/python3 /usr/bin/python \
  && rm -rf /var/cache/dnf \
@@ -71,9 +67,11 @@ COPY slurm/slurm-configs-hammer /etc/slurm
 RUN --mount=type=bind,source=slurm/slurm-25.11.4-1.el8.x86_64.rpm,target=/tmp/slurm-25.11.4-1.el8.x86_64.rpm \
     set -euo pipefail \
  && dnf localinstall -y /tmp/slurm-25.11.4-1.el8.x86_64.rpm \
- && groupadd -g 1033 slurm || true \
- && adduser -u 2000 -g 1033 slurm || true \
+ && { getent group slurm >/dev/null || groupadd -g 1033 slurm; } \
+ && { id slurm >/dev/null 2>&1 || adduser -u 2000 -g 1033 slurm; } \
  && chown -R slurm:slurm /etc/slurm/ \
+ && mv /etc/slurm/slist /usr/bin/slist \
+ && chmod 755 /usr/bin/slist \
  && mkdir -p /var/log/slurm \
  && chown -R slurm:slurm /var/log/slurm \
  && dnf clean all && rm -rf /var/cache/dnf
@@ -87,14 +85,8 @@ ENV SHELL=/bin/bash \
     LC_ALL=en_US.UTF-8 \
     HOME="/home/${NB_USER}"
 
-COPY --chown=root:root --chmod=755 docker/purdue-af/scripts/fix-permissions /usr/local/bin/fix-permissions
-
-RUN sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashrc && \
-    echo "auth requisite pam_deny.so" >> /etc/pam.d/su && \
-    sed -i.bak -e 's/^%admin/#%admin/' /etc/sudoers && \
-    sed -i.bak -e 's/^%sudo/#%sudo/' /etc/sudoers && \
-    useradd -l -m -s /bin/bash -N -u "${NB_UID}" "${NB_USER}" && \
-    chmod g+w /etc/passwd
+RUN echo "auth requisite pam_deny.so" >> /etc/pam.d/su && \
+    useradd -l -m -s /bin/bash -N -u "${NB_UID}" "${NB_USER}"
 
 # ------------------------------------------------------------
 # Stage: stack (all pixi + extensions + config generation)
@@ -121,10 +113,12 @@ RUN mkdir -p "${PIXI_HOME}/bin" && \
     "${PIXI_HOME}/bin/pixi" --version && \
     PATH="${PIXI_HOME}/bin:${PATH}" \
     pixi install --locked --environment base-env && \
-    [ -d "${BASE_ENV_DIR}" ] || (echo "ERROR: BASE_ENV_DIR does not exist after pixi install" && exit 1) && \
-    rm -rf "${HOME}/.cache/rattler" || true && \
-    rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ir" || true && \
-    rm -rf "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ark" || true && \
+    rm -rf "${HOME}/.cache/rattler" \
+           "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ir" \
+           "${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-ark" && \
+    PIXI_KERNEL_JSON="${BASE_ENV_DIR}/share/jupyter/kernels/pixi-kernel-python3/kernel.json" && \
+    jq '.display_name = "Python (pixi project-aware)"' "${PIXI_KERNEL_JSON}" > /tmp/kernel.json && \
+    mv /tmp/kernel.json "${PIXI_KERNEL_JSON}" && \
     cp "${BASE_ENV_DIR}/lib/python3.12/site-packages/jupyter_vscode_proxy/icons/vscode.svg" \
        "${BASE_ENV_DIR}/lib/python3.12/site-packages/jupyter_vscode_proxy/icons/code-server.svg"
 
@@ -149,12 +143,18 @@ RUN PATH="${BASE_ENV_DIR}/bin:${PATH}" \
         "opencode-ai@${OPENCODE_VERSION}" \
         "@agentclientprotocol/claude-agent-acp@${CLAUDE_AGENT_ACP_VERSION}" \
         "@agentclientprotocol/codex-acp@${CODEX_ACP_VERSION}" && \
-    rm -rf "${HOME}/.npm" || true
+    rm -rf "${HOME}/.npm"
 
 COPY --chown=root:root pixi/check-env.py /tmp/check-env.py
 RUN "${BASE_ENV_DIR}/bin/python" /tmp/check-env.py \
         --manifest "${PIXI_HOME}/pixi.toml" --env base-env && \
     rm -f /tmp/check-env.py
+
+# Built here so neither the build tool nor the sources reach the image.
+RUN --mount=type=bind,source=docker/purdue-af/code-server,target=/tmp/code-server \
+    bash /tmp/code-server/build-vsix.sh \
+        /tmp/code-server/purdue-af-interface-controls \
+        /opt/purdue-af/code-server/purdue-af-interface-controls.vsix
 
 # ------------------------------------------------------------
 # Stage: runtime (lightweight; COPY only, no builds or installation routines)
@@ -167,6 +167,8 @@ ENV PIXI_HOME="/opt/pixi" \
     X509_CERT_DIR=/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates
 
 COPY --from=stack /opt/pixi /opt/pixi
+COPY docker/purdue-af/jupyter/overrides.json "${BASE_ENV_DIR}/share/jupyter/lab/settings/"
+COPY --from=stack /opt/purdue-af/code-server /opt/purdue-af/code-server
 
 # The CLIs' shebangs resolve `node` from PATH (the base env, below).
 COPY --from=stack /opt/npm-global /opt/npm-global
@@ -175,11 +177,6 @@ ENV DISABLE_AUTOUPDATER=1 \
     OPENCODE_DISABLE_AUTOUPDATE=1
 
 COPY --chown=root:root --chmod=755 docker/purdue-af/pixi-wrapper /usr/local/bin/pixi
-
-COPY docker/purdue-af/xml/site-local-config.xml /etc/cvmfs/SITECONF/JobConfig/
-COPY docker/purdue-af/xml/storage.xml /etc/cvmfs/SITECONF/PhEDEx/
-COPY docker/purdue-af/configs/vomses /etc
-COPY docker/purdue-af/configs/default.local /etc/cvmfs/
 
 COPY docker/purdue-af/jupyter/jupyter_server_config.py \
     docker/purdue-af/scripts/eos-connect.sh \
@@ -198,23 +195,12 @@ COPY --chown=root:root --chmod=755 \
     docker/purdue-af/jupyter/start-notebook.sh \
     docker/purdue-af/jupyter/start-singleuser.sh \
     /usr/local/bin/
-COPY --chown=root:root \
-    docker/purdue-af/code-server/purdue-af-interface-controls \
-    /opt/purdue-af/code-server/purdue-af-interface-controls/
 COPY --chown=root:root .claude/skills/purdue-af-agentic-interface/SKILL.md \
     /opt/purdue-af/skills/purdue-af-agentic-interface/SKILL.md
 COPY --chown=root:root docker/purdue-af/agents/platform-context.md \
     /opt/purdue-af/agents/platform-context.md
 COPY --chown=root:root --chmod=755 docker/purdue-af/scripts/managed-block.py \
     /usr/local/bin/managed-block.py
-
-COPY --chown=root:root --chmod=755 docker/purdue-af/code-server/build-vsix.sh /usr/local/bin/build-paf-cs-vsix
-RUN build-paf-cs-vsix \
-        /opt/purdue-af/code-server/purdue-af-interface-controls \
-        /opt/purdue-af/code-server/purdue-af-interface-controls.vsix
-
-RUN fix-permissions /etc/jupyter/ && \
-    fix-permissions "${HOME}"
 
 ENV PATH="/usr/local/bin:/opt/npm-global/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}"
 
@@ -227,14 +213,14 @@ CMD ["start-notebook.sh"]
 # --------------------------------------------------------------------------
 # Build-time checks, built by ci-images.yml with `--target smoke`.
 FROM runtime AS smoke
-# Hooks are sourced as start.sh sources them; config-extensions.sh is skipped (network).
+# Stricter than start.sh, which outlives a failed step; config-extensions.sh is skipped (network).
 RUN for hook in config-agents clean-session-state; do \
         NB_USER=jovyan NAMESPACE=cms bash -c \
             "set -e; source /usr/local/bin/before-notebook.d/${hook}.sh; echo HOOKS_SURVIVED" \
             >/tmp/hooks.log 2>&1; \
         cat /tmp/hooks.log; \
         grep -q HOOKS_SURVIVED /tmp/hooks.log || { \
-            echo "FATAL: sourcing ${hook}.sh exited the shell — start.sh would die" >&2; \
+            echo "FATAL: sourcing ${hook}.sh failed or exited the shell" >&2; \
             exit 1; \
         }; \
     done; \
@@ -256,6 +242,19 @@ RUN nvcc --version >/dev/null && \
     command -v codex-acp >/dev/null && \
     python3 -c "import jupyterlab; print('smoke ok:', jupyterlab.__version__)" && \
     python3 -c "import jupyter_ai; print('smoke ok: jupyter-ai present')"
+
+# start.sh as a real session runs it: refits the user, outlives a failing hook, keeps its exports.
+# hadolint ignore=DL3002
+USER root
+RUN rm -f /usr/local/bin/before-notebook.d/* && \
+    printf 'false\nexport SMOKE_EXPORT=kept\n' > /usr/local/bin/before-notebook.d/smoke.sh && \
+    mkdir -p /home/alice && \
+    NB_USER=alice NB_UID=1234 NB_GID=1234 CHOWN_HOME=yes \
+        start.sh bash -c 'echo "$(id -un):$(id -u):$(id -g):${SMOKE_EXPORT}"' > /tmp/start.log 2>&1 || { cat /tmp/start.log; exit 1; } ; \
+    cat /tmp/start.log; \
+    grep -qx 'alice:1234:1234:kept' /tmp/start.log && \
+    grep -q 'WARNING: .*smoke.sh:1: exit status 1' /tmp/start.log && \
+    [ "$(stat -c %u:%g /home/alice)" = 1234:1234 ]
 
 # Default target: the published image, without smoke layers.
 FROM runtime

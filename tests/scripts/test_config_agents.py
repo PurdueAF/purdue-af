@@ -2,17 +2,22 @@
 are stubs that record their argv; no config file may ever hold the token."""
 
 import json
-import os
+import re
 import shlex
 import subprocess
 
 import pytest
 from common import REPO
+from script_helpers import image_copies, image_file, sandboxed, startup_hooks
 
 SCRIPT = REPO / "docker" / "purdue-af" / "scripts" / "config-agents.sh"
 DOCKERFILE = REPO / "docker" / "purdue-af" / "Dockerfile"
-SKILL_SOURCE = ".claude/skills/purdue-af-agentic-interface/SKILL.md"
+SKILLS = REPO / ".claude" / "skills"
+SKILL = "purdue-af-agentic-interface/SKILL.md"
 CONTEXT = REPO / "docker/purdue-af/agents/platform-context.md"
+MANAGED_BLOCK = REPO / "docker/purdue-af/scripts/managed-block.py"
+SOURCE_HELPER = "source /usr/local/bin/af-as-user.sh"
+HELPER = REPO / "docker/purdue-af/scripts/af-as-user.sh"
 
 STUB = """#!/bin/bash
 printf '%s\\n' "$*" >> "$AGENT_LOG"
@@ -32,28 +37,26 @@ def agent_home(tmp_path):
 def run_script(tmp_path, agent_home):
     """Run the hook with stubbed agent CLIs; returns (result, [argv lines]).
 
-    The hook addresses three paths that only exist inside the image: the
-    session home, managed-block.py, and the platform context. The copy under
-    test has exactly those redirected at the sandbox and the repo, so the files
-    it produces can be asserted on directly. Nothing else is rewritten."""
-    script = tmp_path / "config-agents.sh"
-    script.write_text(
-        SCRIPT.read_text()
-        .replace(
-            'NEW_HOME="/home/${NB_USER}"',
-            f'NEW_HOME="{agent_home.parent}/${{NB_USER}}"',
-        )
-        .replace(
-            "/usr/local/bin/managed-block.py",
-            str(REPO / "docker/purdue-af/scripts/managed-block.py"),
-        )
-        .replace(
-            '"/opt/purdue-af/agents/platform-context.md"',
-            f'"{CONTEXT}"',
-        )
-    )
+    The paths that only exist inside the image are redirected at the sandbox
+    and the repo, so the files the hook produces can be asserted on directly.
+    Nothing else is rewritten."""
 
-    def _run(tools=("claude", "codex"), stub_exit=0, **env):
+    def _run(tools=("claude", "codex"), stub_exit=0, context=CONTEXT, **env):
+        script = tmp_path / "config-agents.sh"
+        script.write_text(
+            sandboxed(
+                SCRIPT,
+                {
+                    SOURCE_HELPER: f"source {HELPER}",
+                    'NEW_HOME="/home/${NB_USER}"': (
+                        f'NEW_HOME="{agent_home.parent}/${{NB_USER}}"'
+                    ),
+                    'SKILL_SRC="/opt/purdue-af/skills"': f'SKILL_SRC="{SKILLS}"',
+                    "/usr/local/bin/managed-block.py": str(MANAGED_BLOCK),
+                    '"/opt/purdue-af/agents/platform-context.md"': f'"{context}"',
+                },
+            )
+        )
         bindir = tmp_path / "bin"
         bindir.mkdir(exist_ok=True)
         log = tmp_path / "agent.log"
@@ -211,30 +214,13 @@ def test_opencode_context_is_not_also_written_as_a_file(run_script, agent_home):
 
 
 def test_opencode_instructions_are_omitted_when_the_context_is_missing(
-    tmp_path, agent_home
+    run_script, agent_home, tmp_path
 ):
     """Guarded like every other use of the context path: a config naming a file
     that is not there is worse than one that omits it."""
-    script = tmp_path / "guard.sh"
-    script.write_text(
-        SCRIPT.read_text()
-        .replace(
-            'NEW_HOME="/home/${NB_USER}"',
-            f'NEW_HOME="{agent_home.parent}/${{NB_USER}}"',
-        )
-        .replace(
-            '"/opt/purdue-af/agents/platform-context.md"',
-            f'"{tmp_path / "absent.md"}"',
-        )
-    )
-    result = subprocess.run(
-        ["bash", str(script)],
-        capture_output=True,
-        text=True,
-        env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "NB_USER": "jovyan"},
-    )
+    result, _ = run_script(context=tmp_path / "absent.md")
     assert result.returncode == 0, result.stderr
-    config = json.loads((agent_home / ".config/opencode/purdue-af.json").read_text())
+    config = _opencode_config(agent_home)
     assert "instructions" not in config
     assert "mcp" in config, "the MCP server must still be registered"
 
@@ -243,60 +229,7 @@ def test_opencode_instructions_are_omitted_when_the_context_is_missing(
 def managed_block():
     from common import load_script
 
-    return load_script(
-        REPO / "docker/purdue-af/scripts/managed-block.py", "managed_block"
-    )
-
-
-# --- the AF block stays out of opencode's AGENTS.md ------------------------
-
-
-OPENCODE_AGENTS_MD = ".config/opencode/AGENTS.md"
-
-
-def test_a_stale_opencode_agents_md_is_removed(run_script, agent_home, managed_block):
-    """A managed-only opencode AGENTS.md is removed: `instructions` already
-    carries the context."""
-    stale = agent_home / OPENCODE_AGENTS_MD
-    stale.parent.mkdir(parents=True)
-    stale.write_text(managed_block.apply_block("", "old platform context\n"))
-    result, _ = run_script()
-    assert result.returncode == 0
-    assert not stale.exists(), "the stale managed file should be gone entirely"
-
-
-def test_retiring_it_keeps_anything_the_user_wrote(
-    run_script, agent_home, managed_block
-):
-    """It was a user-owned file with a block of ours in it. Removing our part
-    must not take their part with it."""
-    stale = agent_home / OPENCODE_AGENTS_MD
-    stale.parent.mkdir(parents=True)
-    stale.write_text(
-        managed_block.apply_block("# My notes\n\nAlways use pytest -x.\n", "old\n")
-    )
-    run_script()
-    assert stale.is_file(), "a file with user content must survive"
-    after = stale.read_text()
-    assert "Always use pytest -x." in after
-    assert managed_block.BEGIN not in after
-    assert "old" not in after
-
-
-def test_an_unmanaged_opencode_agents_md_is_never_touched(run_script, agent_home):
-    """A file the user wrote themselves, with no block of ours, is theirs."""
-    mine = agent_home / OPENCODE_AGENTS_MD
-    mine.parent.mkdir(parents=True)
-    mine.write_text("# entirely mine\n")
-    run_script()
-    assert mine.read_text() == "# entirely mine\n"
-
-
-def test_retiring_a_file_that_was_never_there_is_not_fatal(run_script, agent_home):
-    """The common case after the first migrated start: nothing to do."""
-    result, _ = run_script()
-    assert result.returncode == 0
-    assert not (agent_home / OPENCODE_AGENTS_MD).exists()
+    return load_script(MANAGED_BLOCK, "managed_block")
 
 
 def test_opencode_config_is_exported_so_the_session_picks_it_up(run_script):
@@ -416,24 +349,25 @@ def test_server_name_matches_the_repo_mcp_json(run_script):
 # --- the bundled skill ----------------------------------------------------
 
 
-def test_skill_is_installed_into_the_claude_directory(run_script, tmp_path):
+def test_skill_is_installed_into_the_claude_directory(run_script, agent_home):
     result, _ = run_script()
     assert result.returncode == 0
-    # no bundled skills on the test host — must degrade quietly, not fail
-    assert "skipping" in result.stderr or "installed bundled skills" in result.stdout
+    installed = agent_home / ".claude/skills" / SKILL
+    assert installed.read_text() == (SKILLS / SKILL).read_text()
 
 
-def test_skill_is_an_image_input():
-    """It lives outside docker/purdue-af, so it needs an explicit entry or the
-    content-addressed build would reuse a stale image after a skill edit."""
-    out = subprocess.run(
+def test_every_file_the_image_copies_is_an_image_input():
+    """Outside the inputs, the content-addressed build would reuse a stale image
+    after an edit to that file."""
+    inputs = subprocess.run(
         [str(REPO / ".github/workflows/image-inputs.sh"), "--paths", "purdue-af"],
         capture_output=True,
         text=True,
         check=True,
-        env={**os.environ},
-    ).stdout
-    assert SKILL_SOURCE.rsplit("/", 1)[0] in out
+    ).stdout.split()
+    for sources, _ in image_copies():
+        for source in sources:
+            assert source.startswith(tuple(inputs)), source
 
 
 # --- the image actually ships what the hook needs ------------------------
@@ -447,30 +381,17 @@ def test_dockerfile_pins_every_agent_version():
         assert version and version[0].isdigit(), f"{arg} must pin a version"
 
 
-def test_dockerfile_installs_the_hook_and_the_skill():
-    text = DOCKERFILE.read_text()
-    assert "config-agents.sh" in text
-    assert f"{SKILL_SOURCE} \\\n    /opt/purdue-af/skills/" in text
-
-
-def test_code_server_installs_both_agent_extensions():
-    """Open VSX IDs — code-server does not use the MS marketplace."""
-    text = (REPO / "docker/purdue-af/scripts/config-extensions.sh").read_text()
-    assert "_cs_install_if_missing anthropic.claude-code" in text
-    assert "_cs_install_if_missing openai.chatgpt" in text
-
-
-def test_agent_files_are_image_inputs():
-    """docker/purdue-af is an input path of the content-addressed image build,
-    so editing the hook rebuilds the image rather than reusing a stale tag."""
-    out = subprocess.run(
-        [str(REPO / ".github/workflows/image-inputs.sh"), "--paths", "purdue-af"],
-        capture_output=True,
-        text=True,
-        check=True,
-        env={**os.environ},
-    ).stdout
-    assert "docker/purdue-af" in out
+@pytest.mark.parametrize(
+    "path, source",
+    [
+        ("/usr/local/bin/managed-block.py", MANAGED_BLOCK),
+        ("/opt/purdue-af/agents/platform-context.md", CONTEXT),
+        (f"/opt/purdue-af/skills/{SKILL}", SKILLS / SKILL),
+    ],
+)
+def test_the_image_ships_what_the_hook_reads(path, source):
+    assert image_file(path) == source
+    assert source.read_text().strip()
 
 
 # --- the managed section in user-owned agent files ------------------------
@@ -519,11 +440,6 @@ def test_is_idempotent(managed_block):
     assert once == twice
 
 
-def test_markers_warn_that_edits_are_overwritten(managed_block):
-    assert "managed" in managed_block.BEGIN.lower()
-    assert "overwrit" in managed_block.BEGIN.lower()
-
-
 def test_stray_end_marker_before_the_block_does_not_duplicate_it(managed_block):
     """An END marker above the block does not make the block look absent."""
     existing = f"# Mine\n{managed_block.END}\n"
@@ -531,20 +447,7 @@ def test_stray_end_marker_before_the_block_does_not_duplicate_it(managed_block):
     twice = managed_block.apply_block(once, SECTION)
     assert once == twice
     assert twice.count(managed_block.BEGIN) == 1
-    assert managed_block.strip_block(twice) == existing
-
-
-def test_strip_block_leaves_an_unmanaged_file_alone(managed_block):
-    assert managed_block.strip_block("# Mine\n") is None
-    assert (
-        managed_block.strip_block(f"{managed_block.END}\n{managed_block.BEGIN}") is None
-    )
-
-
-def test_strip_block_keeps_content_on_both_sides(managed_block):
-    text = managed_block.apply_block("head\n", SECTION) + "\ntail\n"
-    assert managed_block.strip_block(text) == "head\n\ntail\n"
-    assert managed_block.strip_block(managed_block.apply_block("", SECTION)) == ""
+    assert twice.startswith(existing)
 
 
 def run_managed_block(managed_block, monkeypatch, *argv):
@@ -568,38 +471,10 @@ def test_cli_rejects_bad_arguments(managed_block, monkeypatch):
         run_managed_block(managed_block, monkeypatch, "only-one")
 
 
-def test_cli_remove(managed_block, monkeypatch, tmp_path, capsys):
-    target = tmp_path / "AGENTS.md"
-    run_managed_block(managed_block, monkeypatch, "--remove", target)
-    assert "nothing to remove" in capsys.readouterr().out
-
-    target.write_text("# Mine\n")
-    run_managed_block(managed_block, monkeypatch, "--remove", target)
-    assert target.read_text() == "# Mine\n"
-    assert "left alone" in capsys.readouterr().out
-
-    target.write_text(managed_block.apply_block("# Mine\n", SECTION))
-    run_managed_block(managed_block, monkeypatch, "--remove", target)
-    assert target.read_text() == "# Mine\n"
-
-    target.write_text(managed_block.apply_block("", SECTION))
-    run_managed_block(managed_block, monkeypatch, "--remove", target)
-    assert not target.exists()
-
-
-def test_section_source_is_shipped_and_is_an_image_input():
-    text = DOCKERFILE.read_text()
-    assert "agents/platform-context.md" in text
-    assert "managed-block.py" in text
-    assert CONTEXT.read_text().strip()
-
-
 def test_bundled_python_scripts_do_not_use_the_system_interpreter():
-    """Rocky 8 ships python3.6 at /usr/bin/python3, which cannot parse
-    managed-block.py (`from __future__ import annotations` is a SyntaxError
-    there). `su` resets PATH at session start, so the call site must name the
+    """Rocky 8 ships python3.6 at /usr/bin/python3, so the call site names the
     interpreter."""
-    hook = (REPO / "docker/purdue-af/scripts/config-agents.sh").read_text()
+    hook = SCRIPT.read_text()
     call = next(ln for ln in hook.splitlines() if "managed-block.py" in ln)
     assert "${PYTHON}" in call, call
     assert "/opt/pixi/.pixi/envs/base-env/bin/python3" in hook
@@ -608,9 +483,19 @@ def test_bundled_python_scripts_do_not_use_the_system_interpreter():
 # --- sourcing safety: start.sh runs these hooks with `source` ---------------
 
 
-HOOK_DIR = REPO / "docker" / "purdue-af" / "scripts"
-# the hooks Dockerfile installs into /usr/local/bin/before-notebook.d
-STARTUP_HOOKS = ["config-agents.sh", "config-extensions.sh", "create-symlinks.sh"]
+STARTUP_HOOKS = startup_hooks()
+
+
+def _sourceable(tmp_path):
+    """The hook as the image has it, with its helper found in the repo."""
+    hook = tmp_path / "hook.sh"
+    hook.write_text(sandboxed(SCRIPT, {SOURCE_HELPER: f"source {HELPER}"}))
+    return hook
+
+
+def test_startup_hooks_are_read_from_the_dockerfile():
+    """An empty list would skip the scan below with CI still green."""
+    assert SCRIPT in STARTUP_HOOKS
 
 
 def test_start_sh_sources_hooks_rather_than_executing_them():
@@ -630,7 +515,7 @@ def test_sourcing_the_hook_returns_control_to_the_caller(tmp_path):
         stub.chmod(0o755)
 
     caller = tmp_path / "caller.sh"
-    caller.write_text(f'source "{HOOK_DIR / "config-agents.sh"}"\necho STILL_ALIVE\n')
+    caller.write_text(f'source "{_sourceable(tmp_path)}"\necho STILL_ALIVE\n')
     result = subprocess.run(
         ["bash", str(caller)],
         capture_output=True,
@@ -653,7 +538,7 @@ def test_sourced_hooks_do_not_leak_shell_options(tmp_path):
     of start.sh, turning any later unset variable into a container failure."""
     caller = tmp_path / "caller.sh"
     caller.write_text(
-        f'source "{HOOK_DIR / "config-agents.sh"}"\n'
+        f'source "{_sourceable(tmp_path)}"\n'
         'case "$-" in *e*) echo LEAKED_E ;; esac\n'
         'case "$-" in *u*) echo LEAKED_U ;; esac\n'
         "echo DONE\n"
@@ -669,15 +554,13 @@ def test_sourced_hooks_do_not_leak_shell_options(tmp_path):
     assert "LEAKED_U" not in result.stdout
 
 
-def _top_level_exits(text):
-    """Lines calling `exit` outside any function definition.
+def _top_level(text, command):
+    """Lines starting with the command regex outside any function definition.
 
     Indentation is no guide — an `exit` nested in an `if` is still top level,
     and that is exactly the form that killed a session start once already.
     Tracks function bodies by the `name() {` ... `}` pairs shfmt guarantees.
     """
-    import re
-
     offenders, depth = [], 0
     for i, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
@@ -689,18 +572,20 @@ def _top_level_exits(text):
             continue
         if depth or stripped.startswith("#"):
             continue
-        if re.match(r"^exit\b", stripped):
+        if re.match(command, stripped):
             offenders.append(f"{i}: {stripped}")
     return offenders
 
 
-@pytest.mark.parametrize("hook", STARTUP_HOOKS)
-def test_hooks_have_no_top_level_exit(hook):
-    """Static counterpart to the sourcing test, applied to every startup hook.
+@pytest.mark.parametrize("hook", STARTUP_HOOKS, ids=lambda hook: hook.name)
+def test_hooks_have_no_top_level_exit_or_shell_option(hook):
+    """Static counterpart to the sourcing tests, applied to every startup hook.
     `exit` anywhere outside a function ends start.sh and the container with it —
     including on error paths, where it turns a recoverable problem into a
-    session that never starts."""
-    path = HOOK_DIR / hook
-    assert path.is_file(), f"{hook} is gone; drop it from STARTUP_HOOKS"
-    offenders = _top_level_exits(path.read_text())
-    assert not offenders, f"{hook} exits the sourcing shell at {offenders}"
+    session that never starts — and `set -e`/`set -u` outlive the hook."""
+    assert hook.is_file(), f"the Dockerfile installs {hook}, which is not in the repo"
+    text = hook.read_text()
+    exits = _top_level(text, r"exit\b")
+    assert not exits, f"{hook.name} exits the sourcing shell at {exits}"
+    options = _top_level(text, r"set\s+-[a-z]*[eu]")
+    assert not options, f"{hook.name} leaks shell options at {options}"

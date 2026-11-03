@@ -4,10 +4,5 @@
 
 set -e
 
-# set default ip to 0.0.0.0
-if [[ "${NOTEBOOK_ARGS} $*" != *"--ip="* ]]; then
-	NOTEBOOK_ARGS="--ip=0.0.0.0 ${NOTEBOOK_ARGS}"
-fi
-
-# shellcheck disable=SC1091,SC2086
-. /usr/local/bin/start.sh ${BASE_ENV_DIR}/bin/jupyterhub-singleuser ${NOTEBOOK_ARGS} "$@"
+# shellcheck disable=SC1091
+. /usr/local/bin/start.sh "${BASE_ENV_DIR}/bin/jupyterhub-singleuser" "$@"

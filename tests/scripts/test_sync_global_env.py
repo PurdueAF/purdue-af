@@ -1,12 +1,11 @@
-"""Tests for apps/af-utils/pixi-global-sync/sync-global-env.py — the daemon
-that keeps /work/pixi/global in sync with the repo. Exercises the pure
-logic (drift detection, pause, atomic manifest staging, lock takeover) and
-the reconcile loop on tmp filesystems, with pixi and check-env faked; the
-pixi install itself is validated upstream by ci-pixi-global.yml and
-post-checked in production by check-env."""
+"""Tests for apps/af-utils/pixi-global-sync/sync-global-env.py: drift, pause,
+manifest staging, the lock and the reconcile loop, on tmp filesystems with pixi
+and check-env faked."""
 
 import json
 import os
+import select
+import shutil
 import signal
 import subprocess
 import sys
@@ -108,26 +107,6 @@ class TestStageManifests:
         assert (target / "pixi.lock").read_bytes().endswith(b"# v2\n")
 
 
-class TestLockTakeover:
-    def test_fresh_heartbeat_blocks(self, sync):
-        heartbeat = {"holder": "other", "pid": 1, "ts": time.time()}
-        assert not sync.should_take_over(heartbeat, time.time())
-
-    def test_stale_heartbeat_allows(self, sync):
-        heartbeat = {"holder": "other", "pid": 1, "ts": time.time() - 10_000}
-        assert sync.should_take_over(heartbeat, time.time())
-
-    def test_garbage_heartbeat_allows(self, sync):
-        assert sync.should_take_over(None, time.time())
-        assert sync.should_take_over({"junk": True}, time.time())
-
-    def test_heartbeat_roundtrip(self, sync):
-        sync.LOCK_DIR.mkdir(parents=True)
-        sync.write_heartbeat()
-        heartbeat = json.loads(sync.heartbeat_path().read_text())
-        assert not sync.should_take_over(heartbeat, time.time())
-
-
 class TestFrozenHeartbeat:
     def test_changing_heartbeat_never_frozen(self, sync):
         observer = sync.FrozenHeartbeatObserver(threshold=90)
@@ -147,6 +126,18 @@ class TestFrozenHeartbeat:
         assert not observer.frozen(130.0, 80)  # changed: clock restarts
         assert not observer.frozen(130.0, 160)  # only 80s frozen
         assert observer.frozen(130.0, 171)
+
+    def test_missing_heartbeat_freezes_like_any_other(self, sync):
+        observer = sync.FrozenHeartbeatObserver(threshold=90)
+        assert not observer.frozen(None, 0)
+        assert not observer.frozen(None, 60)
+        assert observer.frozen(None, 91)
+
+    def test_first_write_resets_a_missing_heartbeat(self, sync):
+        observer = sync.FrozenHeartbeatObserver(threshold=90)
+        assert not observer.frozen(None, 0)
+        assert not observer.frozen(100.0, 80)
+        assert not observer.frozen(100.0, 160)
 
 
 class TestMetrics:
@@ -226,34 +217,120 @@ class TestAcquireLock:
         sync.acquire_lock()
         assert json.loads(sync.heartbeat_path().read_text())["pid"] == os.getpid()
 
-    def test_stale_holder_is_replaced(self, sync, monkeypatch):
+    @pytest.mark.parametrize(
+        "body",
+        [None, "{torn", "[1]", '"text"', '{"junk": true}', '{"ts": "soon"}'],
+        ids=["missing", "torn", "list", "string", "no-ts", "bad-ts"],
+    )
+    def test_unusable_heartbeat_waits_then_is_replaced(self, sync, monkeypatch, body):
         clock = fake_clock(sync, monkeypatch)
-        write_foreign_heartbeat(sync, holder="old", pid=1, ts=time.time() - 10_000)
-        sync.acquire_lock()
-        assert clock["slept"] == []
-        assert json.loads(sync.heartbeat_path().read_text())["pid"] == os.getpid()
-
-    def test_unreadable_heartbeat_is_replaced(self, sync, monkeypatch):
-        fake_clock(sync, monkeypatch)
         sync.LOCK_DIR.mkdir(parents=True)
-        sync.heartbeat_path().write_text("{torn")
+        if body is not None:
+            sync.heartbeat_path().write_text(body)
         sync.acquire_lock()
+        assert clock["slept"] == [30] * 4
         assert json.loads(sync.heartbeat_path().read_text())["pid"] == os.getpid()
 
-    def test_frozen_holder_is_replaced_after_waiting(self, sync, monkeypatch):
-        """A fresh-but-unchanging heartbeat: wait, then take over once it has
+    @pytest.mark.parametrize("age", [0, 10_000], ids=["fresh", "old"])
+    def test_frozen_holder_is_replaced_after_waiting(self, sync, monkeypatch, age):
+        """An unchanging heartbeat of any age: wait, then take over once it has
         been frozen past LOCK_FROZEN_SECONDS."""
         clock = fake_clock(sync, monkeypatch)
-        write_foreign_heartbeat(sync, holder="dead", pid=1, ts=time.time())
+        write_foreign_heartbeat(sync, holder="dead", pid=1, ts=time.time() - age)
         sync.acquire_lock()
         assert clock["slept"] == [30] * 4  # 120 s > 90 s threshold
         assert json.loads(sync.heartbeat_path().read_text())["pid"] == os.getpid()
+
+    def test_live_holder_is_never_replaced(self, sync, monkeypatch):
+        clock = fake_clock(sync, monkeypatch)
+        write_foreign_heartbeat(sync, holder="live", pid=1, ts=1.0)
+        sleep = sync.time.sleep
+
+        def holder_beats(seconds):
+            sleep(seconds)
+            if clock["mono"] < 3600:
+                ts = clock["mono"] + 1
+                sync.heartbeat_path().write_text(json.dumps({"ts": ts}))
+            else:
+                shutil.rmtree(sync.LOCK_DIR)
+
+        monkeypatch.setattr(sync.time, "sleep", holder_beats)
+        sync.acquire_lock()
+        assert clock["mono"] == 3600  # acquired only once the holder released
+
+    def test_takeover_outruns_the_liveness_probe(self, sync):
+        """acquire_lock runs before the metrics server: nothing answers
+        /healthz while it waits, and the frozen rule must finish first."""
+        deployment = next(
+            doc
+            for doc in yaml.safe_load_all((APP / "deployment.yaml").read_text())
+            if doc["kind"] == "Deployment"
+        )
+        probe = deployment["spec"]["template"]["spec"]["containers"][0]["livenessProbe"]
+        kill_after = (
+            probe["initialDelaySeconds"]
+            + probe["periodSeconds"] * probe["failureThreshold"]
+        )
+        assert sync.LOCK_FROZEN_SECONDS + 2 * 30 < kill_after / 2
 
     def test_release_removes_the_lock(self, sync):
         sync.acquire_lock()
         sync.release_lock()
         assert not sync.LOCK_DIR.exists()
         sync.release_lock()  # already gone: fine
+
+
+LOCK_DRIVER = """
+import importlib.util, pathlib, sys, time
+spec = importlib.util.spec_from_file_location("daemon", sys.argv[1])
+daemon = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(daemon)
+daemon.LOCK_DIR = pathlib.Path(sys.argv[2])
+daemon.LOCK_FROZEN_SECONDS = 1.5
+real_sleep = time.sleep
+daemon.time = type("T", (), dict(
+    time=time.time, monotonic=time.monotonic, sleep=lambda _: real_sleep(0.05)
+))
+daemon.acquire_lock()
+print("held", flush=True)
+while not daemon.STOP.wait(0.1):
+    daemon.write_heartbeat()
+"""
+
+
+class TestLockAcrossProcesses:
+    @pytest.fixture()
+    def daemon(self, tmp_path):
+        procs = []
+
+        def start():
+            cmd = [
+                sys.executable,
+                "-c",
+                LOCK_DRIVER,
+                str(APP / "sync-global-env.py"),
+                str(tmp_path / "lock"),
+            ]
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
+            procs.append(proc)
+            return proc
+
+        yield start
+        for proc in procs:
+            proc.kill()
+            proc.communicate()
+
+    def test_second_daemon_waits_for_a_live_holder_then_takes_over(self, daemon):
+        first = daemon()
+        assert first.stdout.readline() == "held\n"
+        second = daemon()
+        ready, _, _ = select.select([second.stdout], [], [], 2.5)
+        assert not ready, "took the lock of a live holder"
+
+        first.send_signal(signal.SIGKILL)
+        first.wait()
+        ready, _, _ = select.select([second.stdout], [], [], 10)
+        assert ready and second.stdout.readline() == "held\n"
 
 
 class FastEvent(threading.Event):

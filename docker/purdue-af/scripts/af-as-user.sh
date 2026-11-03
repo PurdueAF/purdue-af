@@ -10,3 +10,14 @@ af_as_user() {
 		"$@"
 	fi
 }
+
+# Hand a directory an older image left root-owned back to the user: one stat
+# per directory at every start, and a recursive walk only when it finds one.
+af_repair_ownership() {
+	local dir
+	for dir in "$@"; do
+		if [ ! -L "$dir" ] && [ "$(stat -c %u "$dir" 2>/dev/null)" = 0 ]; then
+			chown -Rh "$NB_USER:users" "$dir" || true
+		fi
+	done
+}

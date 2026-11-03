@@ -12,7 +12,7 @@ the file browser.
 Example of the `eos-connect` command output:
 
 ```
-[dkondra@purdue-af-1 ~]$ eos-connect
+$ eos-connect
 
 ------------------------ Connecting to CERN EOS ------------------------
 
@@ -20,19 +20,20 @@ Example of the `eos-connect` command output:
 
  > Let's start with initializing the Kerberos ticket.
  > What is your CERN username? Enter below:
- > dkondrat
-Password for dkondrat@CERN.CH:
- > Symlink /home/dkondra/eos-cern doesn't exist yet.
- > Creating symlink /home/dkondra/eos-cern that points to /eos/cern/home-d/dkondrat/
+ > <cern-username>
+Password for <cern-username>@CERN.CH:
+ > Kerberos authentication complete!
+
+ > Symlink /home/<username>/eos-cern doesn't exist yet.
+ > Creating symlink /home/<username>/eos-cern that points to /eos/cern/home-<c>/<cern-username>/
 
  > The directory 'eos-cern' should appear in the file browser in a few seconds.
  > The interaction with CERN EOS may be slow at first.
 
  > If the file browser shows 'eos-cern' as a file rather than a directory,
- > try restarting the session (File > Hub Control Panel > Stop My Server),
- > and then run the eos-connect command again.
+ > try restarting the session, and then run the eos-connect command again.
+
 --------------------------------- Done! ---------------------------------
-[dkondra@purdue-af-1 ~]$
 ```
 
 !!! note

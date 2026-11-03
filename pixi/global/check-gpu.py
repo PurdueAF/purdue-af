@@ -6,8 +6,7 @@ numba.cuda, and ROOT's RooFit CUDA backend.
 Each framework runs a REAL small GPU computation (not just is_available())
 in its own subprocess, so a segfault, driver hang, or CUDA-context problem
 in one framework cannot take down the others — and a hang is cut off by the
-per-check timeout. Frameworks that ride on these (zuko, dask-xgboost) are
-covered transitively.
+per-check timeout. zuko rides on torch and is covered transitively.
 
 Run inside a GPU session, with the global env's python on PATH:
 
