@@ -1,5 +1,4 @@
-"""Tests for extraFiles/session-activity.py — the hub's own last_activity on
-/hub/metrics, which is what the dashboard's "Last active" column reads."""
+"""Tests for extraFiles/session-activity.py: last_activity on /hub/metrics."""
 
 import datetime
 import types
@@ -81,12 +80,11 @@ def test_sessions_labels_each_running_server(monkeypatch, registry):
 
     rows = ns["sessions"]()
 
-    assert [labels for labels, _, _ in rows] == [
+    assert [labels for labels, _ in rows] == [
         ["alice", "", "purdue-af-7"],
         ["bob-cern", "gpu", "purdue-af-12"],
     ]
     assert rows[0][1] == LAST.replace(tzinfo=UTC).timestamp()
-    assert rows[0][2] == STARTED.replace(tzinfo=UTC).timestamp()
 
 
 def test_a_session_that_has_reported_nothing_falls_back_to_its_spawn_time(
@@ -95,22 +93,20 @@ def test_a_session_that_has_reported_nothing_falls_back_to_its_spawn_time(
     ns = snippet(monkeypatch)
     ns["running_spawners"] = lambda: [fake_spawner(last=None)]
 
-    (_, last, started) = ns["sessions"]()[0]
+    (_, last) = ns["sessions"]()[0]
 
-    assert last == started == STARTED.replace(tzinfo=UTC).timestamp()
+    assert last == STARTED.replace(tzinfo=UTC).timestamp()
 
 
 def test_sessions_skips_rows_the_orm_cannot_resolve(monkeypatch, registry):
     ns = snippet(monkeypatch)
     ns["running_spawners"] = lambda: [
         fake_spawner(username=None),  # spawner with no user row
-        fake_spawner(last=None, started=None),  # never started
+        fake_spawner(started=None),  # not started yet
         fake_spawner("carol", 3),
     ]
 
-    assert [labels for labels, _, _ in ns["sessions"]()] == [
-        ["carol", "", "purdue-af-3"]
-    ]
+    assert [labels for labels, _ in ns["sessions"]()] == [["carol", "", "purdue-af-3"]]
 
 
 def test_running_spawners_are_the_ones_with_a_server(monkeypatch, registry):
@@ -134,7 +130,7 @@ def test_running_spawners_are_the_ones_with_a_server(monkeypatch, registry):
     )
     ns = snippet(monkeypatch)
 
-    assert [labels for labels, _, _ in ns["sessions"]()] == [
+    assert [labels for labels, _ in ns["sessions"]()] == [
         ["alice", "", f"purdue-af-{alice.id}"]
     ]
 
@@ -142,21 +138,17 @@ def test_running_spawners_are_the_ones_with_a_server(monkeypatch, registry):
 # ── collector ─────────────────────────────────────────────────────────────────
 
 
-def test_collector_exports_both_gauges(monkeypatch, registry):
+def test_collector_exports_last_activity(monkeypatch, registry):
     ns = snippet(monkeypatch)
     ns["running_spawners"] = lambda: [fake_spawner("alice", 7)]
 
-    families = collect(ns)
-
-    activity = families["af_session_last_activity_seconds"]
+    activity = collect(ns)["af_session_last_activity_seconds"]
     assert activity.samples[0].labels == {
         "username": "alice",
         "servername": "",
         "pod": "purdue-af-7",
     }
     assert activity.samples[0].value == LAST.replace(tzinfo=UTC).timestamp()
-    started = families["af_session_started_seconds"]
-    assert started.samples[0].value == STARTED.replace(tzinfo=UTC).timestamp()
 
 
 def test_a_broken_collection_does_not_take_hub_metrics_down(monkeypatch, registry):
@@ -171,10 +163,7 @@ def test_a_broken_collection_does_not_take_hub_metrics_down(monkeypatch, registr
 
     families = collect(ns)
 
-    assert set(families) == {
-        "af_session_last_activity_seconds",
-        "af_session_started_seconds",
-    }
+    assert set(families) == {"af_session_last_activity_seconds"}
     assert families["af_session_last_activity_seconds"].samples == []
 
 
@@ -186,4 +175,3 @@ def test_snippet_registers_itself_on_import(monkeypatch, registry):
     exported = {family.name for family in registry.collect()}
 
     assert "af_session_last_activity_seconds" in exported
-    assert "af_session_started_seconds" in exported

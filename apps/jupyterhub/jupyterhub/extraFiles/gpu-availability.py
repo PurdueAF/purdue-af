@@ -1,28 +1,13 @@
-"""Live GPU availability on the profile form + refusal of doomed GPU spawns.
+"""Live GPU counts on the profile form, and refusal of GPU spawns that cannot run.
 
-z2jh execs jupyterhub_config.d snippets in the chart config's own namespace,
-after c.KubeSpawner.profile_list has been populated from singleuser.profileList.
-This snippet wraps that static list in a callable so that every render of the
-profile selection form annotates GPU choices with the number of GPUs of that
-flavor that are free right now, and registers a modify_pod_hook that refuses
-to create a pod requesting a GPU flavor with none left (otherwise the pod
-would sit Pending until start_timeout).
-
-Availability = allocatable - requested on schedulable (not cordoned) cms-af
-nodes, from Prometheus / kube-state-metrics — the same data the Grafana
-dashboards use, so no extra hub RBAC is needed. If Prometheus is unreachable
-the form keeps the plain static labels and GPU spawns are allowed (fail open).
-
-A refusal here is admission control, not a fault, but JupyterHub has no
-ServerSpawnStatus for it (its own refusals are raised before the spawner
-runs), so one lands in the generic `failure` bucket AFSpawnFailures watches.
-GPU_SPAWN_REFUSED counts refusals separately so that alert can subtract them.
+If Prometheus is unreachable the form keeps its static labels and GPU spawns
+are allowed.
 """
 
 import asyncio
 import copy
 import json
-import os
+import re
 import sys
 import time
 from typing import Any
@@ -36,15 +21,13 @@ from traitlets.log import get_logger
 # JupyterHub injects `c` at exec time; the annotation is for type checkers only.
 c: Any
 
-PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://prometheus-server:9090")
+PROMETHEUS_URL = "http://prometheus-server:9090"
 PROMETHEUS_TIMEOUT = 5  # seconds
 CACHE_TTL = 30  # seconds; form renders reuse the last Prometheus answer this long
 GRANT_TTL = 120  # seconds; admitted spawns count as used until Prometheus sees them
 
 # Shared with the agentic interface; z2jh execs snippets, hence the path.
-_CONFIG_D = os.environ.get(
-    "JUPYTERHUB_CONFIG_D", "/usr/local/etc/jupyterhub/jupyterhub_config.d"
-)
+_CONFIG_D = "/usr/local/etc/jupyterhub/jupyterhub_config.d"
 if _CONFIG_D not in sys.path:
     sys.path.insert(0, _CONFIG_D)
 from gpu_queries import ALLOC_QUERY as _ALLOC_QUERY  # noqa: E402
@@ -53,21 +36,10 @@ from gpu_queries import USED_QUERY as _USED_QUERY  # noqa: E402
 
 log = get_logger()
 
-# An optional "note" is appended to the form choice.
 GPU_FLAVORS = {
-    "nvidia.com/mig-1g.5gb": {
-        "label": "A100 GPU slices (5GB)",
-        # keep in sync with the gpu-culler --timeout in values.yaml
-        "note": "idle session timeout 24h",
-    },
-    "nvidia.com/mig-7g.40gb": {
-        "label": "full A100 GPUs (40GB)",
-        "note": "idle session timeout 24h",
-    },
-    "nvidia.com/gpu": {
-        "label": "NVIDIA T4 GPUs (16GB)",
-        "note": "idle session timeout 24h",
-    },
+    "nvidia.com/mig-1g.5gb": "A100 GPU slices (5GB)",
+    "nvidia.com/mig-7g.40gb": "full A100 GPUs (40GB)",
+    "nvidia.com/gpu": "NVIDIA T4 GPUs (16GB)",
 }
 
 
@@ -78,6 +50,19 @@ GPU_SPAWN_REFUSED = Counter(
     ["resource", "reason"],
     registry=REGISTRY,
 )
+
+
+def idle_note(services: Any) -> str | None:
+    """The form's note on GPU choices, from the gpu-culler's own --timeout."""
+    for service in services:
+        if service.get("name") == "gpu-culler":
+            for arg in service.get("command", []):
+                if match := re.fullmatch(r"--timeout=(\d+)", arg):
+                    return f"idle session timeout {int(match[1]) / 3600:g}h"
+    return None
+
+
+IDLE_NOTE = idle_note(c.JupyterHub.services)
 
 
 async def _prom_query(query: str) -> dict[str, float]:
@@ -173,11 +158,9 @@ def _gpu_requests_in(kubespawner_override: dict[str, Any] | None) -> dict[str, i
 def _annotate_gpu_choices(
     profiles: list[dict[str, Any]], free: dict[str, int] | None
 ) -> list[dict[str, Any]]:
-    """Append live availability and flavor notes to every GPU choice.
+    """Append live availability and the idle note to every GPU choice.
 
-    The flavor note (e.g. the 24h inactivity limit) is appended even when
-    availability is unknown (free is None); the live count replaces the
-    static "subject to availability" hedge only when it is actually known.
+    The live count replaces the "subject to availability" hedge only when known.
     """
     for profile in profiles:
         for option in (profile.get("profile_options") or {}).values():
@@ -191,9 +174,8 @@ def _annotate_gpu_choices(
                             if count
                             else "none available right now"
                         )
-                    note = GPU_FLAVORS[resource].get("note")
-                    if note:
-                        parts.append(note)
+                    if IDLE_NOTE:
+                        parts.append(IDLE_NOTE)
                     if not parts:
                         continue
                     name = choice["display_name"]
@@ -219,13 +201,7 @@ class GPUsUnavailableError(Exception):
 def hide_gpus_from_pod(pod: Any) -> Any:
     """Inject NVIDIA_VISIBLE_DEVICES=void into every container of a 0-GPU pod.
 
-    The 0.13.x AF image is built on the NVIDIA CUDA base, which bakes
-    NVIDIA_VISIBLE_DEVICES=all — and the cluster runtime honors it, so a
-    0-GPU session would see every GPU on its node. The guard lives HERE, in
-    the pod spec, rather than as an image ENV override: pod-spec env always
-    beats image env, GPU sessions are never touched (the device plugin's
-    injection for the allocated device works exactly as it does for the
-    0.12.x image), and the fix applies to any image the hub spawns.
+    The AF image bakes in NVIDIA_VISIBLE_DEVICES=all, which the runtime honors.
     """
     for container in pod.spec.containers:
         env = getattr(container, "env", None) or []
@@ -283,9 +259,8 @@ async def refuse_gpu_spawn_if_unavailable(spawner: Any, pod: Any) -> Any:
             observed.get(resource, 0),
             _grants_in_flight(resource),
         )
-        label = GPU_FLAVORS[resource]["label"]
         raise GPUsUnavailableError(
-            f"All {label} are currently in use by other sessions. "
+            f"All {GPU_FLAVORS[resource]} are currently in use by other sessions. "
             "Please start a session without a GPU, or try again later."
         )
 

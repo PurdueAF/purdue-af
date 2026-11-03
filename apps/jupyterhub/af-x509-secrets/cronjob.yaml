@@ -7,9 +7,9 @@ spec:
   concurrencyPolicy: Forbid
   suspend: false
   successfulJobsHistoryLimit: 1
-  failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
+      backoffLimit: 2
       # Forbid: a hung run would block every later one.
       activeDeadlineSeconds: 900
       template:
@@ -23,30 +23,19 @@ spec:
               operator: "Equal"
               value: "cms-af"
               effect: "NoSchedule"
+          # A failed step ends the run here, with the Secret as it was.
           initContainers:
-            - name: take-data-dir-ownership
-              image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/alpine:3.24
-              command: ["/bin/sh", "-c"]
-              args:
-                [
-                  "cp /etc/grid-certs-ro/usercert.pem /etc/grid-certs; chmod 600 /etc/grid-certs/usercert.pem; cp /etc/grid-certs-ro/userkey.pem /etc/grid-certs; chmod 400 /etc/grid-certs/userkey.pem",
-                ]
-              env:
-                - name: INSTANCE_NAME
-                  value: af-x509-secrets
-              volumeMounts:
-                - name: grid-certs-rw-copy
-                  mountPath: /etc/grid-certs/
-                - name: grid-secret
-                  mountPath: /etc/grid-certs-ro/
-          containers:
-            - name: x509-secrets
+            - name: voms-proxy
               image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/sslhep/x509-secrets:v1.8.6
-              command: ["bash", "-c"]
+              command: ["/bin/bash", "-ec"]
               args:
-                [
-                  "pip install --ignore-installed 'urllib3>=2.0.0,<3' 'kubernetes>=28.0.0' && python3 x509_updater.py --secret ${x509_secret_name} --voms cms",
-                ]
+                - |
+                  cp /etc/grid-certs-ro/usercert.pem /etc/grid-certs-ro/userkey.pem /etc/grid-certs/
+                  chmod 600 /etc/grid-certs/usercert.pem
+                  chmod 400 /etc/grid-certs/userkey.pem
+                  voms-proxy-init3 --pwstdin --key /etc/grid-certs/userkey.pem --cert /etc/grid-certs/usercert.pem \
+                    --voms=cms --out /proxy/x509up </etc/grid-certs-ro/passphrase
+                  voms-proxy-info3 --file /proxy/x509up --exists --valid 1:00 --acexists cms
               resources:
                 requests:
                   cpu: 100m
@@ -54,25 +43,39 @@ spec:
                 limits:
                   cpu: 200m
                   memory: 2Gi
-              env:
-                - name: MY_POD_NAME
-                  valueFrom:
-                    fieldRef:
-                      fieldPath: metadata.name
-                - name: MY_POD_NAMESPACE
-                  valueFrom:
-                    fieldRef:
-                      fieldPath: metadata.namespace
               volumeMounts:
                 - name: grid-certs-rw-copy
                   mountPath: /etc/grid-certs/
                 - name: grid-secret
                   mountPath: /etc/grid-certs-ro/
+                - name: proxy
+                  mountPath: /proxy
+          containers:
+            - name: publish-proxy
+              image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/alpine/kubectl:1.34.1
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  kubectl create secret generic ${x509_secret_name} --from-file=x509up=/proxy/x509up --dry-run=client -o yaml |
+                    kubectl apply --server-side --force-conflicts --field-manager=af-x509-secrets -f -
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+              volumeMounts:
+                - name: proxy
+                  mountPath: /proxy
+                  readOnly: true
           volumes:
             - name: grid-secret
               secret:
                 secretName: grid-certs-secret # README.md
 
-            # The init container copies the certs here with the permissions voms-proxy-init needs.
+            # voms-proxy-init3 needs these modes, which a Secret volume does not give.
             - name: grid-certs-rw-copy
+              emptyDir: {}
+            - name: proxy
               emptyDir: {}

@@ -214,14 +214,35 @@ def test_ensure_tools_is_silent_on_stdout(shims):
     assert "Installing: packages" in result.stderr  # chatter went to stderr
 
 
-def test_purdue_tolerates_ldap_sizelimit_exit(shims):
-    """ldapsearch exit 4 ('Size limit exceeded') with entries printed still syncs."""
+def test_a_cut_ldap_result_keeps_the_last_good_list(shims):
+    """ldapsearch prints entries and exits 4 when the server's size limit cuts them."""
     ldap = shims["bin"] / "ldapsearch"
     ldap.write_text('#!/bin/bash\nseq -f "uid: user%g" 1 250\nexit 4\n')
     ldap.chmod(0o755)
 
-    result = run_sync(shims, "purdue", GET_SECRET_RC=1)
+    result = run_sync(shims, "purdue", GET_SECRET_RC=0, EXISTING_B64="")
 
-    assert result.returncode == 0, result.stderr
-    assert "Found 250 users" in result.stdout
-    assert "kubectl create secret generic af-auth-purdue" in calls(shims)
+    assert result.returncode == 1
+    assert "ldapsearch exited 4" in result.stderr
+    assert "refusing to update" in result.stdout
+    assert "patch" not in calls(shims) and "create" not in calls(shims)
+
+
+def test_a_list_that_shrank_too_far_keeps_the_last_good_list(shims):
+    existing = base64.b64encode(
+        "".join(f"user{n}\n" for n in range(1, 401)).encode()
+    ).decode()
+    result = run_sync(
+        shims, "purdue", GET_SECRET_RC=0, EXISTING_B64=existing, LDAP_COUNT=300
+    )
+
+    assert result.returncode == 1
+    assert "refusing to update" in result.stdout
+    assert "patch" not in calls(shims) and "create" not in calls(shims)
+
+
+def test_cric_is_read_over_verified_tls(shims):
+    run_sync(shims, "cern", GET_SECRET_RC=1, MIN_USERS=2)
+
+    assert "--cacert /scripts/CERN-bundle.pem" in calls(shims)
+    assert "curl -k" not in calls(shims)

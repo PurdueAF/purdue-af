@@ -37,6 +37,23 @@ def load_all(path):
     return [doc for doc in yaml.safe_load_all(path.read_text()) if doc]
 
 
+HUB_VALUES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
+EXTRA_FILES = HUB_VALUES.with_name("extraFiles")
+
+
+def hub_values():
+    """values.yaml as the hub reads it: Helm renders every map key as a string."""
+
+    def rendered(value):
+        if isinstance(value, dict):
+            return {str(k): rendered(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [rendered(v) for v in value]
+        return value
+
+    return rendered(yaml.safe_load(HUB_VALUES.read_text()))
+
+
 def mount_configmap(volume, version, files):
     """Swap `files` into `volume` as kubelet does: a new directory, `..data`
     relinked to it in one rename, each file a link through `..data`."""

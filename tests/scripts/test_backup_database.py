@@ -2,6 +2,7 @@
 
 import os
 import sqlite3
+import stat
 import subprocess
 import sys
 
@@ -97,6 +98,28 @@ def test_a_cut_transfer_fails_the_job_and_keeps_the_last_good_copy(backup):
     assert "checksum" in result.stdout
     assert [p.name for p in backup.backups.iterdir()] == [good.name]
     assert good.read_bytes() == before
+
+
+def test_a_missing_database_fails_the_job(backup):
+    """sqlite3.connect would otherwise create it, and a valid empty copy passes."""
+    backup.db.unlink()
+    assert backup().returncode != 0
+    assert not backup.db.exists()
+    assert list(backup.backups.iterdir()) == []
+
+
+def test_a_copy_is_readable_by_its_owner_alone(backup):
+    assert backup().returncode == 0
+    (copy,) = backup.backups.iterdir()
+    assert stat.S_IMODE(copy.stat().st_mode) == 0o600
+
+
+def test_leftovers_of_a_killed_run_go_with_the_next_one(backup):
+    backup.backups.mkdir()
+    leftover = backup.backups / "jupyterhub-2026jan01-noon.sqlite.transfer"
+    leftover.write_text("BACKUP-BEGIN")
+    assert backup().returncode == 0
+    assert not leftover.exists()
 
 
 def test_a_damaged_database_fails_the_job(backup):

@@ -4,10 +4,13 @@ The cull logic is covered in tests/jupyterhub_config; this checks the wiring.
 A managed service gets a fresh environment (JUPYTERHUB_*, PATH, LANG), not the
 hub's, so everything the culler needs must be passed explicitly."""
 
+import re
+
 from common import REPO, load_yaml
 
 HUB = REPO / "apps/jupyterhub/jupyterhub"
 SCRIPT = HUB / "extraFiles/cull-gpu-sessions.py"
+PROMETHEUS = REPO / "apps/monitoring/prometheus/values.yaml"
 
 
 def hub_values():
@@ -44,3 +47,22 @@ def test_role_grants_the_scopes_the_cull_pass_uses():
     role = hub_values()["loadRoles"]["gpu-culler"]
     assert role["services"] == ["gpu-culler"]
     assert {"read:servers", "delete:servers"} <= set(role["scopes"])
+
+
+def test_the_alert_on_a_dead_culler_waits_out_one_timeout_and_one_pass():
+    arguments = dict(
+        a.removeprefix("--").split("=")
+        for a in culler_service()["command"]
+        if a.startswith("--")
+    )
+    timeout, every = int(arguments["timeout"]), int(arguments["every"])
+    doc = load_yaml(PROMETHEUS)
+    groups = doc["serverFiles"]["alerting_rules.yml"]["groups"]
+    rule = next(
+        r
+        for g in groups
+        for r in g["rules"]
+        if r["alert"] == "AFGpuSessionsPastIdleTimeout"
+    )
+    hours = int(re.search(r"> (\d+) \* 3600", rule["expr"]).group(1))
+    assert timeout + every < hours * 3600 < timeout + 2 * 3600

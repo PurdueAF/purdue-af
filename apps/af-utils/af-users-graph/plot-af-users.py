@@ -11,7 +11,7 @@ from typing import NamedTuple
 
 import matplotlib.pyplot as plt
 
-BACKUP_DIR = "/depot/cms/purdue-af/backups"
+BACKUP_DIR = "/backups"
 OUTPUT_PATH = "/data/purdue-af-registered-users.png"
 
 PLOT_STYLE = {

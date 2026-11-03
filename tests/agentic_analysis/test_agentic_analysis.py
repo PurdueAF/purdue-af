@@ -1288,12 +1288,15 @@ def test_ray_jobs_may_run_in_another_environment(ray):
     assert ray[0]["headers"]["af-env"] == "/agentic-analysis/ws/env"
 
 
-def test_the_ray_gateway_takes_the_settings_the_helper_sends():
-    gateway = (REPO / "apps/ray-train/gateway.py").read_text()
-    prefix = re.search(r'^SETTING_PREFIX = "(.+)"$', gateway, re.M).group(1)
-    settings = set(re.findall(r'SETTING_PREFIX \+ "([a-z-]+)"', gateway))
-    assert prefix == "af-"
-    assert {"env", "max-workers", "gpus-per-worker"} <= settings
+def test_the_ray_gateway_takes_the_settings_the_helper_sends(ray):
+    gateway = load_script(
+        REPO / "apps/ray-train/gateway.py", "ray_train_gateway_settings"
+    )
+
+    gpus.client(env="/agentic-analysis/ws/env", max_workers=4, gpus_per_worker=2)
+
+    sent = set(ray[0]["headers"]) - {"Authorization"}
+    assert sent and sent <= gateway.SETTINGS
 
 
 # --- the agent's configuration ---

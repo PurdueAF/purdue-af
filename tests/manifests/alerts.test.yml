@@ -31,6 +31,66 @@ tests:
         eval_time: 10m
         exp_alerts: []
 
+  - name: a GPU session idle past the culler's timeout fires after 30 minutes
+    interval: 5m
+    input_series:
+      - series: 'af_session_last_activity_seconds{job="jupyterhub",instance="${jupyterhub_host}",username="alice",servername="",pod="purdue-af-7"}'
+        values: 0x320
+      - series: 'kube_pod_container_resource_requests{namespace="cms",pod="purdue-af-7",container="notebook",resource="nvidia_com_mig_7g_40gb"}'
+        values: 1x320
+    alert_rule_test:
+      - alertname: AFGpuSessionsPastIdleTimeout
+        eval_time: 25h
+        exp_alerts: []
+      - alertname: AFGpuSessionsPastIdleTimeout
+        eval_time: 26h
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: compute
+            exp_annotations:
+              summary: Idle sessions are holding GPUs, so fewer are free for new sessions
+              description: >
+                Sessions holding a GPU and idle past the timeout: 1. The GPU culler is not stopping them. Check: kubectl -n cms logs -l component=hub | grep gpu-culler
+
+  - name: idle sessions without a GPU, and with a limit of 0, stay quiet
+    interval: 5m
+    input_series:
+      - series: 'af_session_last_activity_seconds{job="jupyterhub",instance="${jupyterhub_host}",pod="purdue-af-7"}'
+        values: 0x360
+      - series: 'af_session_last_activity_seconds{job="jupyterhub",instance="${jupyterhub_host}",pod="purdue-af-8"}'
+        values: 0x360
+      - series: 'kube_pod_container_resource_requests{namespace="cms",pod="purdue-af-8",resource="nvidia_com_mig_1g_5gb"}'
+        values: 0x360
+    alert_rule_test:
+      - alertname: AFGpuSessionsPastIdleTimeout
+        eval_time: 30h
+        exp_alerts: []
+
+  - name: a GPU session in use stays quiet
+    interval: 5m
+    input_series:
+      - series: 'af_session_last_activity_seconds{job="jupyterhub",instance="${jupyterhub_host}",pod="purdue-af-7"}'
+        values: 0+300x360
+      - series: 'kube_pod_container_resource_requests{namespace="cms",pod="purdue-af-7",resource="nvidia_com_gpu"}'
+        values: 1x360
+    alert_rule_test:
+      - alertname: AFGpuSessionsPastIdleTimeout
+        eval_time: 30h
+        exp_alerts: []
+
+  - name: another environment's sessions do not fire the idle GPU alert
+    interval: 5m
+    input_series:
+      - series: 'af_session_last_activity_seconds{job="jupyterhub",instance="other.example.org",pod="purdue-af-7"}'
+        values: 0x360
+      - series: 'kube_pod_container_resource_requests{namespace="cms",pod="purdue-af-7",resource="nvidia_com_gpu"}'
+        values: 1x360
+    alert_rule_test:
+      - alertname: AFGpuSessionsPastIdleTimeout
+        eval_time: 30h
+        exp_alerts: []
+
   - name: a run of 400s at the OAuth callback with no success fires
     interval: 1m
     input_series:
@@ -584,10 +644,30 @@ tests:
           - labels: 'ALERTS{alertname="AFHubBackupStale",alertstate="firing",component="delivery",cronjob="jupyterhub-database-backup",namespace="cms",severity="warning"}'
             value: 1
 
+  - name: the userlist alert stays quiet through a brief outage
+    interval: 5m
+    input_series:
+      - series: 'kube_cronjob_status_last_successful_time{namespace="cms",cronjob="af-userlist-sync-purdue"}'
+        values: 0x100
+    alert_rule_test:
+      - alertname: AFUserlistNotSyncing
+        eval_time: 6h
+        exp_alerts: []
+    promql_expr_test:
+      - expr: ALERTS{alertname="AFUserlistNotSyncing",alertstate="firing"}
+        eval_time: 6h15m
+        exp_samples:
+          - labels: 'ALERTS{alertname="AFUserlistNotSyncing",alertstate="firing",component="delivery",cronjob="af-userlist-sync-purdue",namespace="cms",severity="warning"}'
+            value: 1
+
   - name: a CronJob with its own rule does not fire the general one
     interval: 4m
     input_series:
       - series: 'kube_cronjob_status_last_successful_time{namespace="cms",cronjob="jupyterhub-database-backup"}'
+        values: 0x800
+      - series: 'kube_cronjob_status_last_successful_time{namespace="cms",cronjob="af-userlist-sync-cern"}'
+        values: 0x800
+      - series: 'kube_cronjob_status_last_successful_time{namespace="cms",cronjob="af-userlist-sync-purdue"}'
         values: 0x800
       - series: 'kube_cronjob_status_last_successful_time{namespace="cms",cronjob="af-x509-secrets"}'
         values: 0x800

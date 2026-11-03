@@ -7,7 +7,6 @@ spec:
   concurrencyPolicy: Forbid
   suspend: false
   successfulJobsHistoryLimit: 1
-  failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
       backoffLimit: 1

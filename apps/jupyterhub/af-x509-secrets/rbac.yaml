@@ -4,22 +4,27 @@ metadata:
   name: af-x509-secrets-${namespace}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
-  name: af-x509-secrets-role-${namespace}
+  name: af-x509-secrets
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["get", "create", "update", "delete", "patch"]
+    resourceNames: ["${x509_secret_name}"]
+    verbs: ["patch"]
+  # A create request carries no name for resourceNames to match.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
-  name: af-x509-secrets-binding-${namespace}
+  name: af-x509-secrets
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: af-x509-secrets-role-${namespace}
+  kind: Role
+  name: af-x509-secrets
 subjects:
   - kind: ServiceAccount
     name: af-x509-secrets-${namespace}

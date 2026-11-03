@@ -14,9 +14,8 @@ hub:
     type: sqlite-memory
     pvc: null
   config:
-    KubeSpawner:
-      http_timeout: 120 # 2-core CI runner: Lab cold-start can exceed the 30s default
     PurdueCILogonOAuthenticator:
+      admin_users: ["admin-e2e"] # fixtures carry no real usernames
       # Browser-side URL (test client reaches the mock via port-forward);
       # server-side URLs use the in-cluster service DNS.
       authorize_url: http://localhost:9090/authorize

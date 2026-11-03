@@ -1,38 +1,20 @@
 #!/bin/sh
 # Back up the hub sqlite DB to depot storage, keeping the 14 most recent.
 set -eu
+umask 077
 
 BACKUP_DIR=/depot/cms/purdue-af/backups
 DB_PATH=/srv/jupyterhub/jupyterhub.sqlite
 
-echo "Starting database backup at $(date)"
-
-echo "Searching for JupyterHub hub pods..."
-kubectl get pods -n cms -l app=jupyterhub,component=hub
-
 HUB_POD=$(kubectl get pods -n cms -l app=jupyterhub,component=hub \
-	-o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-if [ -z "$HUB_POD" ]; then
-	echo "ERROR: Could not find JupyterHub hub pod"
-	kubectl get pods -n cms | grep -i hub || echo "No hub pods found"
-	exit 1
-fi
-echo "Found hub pod: $HUB_POD"
+	-o jsonpath='{.items[0].metadata.name}')
 
 if [ "$(date +%H)" -lt 12 ]; then TIMESTAMP="midnight"; else TIMESTAMP="noon"; fi
 BACKUP_FILENAME="jupyterhub-$(date +%Y)$(date +%b | tr '[:upper:]' '[:lower:]')$(date +%d)-${TIMESTAMP}.sqlite"
 BACKUP_PATH="${BACKUP_DIR}/${BACKUP_FILENAME}"
-echo "Backup path: ${BACKUP_PATH}"
 
 mkdir -p "$BACKUP_DIR"
-
-echo "Checking if database file exists in pod..."
-if ! kubectl exec -n cms "$HUB_POD" -- test -f "$DB_PATH"; then
-	echo "ERROR: ${DB_PATH} does not exist in pod ${HUB_POD}"
-	kubectl exec -n cms "$HUB_POD" -- find /srv -name "*.sqlite" -o -name "jupyterhub.db" 2>/dev/null ||
-		echo "No database files found"
-	exit 1
-fi
+rm -f "$BACKUP_DIR"/jupyterhub-*.sqlite.transfer "$BACKUP_DIR"/jupyterhub-*.sqlite.partial
 
 # SQLite's online backup: a file copy of a database the hub is writing can be torn.
 # kubectl exec's stdout also carries what the node's runtime prints, so the database
@@ -41,11 +23,15 @@ TRANSFER="${BACKUP_PATH}.transfer"
 PARTIAL="${BACKUP_PATH}.partial"
 trap 'rm -f "$TRANSFER" "$PARTIAL"' EXIT
 
-echo "Backing up database from pod ${HUB_POD} to ${BACKUP_PATH}..."
+# Every session mounts this volume, and the directory's defaults can outrank the umask.
+: >"$TRANSFER"
+: >"$PARTIAL"
+chmod 600 "$TRANSFER" "$PARTIAL" || echo "WARNING: could not restrict ${BACKUP_PATH}"
+
 if ! kubectl exec -n cms "$HUB_POD" -- python3 -c '
 import base64, hashlib, os, sqlite3, sys, tempfile
 
-src = sqlite3.connect(sys.argv[1], timeout=60)
+src = sqlite3.connect(f"file:{sys.argv[1]}?mode=rw", uri=True, timeout=60)
 fd, tmp = tempfile.mkstemp(suffix=".sqlite")
 os.close(fd)
 try:
@@ -63,7 +49,7 @@ try:
 finally:
     os.unlink(tmp)
 ' "$DB_PATH" >"$TRANSFER"; then
-	echo "ERROR: Failed to back up database from pod"
+	echo "ERROR: Failed to back up database from pod ${HUB_POD}"
 	exit 1
 fi
 
@@ -76,11 +62,6 @@ if [ -z "$WANT" ] || [ "$GOT" != "$WANT" ] || ! grep -q '^BACKUP-END$' "$TRANSFE
 fi
 
 mv "$PARTIAL" "$BACKUP_PATH"
-echo "Database backup completed successfully: ${BACKUP_PATH}"
-echo "Cleaning up old backups (keeping last 14)..."
 cd "$BACKUP_DIR"
 ls -t jupyterhub-*.sqlite | tail -n +15 | xargs -r rm -f
-echo "Current backups:"
-ls -la jupyterhub-*.sqlite 2>/dev/null || echo "No backups found"
-
-echo "Database backup job completed at $(date)"
+ls -la jupyterhub-*.sqlite

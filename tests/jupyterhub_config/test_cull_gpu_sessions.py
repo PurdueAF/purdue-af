@@ -6,11 +6,9 @@ import types
 from pathlib import Path
 
 import pytest
-from common import REPO, load_script
+from common import EXTRA_FILES, load_script
 
-SCRIPT = (
-    REPO / "apps" / "jupyterhub" / "jupyterhub" / "extraFiles" / "cull-gpu-sessions.py"
-)
+SCRIPT = EXTRA_FILES / "cull-gpu-sessions.py"
 SLICE = "nvidia.com/mig-1g.5gb"
 FULL = "nvidia.com/mig-7g.40gb"
 T4 = "nvidia.com/gpu"
@@ -56,6 +54,11 @@ def test_pod_holds_gpu():
     assert not mod.pod_holds_gpu(fake_pod(limits={SLICE: 0, T4: 0}))
     assert not mod.pod_holds_gpu(fake_pod(limits=None))  # sidecar w/o resources
     assert not mod.pod_holds_gpu(fake_pod(limits={"cpu": "4"}))
+    assert not mod.pod_holds_gpu(fake_pod(limits={"memory": "256Mi"}))
+
+
+def test_a_new_gpu_flavor_is_culled_too():
+    assert culler().pod_holds_gpu(fake_pod(limits={"nvidia.com/mig-2g.10gb": "1"}))
 
 
 def test_pod_server_reads_kubespawner_annotations():
@@ -281,14 +284,14 @@ async def test_hub_api_get_and_empty_body(monkeypatch):
     assert calls[0][2]["Authorization"] == "token secret"
 
 
-async def test_main_continues_after_cull_failure(monkeypatch):
+async def test_main_logs_a_failed_pass_and_continues(monkeypatch, caplog):
     mod = culler()
     passes = {"n": 0}
 
     async def boom(namespace, timeout):
         passes["n"] += 1
         if passes["n"] == 1:
-            raise RuntimeError("transient")
+            raise RuntimeError("Service host/port is not set.")
         raise asyncio.CancelledError()
 
     sleeps = []
@@ -299,11 +302,14 @@ async def test_main_continues_after_cull_failure(monkeypatch):
     monkeypatch.setattr(mod, "cull_once", boom)
     monkeypatch.setattr(mod.asyncio, "sleep", fake_sleep)
 
-    with pytest.raises(asyncio.CancelledError):
-        await mod.main("cms", ONE_DAY, every=7)
+    with caplog.at_level("INFO", logger="gpu-culler"):
+        with pytest.raises(asyncio.CancelledError):
+            await mod.main("cms", ONE_DAY, every=7)
 
     assert passes["n"] == 2
     assert sleeps == [7]
+    assert "cull pass failed" in caplog.text
+    assert "Service host/port is not set." in caplog.text
 
 
 async def test_new_code_ends_the_service_for_the_hub_to_start_it_again(
@@ -325,7 +331,7 @@ async def test_new_code_ends_the_service_for_the_hub_to_start_it_again(
     await mod.main("cms", ONE_DAY, every=7)
 
 
-# ── namespace + failure visibility ────────────────────────────────────────────
+# ── namespace ─────────────────────────────────────────────────────────────────
 
 
 def test_default_namespace_reads_service_account(tmp_path, monkeypatch):
@@ -339,35 +345,10 @@ def test_default_namespace_reads_service_account(tmp_path, monkeypatch):
     assert mod.default_namespace() == "cms-other"
 
 
-async def test_cull_failure_is_logged(monkeypatch, caplog):
-    """A failing pass is logged, unbuffered."""
-    mod = culler()
-    passes = {"n": 0}
-
-    async def boom(namespace, timeout):
-        passes["n"] += 1
-        if passes["n"] == 1:
-            raise RuntimeError("Service host/port is not set.")
-        raise asyncio.CancelledError()
-
-    async def fake_sleep(seconds):
-        pass
-
-    monkeypatch.setattr(mod, "cull_once", boom)
-    monkeypatch.setattr(mod.asyncio, "sleep", fake_sleep)
-
-    with caplog.at_level("INFO", logger="gpu-culler"):
-        with pytest.raises(asyncio.CancelledError):
-            await mod.main("cms", ONE_DAY, every=7)
-
-    assert "cull pass failed" in caplog.text
-    assert "Service host/port is not set." in caplog.text
-
-
 # ── command line ──────────────────────────────────────────────────────────────
 
 
-def test_cli_defaults_to_a_day_every_ten_minutes(monkeypatch):
+def run_cli(monkeypatch, argv):
     import logging
     import runpy
     import sys
@@ -380,9 +361,19 @@ def test_cli_defaults_to_a_day_every_ten_minutes(monkeypatch):
 
     monkeypatch.setattr(asyncio, "run", fake_run)
     monkeypatch.setattr(logging, "basicConfig", lambda **kw: None)
-    monkeypatch.setattr(sys, "argv", ["cull-gpu-sessions.py"])
+    monkeypatch.setattr(sys, "argv", ["cull-gpu-sessions.py", *argv])
     monkeypatch.setattr(Path, "read_text", lambda self: "cms\n")
 
     runpy.run_path(str(SCRIPT), run_name="__main__")
+    return started
 
+
+def test_cli_passes_its_arguments_on(monkeypatch):
+    started = run_cli(monkeypatch, ["--timeout=86400", "--every=600"])
     assert started == [{"namespace": "cms", "timeout": ONE_DAY, "every": 600}]
+
+
+@pytest.mark.parametrize("argv", [[], ["--timeout=86400"], ["--every=600"]])
+def test_cli_requires_both_arguments(monkeypatch, argv):
+    with pytest.raises(SystemExit):
+        run_cli(monkeypatch, argv)

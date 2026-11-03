@@ -1,73 +1,43 @@
 """Tests for extraFiles/gpu-availability.py — live GPU counts + spawn refusal."""
 
+import copy
 import logging
 import types
-from pathlib import Path
 
 import prometheus_client
 import pytest
-from common import ConfigSink
+from common import ConfigSink, hub_values
 from hub_helpers import load_snippet
 from prometheus_client import CollectorRegistry
 
 SLICE = "nvidia.com/mig-1g.5gb"
 FULL = "nvidia.com/mig-7g.40gb"
 T4 = "nvidia.com/gpu"
+PROFILE_LIST = hub_values()["singleuser"]["profileList"]
+HEDGE = " - subject to availability"
+NOTE = "idle session timeout 24h"
+ONE_FULL_FREE = {SLICE: 0, FULL: 1, T4: 0}
 
 
-def gpu_profiles():
-    """Static profileList mirroring the GPU-relevant shape of values.yaml."""
-    return [
-        {
-            "display_name": "Purdue AF",
-            "profile_options": {
-                "0-cpu": {
-                    "display_name": "CPUs",
-                    "choices": {
-                        "1": {
-                            "display_name": "4",
-                            "kubespawner_override": {"cpu_guarantee": 4},
-                        },
-                    },
-                },
-                "1-gpu": {
-                    "display_name": "GPUs",
-                    "choices": {
-                        "1": {
-                            "display_name": "0",
-                            "kubespawner_override": {
-                                "extra_resource_limits": {SLICE: 0}
-                            },
-                        },
-                        "2": {
-                            "display_name": "1 A100 GPU slice (5GB)",
-                            "kubespawner_override": {
-                                "extra_resource_limits": {SLICE: 1}
-                            },
-                        },
-                        "3": {
-                            "display_name": "1 full A100 GPU (40GB) - subject to availability",
-                            "kubespawner_override": {
-                                "extra_resource_limits": {FULL: 1}
-                            },
-                        },
-                        "4": {
-                            "display_name": "1 NVIDIA T4 GPU (16GB)",
-                            "kubespawner_override": {"extra_resource_limits": {T4: 1}},
-                        },
-                    },
-                },
-            },
-        },
-    ]
+def culler_service():
+    return {"name": "gpu-culler", **hub_values()["hub"]["services"]["gpu-culler"]}
 
 
 def load(monkeypatch, profile_list=...):
     monkeypatch.setattr(prometheus_client, "REGISTRY", CollectorRegistry())
     sink = ConfigSink()
+    sink.JupyterHub.services = [culler_service()]
     sink.KubeSpawner.profile_list = (
-        gpu_profiles() if profile_list is ... else profile_list
+        copy.deepcopy(PROFILE_LIST) if profile_list is ... else profile_list
     )
+    return load_snippet("gpu-availability.py", monkeypatch, extra_globals={"c": sink})
+
+
+def load_with_services(monkeypatch, services):
+    monkeypatch.setattr(prometheus_client, "REGISTRY", CollectorRegistry())
+    sink = ConfigSink()
+    sink.JupyterHub.services = services
+    sink.KubeSpawner.profile_list = copy.deepcopy(PROFILE_LIST)
     return load_snippet("gpu-availability.py", monkeypatch, extra_globals={"c": sink})
 
 
@@ -85,13 +55,41 @@ def set_free(ns, value):
     ns["observed_free_gpus"] = _free
 
 
+def stub_prometheus(ns, free):
+    """Stub the query the caches and reservations sit on top of."""
+
+    async def _free():
+        return free
+
+    ns["get_free_gpus"] = _free
+
+
 def gpu_choices(profiles):
     return profiles[0]["profile_options"]["1-gpu"]["choices"]
 
 
+def gpu_label(profiles, resource):
+    """The form label of the choice that requests `resource`."""
+    (label,) = [
+        choice["display_name"]
+        for choice in gpu_choices(profiles).values()
+        if choice["kubespawner_override"]["extra_resource_limits"].get(resource)
+    ]
+    return label
+
+
+def hedged(resource):
+    return gpu_label(PROFILE_LIST, resource)
+
+
+def plain(resource):
+    return hedged(resource).removesuffix(HEDGE)
+
+
 def fake_pod(limits):
     main = types.SimpleNamespace(resources=types.SimpleNamespace(limits=limits))
-    sidecar = types.SimpleNamespace(resources=None)  # af-pod-monitor has no limits
+    # KubeSpawner leaves an extra container's resources a plain dict
+    sidecar = types.SimpleNamespace(resources={"limits": {"memory": "256Mi"}})
     return types.SimpleNamespace(spec=types.SimpleNamespace(containers=[main, sidecar]))
 
 
@@ -123,85 +121,48 @@ async def test_form_shows_live_counts(monkeypatch):
 
     profiles = await ns["profile_list_with_gpu_counts"](None)
 
-    choices = gpu_choices(profiles)
     # live counts are joined with each flavor's idle-timeout note, and the
-    # static "subject to availability" hedge is replaced by the live count
-    assert (
-        choices["2"]["display_name"]
-        == "1 A100 GPU slice (5GB) — 12 available now, idle session timeout 24h"
-    )
-    assert (
-        choices["3"]["display_name"]
-        == "1 full A100 GPU (40GB) — 2 available now, idle session timeout 24h"
-    )
-    assert (
-        choices["4"]["display_name"]
-        == "1 NVIDIA T4 GPU (16GB) — 5 available now, idle session timeout 24h"
-    )
+    # static hedge values.yaml carries is replaced by the live count
+    assert hedged(FULL).endswith(HEDGE)
+    assert gpu_label(profiles, SLICE) == f"{plain(SLICE)} — 12 available now, {NOTE}"
+    assert gpu_label(profiles, FULL) == f"{plain(FULL)} — 2 available now, {NOTE}"
+    assert gpu_label(profiles, T4) == f"{plain(T4)} — 5 available now, {NOTE}"
     # zero-GPU choice and non-GPU options stay untouched
-    assert choices["1"]["display_name"] == "0"
-    assert (
-        profiles[0]["profile_options"]["0-cpu"]["choices"]["1"]["display_name"] == "4"
-    )
+    static = PROFILE_LIST[0]["profile_options"]
+    assert gpu_choices(profiles)["1"] == static["1-gpu"]["choices"]["1"]
+    assert profiles[0]["profile_options"]["0-cpu"] == static["0-cpu"]
 
 
 async def test_form_marks_exhausted_flavor(monkeypatch):
     ns = load(monkeypatch)
     set_free(ns, {SLICE: 3, FULL: 0, T4: 0})
 
-    choices = gpu_choices(await ns["profile_list_with_gpu_counts"](None))
+    profiles = await ns["profile_list_with_gpu_counts"](None)
 
-    assert (
-        choices["2"]["display_name"]
-        == "1 A100 GPU slice (5GB) — 3 available now, idle session timeout 24h"
-    )
-    assert (
-        choices["3"]["display_name"]
-        == "1 full A100 GPU (40GB) — none available right now, idle session timeout 24h"
-    )
-    assert (
-        choices["4"]["display_name"]
-        == "1 NVIDIA T4 GPU (16GB) — none available right now, idle session timeout 24h"
-    )
+    exhausted = f"none available right now, {NOTE}"
+    assert gpu_label(profiles, SLICE) == f"{plain(SLICE)} — 3 available now, {NOTE}"
+    assert gpu_label(profiles, FULL) == f"{plain(FULL)} — {exhausted}"
+    assert gpu_label(profiles, T4) == f"{plain(T4)} — {exhausted}"
 
 
 async def test_form_keeps_static_labels_when_availability_unknown(monkeypatch):
     ns = load(monkeypatch)
+    stub_prometheus(ns, None)
 
-    async def unknown():
-        return None
+    profiles = await ns["profile_list_with_gpu_counts"](None)
 
-    ns["get_free_gpus"] = unknown
-
-    choices = gpu_choices(await ns["profile_list_with_gpu_counts"](None))
-
-    # no live counts: the static "subject to availability" hedge stays,
-    # but the idle-timeout notes still show
-    assert (
-        choices["2"]["display_name"]
-        == "1 A100 GPU slice (5GB) — idle session timeout 24h"
-    )
-    assert (
-        choices["3"]["display_name"]
-        == "1 full A100 GPU (40GB) - subject to availability — idle session timeout 24h"
-    )
-    assert (
-        choices["4"]["display_name"]
-        == "1 NVIDIA T4 GPU (16GB) — idle session timeout 24h"
-    )
+    # no live counts: the static hedge stays, but the idle-timeout notes show
+    for resource in (SLICE, FULL, T4):
+        assert gpu_label(profiles, resource) == f"{hedged(resource)} — {NOTE}"
 
 
-async def test_flavor_without_a_note_keeps_its_label_when_unknown(monkeypatch):
-    ns = load(monkeypatch)
+async def test_no_culler_means_no_note_and_keeps_the_label(monkeypatch):
+    ns = load_with_services(monkeypatch, [])
     set_free(ns, None)
-    for flavor in ns["GPU_FLAVORS"].values():
-        flavor.pop("note")
 
-    choices = gpu_choices(await ns["profile_list_with_gpu_counts"](None))
+    profiles = await ns["profile_list_with_gpu_counts"](None)
 
-    assert choices["3"]["display_name"] == (
-        "1 full A100 GPU (40GB) - subject to availability"
-    )
+    assert gpu_label(profiles, FULL) == hedged(FULL)
 
 
 async def test_static_profile_list_is_not_mutated(monkeypatch):
@@ -210,7 +171,7 @@ async def test_static_profile_list_is_not_mutated(monkeypatch):
 
     await ns["profile_list_with_gpu_counts"](None)
 
-    assert ns["_static_profile_list"] == gpu_profiles()
+    assert ns["_static_profile_list"] == PROFILE_LIST
 
 
 # ── availability lookup ───────────────────────────────────────────────────────
@@ -272,21 +233,48 @@ async def test_prom_query_maps_samples_by_resource(monkeypatch):
     assert kwargs == {"connect_timeout": 5, "request_timeout": 5}
 
 
+@pytest.mark.parametrize(
+    "command, note",
+    [
+        (["python3", "--timeout=5400", "--every=600"], "idle session timeout 1.5h"),
+        (["python3", "--timeout=soon"], None),
+        (["python3"], None),
+    ],
+)
+def test_note_follows_the_culler_command(monkeypatch, command, note):
+    culler = {"name": "gpu-culler", "command": command}
+    assert load_with_services(monkeypatch, [culler])["IDLE_NOTE"] == note
+
+
+def test_note_reads_only_the_gpu_culler(monkeypatch):
+    other = {"name": "prometheus", "command": ["run", "--timeout=60"]}
+    assert load_with_services(monkeypatch, [other])["IDLE_NOTE"] is None
+
+
+def test_every_gpu_on_the_form_has_a_flavor_and_a_metric(monkeypatch):
+    ns = load(monkeypatch)
+    offered = {
+        resource
+        for profile in PROFILE_LIST
+        for option in profile.get("profile_options", {}).values()
+        for choice in option["choices"].values()
+        for resource in choice["kubespawner_override"].get("extra_resource_limits", {})
+    }
+    assert set(ns["GPU_FLAVORS"]) == set(ns["GPU_METRICS"])
+    assert offered <= set(ns["GPU_METRICS"])
+
+
 def test_snippet_finds_gpu_queries_in_its_config_dir(monkeypatch):
-    """z2jh execs the snippet; the shared module is only importable because
-    the snippet puts jupyterhub_config.d on sys.path itself."""
+    """z2jh execs the snippet, which puts the mounted directory on sys.path."""
     import sys
 
-    from hub_helpers import EXTRA_FILES
-
-    kept = [p for p in sys.path if Path(p).resolve() != EXTRA_FILES.resolve()]
-    monkeypatch.setattr(sys, "path", kept)
-    monkeypatch.delitem(sys.modules, "gpu_queries", raising=False)
+    mounts = hub_values()["hub"]["extraVolumeMounts"]
+    mount = next(m for m in mounts if m["name"] == "hub-extra-config")
 
     ns = load(monkeypatch)
 
-    assert sys.path[0] == str(EXTRA_FILES)
-    assert ns["GPU_METRICS"]
+    assert ns["_CONFIG_D"] == mount["mountPath"]
+    assert sys.path[0] == mount["mountPath"]
 
 
 async def test_get_free_gpus_unknown_on_query_failure(monkeypatch):
@@ -420,10 +408,7 @@ async def test_spawn_allowed_when_availability_unknown(monkeypatch):
 async def test_admitted_spawn_reserves_the_gpu(monkeypatch):
     ns = load(monkeypatch)
 
-    async def one_full_free():
-        return {SLICE: 0, FULL: 1, T4: 0}
-
-    ns["get_free_gpus"] = one_full_free
+    stub_prometheus(ns, ONE_FULL_FREE)
 
     # first spawn takes the last 40GB GPU ...
     pod = fake_pod({FULL: "1"})
@@ -439,10 +424,9 @@ async def test_admitted_spawn_reserves_the_gpu(monkeypatch):
         )
 
     # and the form shows the reservation too
-    choices = gpu_choices(await ns["profile_list_with_gpu_counts"](None))
+    profiles = await ns["profile_list_with_gpu_counts"](None)
     assert (
-        choices["3"]["display_name"]
-        == "1 full A100 GPU (40GB) — none available right now, idle session timeout 24h"
+        gpu_label(profiles, FULL) == f"{plain(FULL)} — none available right now, {NOTE}"
     )
 
 
@@ -451,10 +435,7 @@ async def test_retry_after_cancelled_spawn_is_not_refused(monkeypatch):
     # the reservation their own cancelled attempt left behind
     ns = load(monkeypatch)
 
-    async def one_full_free():
-        return {SLICE: 0, FULL: 1, T4: 0}
-
-    ns["get_free_gpus"] = one_full_free
+    stub_prometheus(ns, ONE_FULL_FREE)
 
     pod = fake_pod({FULL: "1"})
     assert (
@@ -476,10 +457,7 @@ async def test_retry_after_cancelled_spawn_is_not_refused(monkeypatch):
 async def test_stop_releases_the_reservation(monkeypatch):
     ns = load(monkeypatch)
 
-    async def one_full_free():
-        return {SLICE: 0, FULL: 1, T4: 0}
-
-    ns["get_free_gpus"] = one_full_free
+    stub_prometheus(ns, ONE_FULL_FREE)
 
     pod = fake_pod({FULL: "1"})
     assert (
@@ -530,10 +508,7 @@ async def test_refusal_counted_as_reserved(monkeypatch):
     # Sustained counts here mean reservations are outliving their pods.
     ns = load(monkeypatch)
 
-    async def one_full_free():
-        return {SLICE: 0, FULL: 1, T4: 0}
-
-    ns["get_free_gpus"] = one_full_free
+    stub_prometheus(ns, ONE_FULL_FREE)
     before = refusals(ns, FULL, "reserved")
 
     pod = fake_pod({FULL: "1"})
