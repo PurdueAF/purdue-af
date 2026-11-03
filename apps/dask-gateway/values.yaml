@@ -18,8 +18,8 @@ gateway:
       cpu: 2
       memory: 4Gi
     requests:
-      cpu: 2
-      memory: 4Gi
+      cpu: 250m
+      memory: 512Mi
   backend:
     # The Hub's image puller holds this image: prePuller.extraImages in apps/jupyterhub.
     image:
@@ -27,10 +27,10 @@ gateway:
       tag: 2024.1.0
     scheduler:
       cores:
-        request: 4
+        request: 1
         limit: 8
       memory:
-        request: 16G
+        request: 4G
         limit: 32G
       extraPodConfig:
         nodeSelector: *af-nodes
@@ -497,8 +497,8 @@ traefik:
       cpu: 2
       memory: 4Gi
     requests:
-      cpu: 2
-      memory: 4Gi
+      cpu: 500m
+      memory: 512Mi
   loglevel: ERROR
   service:
     annotations:
@@ -515,8 +515,8 @@ controller:
       cpu: 2
       memory: 4Gi
     requests:
-      cpu: 2
-      memory: 4Gi
+      cpu: 250m
+      memory: 2Gi
   loglevel: WARN
   image:
     pullPolicy: IfNotPresent

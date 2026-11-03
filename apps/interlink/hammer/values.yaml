@@ -13,8 +13,8 @@ plugin:
       readOnly: true
   resources:
     memory:
-      request: 16Gi
-      limit: 16Gi
+      request: 512Mi
+      limit: 4Gi
   envs:
     - name: SLURM_CLUSTER
       value: "hammer"

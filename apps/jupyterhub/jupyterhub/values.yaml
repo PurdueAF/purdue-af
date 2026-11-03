@@ -222,6 +222,12 @@ singleuser:
   extraPodConfig:
     enableServiceLinks: false
 prePuller:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
   hook:
     enabled: false
   continuous:

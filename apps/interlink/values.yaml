@@ -12,13 +12,17 @@ plugin:
   port: 4000
   privileged: false
   resources:
-    # null drops the chart's CPU request and limit.
-    CPU: null
+    CPU:
+      request: 100m
+      limit: "1"
 
 virtualNode:
   image: ghcr.io/interlink-hq/interlink/virtual-kubelet-inttw:0.7.0-pre1
 
   containerResources:
+    CPU:
+      request: 100m
+      limit: "2"
     memory:
       request: 512Mi
       limit: 2Gi
