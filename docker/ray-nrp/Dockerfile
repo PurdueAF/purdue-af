@@ -1,6 +1,6 @@
 # Ray's image for jobs on NRP Nautilus: the AF's global Pixi environment
 # (pixi/global) installed into the image, since NRP pods see no AF storage.
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 COPY --from=ghcr.io/prefix-dev/pixi:0.83.0 /usr/local/bin/pixi /usr/local/bin/pixi
 
