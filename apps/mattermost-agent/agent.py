@@ -517,6 +517,7 @@ class Docs:
 class Mattermost:
     def __init__(self, client: httpx.AsyncClient) -> None:
         self.client = client
+        self.seen: dict[str, list[str]] = {"teams": [], "channels": []}
 
     async def get(self, path: str, **params: Any) -> Any:
         response = await self.client.get(f"/api/v4{path}", params=params)
@@ -526,20 +527,27 @@ class Mattermost:
     async def channels(
         self, user_id: str, team_name: str, channel_name: str
     ) -> tuple[str | None, set[str], set[str]]:
-        """The bot's public channel of that name, its direct messages and its
-        group messages."""
-        home, direct, groups = None, set(), set()
-        for team in await self.get("/users/me/teams"):
+        """The bot's channel of that name, public or else private, its direct
+        messages and its group messages. What it found instead goes to
+        self.seen, for the log."""
+        home, private, direct, groups = None, None, set(), set()
+        teams = await self.get("/users/me/teams")
+        self.seen = {"teams": [t["display_name"] for t in teams], "channels": []}
+        for team in teams:
             if team["display_name"] != team_name:
                 continue
             for c in await self.get(f"/users/{user_id}/teams/{team['id']}/channels"):
+                if c["type"] in ("O", "P"):
+                    self.seen["channels"].append(f"{c['display_name']} ({c['type']})")
                 if c["type"] == "O" and c["display_name"] == channel_name:
                     home = c["id"]
+                elif c["type"] == "P" and c["display_name"] == channel_name:
+                    private = c["id"]
                 elif c["type"] == "D":
                     direct.add(c["id"])
                 elif c["type"] == "G":
                     groups.add(c["id"])
-        return home, direct, groups
+        return home or private, direct, groups
 
     async def members(self, channel: str) -> list[str]:
         found = await self.get(f"/channels/{channel}/members", per_page=200)
@@ -723,7 +731,13 @@ class Agent:
                 self.me["id"], self.team_name, self.channel_name
             )
             if self.home is None:
-                log.warning("not in %s", self.channel_name)
+                log.warning(
+                    "not in %s: teams %s; channels in %s: %s",
+                    self.channel_name,
+                    self.mattermost.seen["teams"],
+                    self.team_name,
+                    self.mattermost.seen["channels"],
+                )
             if not first:
                 # A conversation that appeared since the last look is all new.
                 known = self.direct | self.groups

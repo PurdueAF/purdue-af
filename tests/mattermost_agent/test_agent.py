@@ -408,6 +408,33 @@ async def test_only_the_named_public_channel_and_direct_messages_are_polled(make
     assert found == ("c1", {"dm"}, {"g1"})
 
 
+async def test_the_channel_is_found_when_it_is_made_private(make):
+    bot, server, *_ = await make()
+    channels = [{"id": "c3", "type": "P", "display_name": CHANNEL}]
+
+    original = server.__call__
+
+    def private_only(request):
+        if request.url.path == "/api/v4/users/bot/teams/t1/channels":
+            return httpx.Response(200, json=channels + server.direct)
+        return original(request)
+
+    bot.mattermost.client._transport = httpx.MockTransport(private_only)
+    found = await bot.mattermost.channels("bot", TEAM, CHANNEL)
+    assert found[0] == "c3"
+
+
+async def test_a_missing_channel_logs_what_the_bot_sees(make, caplog):
+    bot, server, *_ = await make()
+    bot.channel_name = "Renamed Channel"
+    with caplog.at_level("WARNING", logger="mattermost-agent"):
+        await poll(bot)
+    assert bot.home is None
+    message = caplog.records[-1].getMessage()
+    assert "not in Renamed Channel" in message
+    assert TEAM in message and f"{CHANNEL} (O)" in message
+
+
 async def test_a_member_is_answered_in_a_direct_message_without_a_mention(make):
     bot, server, llm, _ = await make({"content": "It is up."})
     await poll(bot)
