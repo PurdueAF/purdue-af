@@ -68,7 +68,7 @@ class FakeMattermost:
         if path == f"/teams/name/{TEAM_URL}":
             return httpx.Response(200, json={"id": "t1", "display_name": TEAM})
         if path == "/channels/c1/members/bot":
-            return httpx.Response(200 if self.bot_member else 404, json={})
+            return httpx.Response(200 if self.bot_member else 403, json={})
         if path == "/users/me/teams":
             teams = [
                 {"id": "t1", "display_name": TEAM},
@@ -76,8 +76,9 @@ class FakeMattermost:
             ]
             return httpx.Response(200, json=teams)
         if path == "/users/bot/teams/t1/channels":
+            mine = [{"id": "c1", "type": "O", "display_name": CHANNEL}]
             channels = [
-                {"id": "c1", "type": "O", "display_name": CHANNEL},
+                *(mine if self.bot_member else []),
                 {"id": "c2", "type": "O", "display_name": "Town Square"},
                 {"id": "c3", "type": "P", "display_name": CHANNEL},
                 {"id": "g1", "type": "G", "display_name": ""},
@@ -458,12 +459,18 @@ async def test_a_refused_lookup_is_logged_with_its_status(make, caplog, status):
 
 
 async def test_a_channel_the_bot_left_is_not_its_channel(make, caplog):
+    """Mattermost refuses a non-member the channel members, so the bot reads
+    its own channel list instead, and keeps polling its direct messages."""
     bot, server, *_ = await make()
     server.bot_member = False
     with caplog.at_level("WARNING", logger="mattermost-agent"):
         await poll(bot)
     assert bot.home is None
-    assert "not a member" in caplog.records[-1].getMessage()
+    assert bot.direct == {"dm"}
+    messages = [r.getMessage() for r in caplog.records]
+    assert messages == [
+        "no channel: this account is not a member of cms-exp/purdue-analysis-facility"
+    ]
 
 
 async def test_a_member_is_answered_in_a_direct_message_without_a_mention(make):

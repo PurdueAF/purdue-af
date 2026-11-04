@@ -531,30 +531,29 @@ class Mattermost:
         belongs to it; its direct messages and its group messages. Why the
         channel could not be had goes to self.problem, for the log."""
         self.problem = ""
-        home: dict[str, Any] | None = None
         found = await self.client.get(
             f"/api/v4/teams/name/{team}/channels/name/{channel}"
         )
-        if found.status_code != 200:
+        if found.status_code == 200:
+            team_id = found.json()["team_id"]
+        else:
             self.problem = f"looking up {team}/{channel}: HTTP {found.status_code}"
-        elif not await self.is_member(found.json()["id"], user_id):
-            self.problem = f"this account is not a member of {team}/{channel}"
-        else:
-            home = found.json()
-        if home is not None:
-            team_id = home["team_id"]
-        else:
             named = await self.client.get(f"/api/v4/teams/name/{team}")
             if named.status_code != 200:
                 self.problem += f"; looking up team {team}: HTTP {named.status_code}"
                 return None, set(), set()
             team_id = named.json()["id"]
-        direct, groups = set(), set()
-        for c in await self.get(f"/users/{user_id}/teams/{team_id}/channels"):
-            if c["type"] == "D":
-                direct.add(c["id"])
-            elif c["type"] == "G":
-                groups.add(c["id"])
+        # Its own channels, which it may always list: Mattermost shows the
+        # members of a channel only to its members.
+        mine = await self.get(f"/users/{user_id}/teams/{team_id}/channels")
+        home = None
+        if found.status_code == 200:
+            if any(c["id"] == found.json()["id"] for c in mine):
+                home = found.json()
+            else:
+                self.problem = f"this account is not a member of {team}/{channel}"
+        direct = {c["id"] for c in mine if c["type"] == "D"}
+        groups = {c["id"] for c in mine if c["type"] == "G"}
         return home, direct, groups
 
     async def members(self, channel: str) -> list[str]:
