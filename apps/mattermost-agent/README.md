@@ -3,7 +3,7 @@
 PurdueAF Agent, a service account on
 [CERN Mattermost](https://mattermost.web.cern.ch), acting through an OAuth 2.0
 application. It
-answers an @mention in one public channel, in a thread, later replies in that
+answers an @mention in one channel, in a thread, later replies in that
 thread that mention nobody else, and a direct message from a member of that
 channel, from the user docs and the
 [agentic interface](../agentic-interface/README.md)'s facility-wide tools, with
