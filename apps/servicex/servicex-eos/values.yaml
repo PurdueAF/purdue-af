@@ -94,8 +94,8 @@ codeGen:
 
 transformer:
   sidecarImage: geddes2-registry.rcac.purdue.edu/cms/servicex-transformer-sidecar
-  sidecarTag: local
-  # `local` is pushed over in place.
+  sidecarTag: dmitry
+  # The tag is pushed over in place.
   sidecarPullPolicy: Always
   autoscaler:
     maxReplicas: 100
