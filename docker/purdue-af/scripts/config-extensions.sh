@@ -138,6 +138,8 @@ EOF
 	_cs_install_if_missing ms-python.python
 	_cs_install_if_missing ms-toolsai.jupyter
 	_cs_install_if_missing renan-r-santos.pixi-code
+	# code-server ships no PDF viewer.
+	_cs_install_if_missing mathematic.vscode-pdf
 	# Open VSX IDs (code-server's marketplace).
 	_cs_install_if_missing anthropic.claude-code
 	# Pinned: newer builds emit `using` declarations code-server's Node cannot parse.
