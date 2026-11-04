@@ -309,6 +309,10 @@ index 1111111..2222222 100644
 def test_only_version_stamps_recognises_the_release_stamp(cs):
     assert cs.only_version_stamps(STAMP_DIFF)
     assert cs.only_version_stamps(STAMP_DIFF + STAMP_DIFF.replace("global", "base"))
+    second_hunk = '@@ -40 +40 @@\n-version = "0.14.5"\n+version = "0.14.5+dev"\n'
+    assert cs.only_version_stamps(
+        STAMP_DIFF + second_hunk + "\\ No newline at end of file\n"
+    )
 
 
 @pytest.mark.parametrize(
