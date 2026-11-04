@@ -1012,7 +1012,13 @@ class Agent:
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code == 401:
                     raise Unauthorized("HTTP 401 with fresh tokens") from exc
-                log.warning("poll: HTTP %s", exc.response.status_code)
+                request = exc.request
+                log.warning(
+                    "poll: HTTP %s for %s %s",
+                    exc.response.status_code,
+                    request.method,
+                    request.url.path,
+                )
             except httpx.HTTPError as exc:
                 log.warning("poll: %s", type(exc).__name__)
             self.beat = time.monotonic()
