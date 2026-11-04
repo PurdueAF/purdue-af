@@ -142,5 +142,14 @@ if [[ -z "$listing" ]]; then
 	echo "image-inputs.sh: no tracked files matched inputs of '$name'" >&2
 	exit 1
 fi
+# A pixi.toml hashes without its workspace version, which each image release rewrites (bump-af-version.py).
+listing=$(while IFS=$'\t' read -r meta path; do
+	if [[ "$path" == pixi/*/pixi.toml ]]; then
+		read -r mode blob stage <<<"$meta"
+		blob=$(git cat-file blob "$blob" | sed '/^version = /d' | git hash-object --stdin)
+		meta="$mode $blob $stage"
+	fi
+	printf '%s\t%s\n' "$meta" "$path"
+done <<<"$listing")
 hash=$(printf '%s\n' "$listing" | git hash-object --stdin)
 echo "in-${hash:0:12}"

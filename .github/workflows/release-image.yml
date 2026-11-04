@@ -117,13 +117,18 @@ jobs:
         run: |
           git config user.name "af-release-bot"
           git config user.email "af-release-bot@users.noreply.github.com"
-          git add apps/jupyterhub/jupyterhub/values.yaml apps/af-utils/pixi-global-sync/deployment.yaml
+          git add apps/jupyterhub/jupyterhub/values.yaml apps/af-utils/pixi-global-sync/deployment.yaml \
+            pixi/base/pixi.toml pixi/global/pixi.toml
           git commit -m "release purdue-af image $VERSION"
           # the v prefix keeps image tags distinct from bare platform CalVer tags
           git tag -a "v$VERSION" -m "purdue-af image $VERSION
           image: $IMAGE_REPO:$VERSION
           digest: $DIGEST"
-          git push origin main "v$VERSION"
+          # Only the tagged commit carries the bare version in the pixi manifests.
+          python3 .github/workflows/bump-af-version.py --mark-dev
+          git add pixi/base/pixi.toml pixi/global/pixi.toml
+          git commit -m "pixi: mark the environments $VERSION+dev"
+          git push --atomic origin main "v$VERSION"
           gh release create "v$VERSION" \
             --title "purdue-af image $VERSION" \
             --generate-notes \

@@ -1,6 +1,8 @@
 # Lock with the pixi version pinned by ARG PIXI_VERSION in docker/purdue-af/Dockerfile.
 [workspace]
 name = "base-env"
+# The purdue-af release: X.Y.Z at its tag, X.Y.Z+dev on every commit after it (bump-af-version.py).
+version = "0.14.4+dev"
 channels = ["conda-forge"]
 platforms = ["linux-64"]
 

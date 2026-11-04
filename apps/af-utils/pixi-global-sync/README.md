@@ -1,17 +1,19 @@
-# pixi-global-sync — keeps `/work/pixi/global` in sync with the repo
+# pixi-global-sync — keeps `/work/pixi/global` at the released environment
 
 Single-replica Deployment (running the production AF image) that does
-exactly what an admin does by hand whenever
-[`pixi/global/pixi.toml`](../../../pixi/global/pixi.toml) /
-[`pixi.lock`](../../../pixi/global/pixi.lock) change on `main`: update the
-two manifest files, run `pixi install --locked`, confirm the env imports.
+exactly what an admin does by hand whenever a purdue-af image release
+changes [`pixi/global/pixi.toml`](../../../pixi/global/pixi.toml) /
+[`pixi.lock`](../../../pixi/global/pixi.lock): update the two manifest
+files, run `pixi install --locked`, confirm the env imports.
 `/work/pixi/global` is a plain pixi project directory; the only addition on
 the share is the persistent package cache at `/work/pixi/.cache`.
 
 ## How a change arrives
 
-- **The manifests arrive through the Flux `experimental` root** after the
-  full pipeline validated the lock ([RELEASING.md](../../../RELEASING.md)).
+- **The manifests arrive through the Flux `af-image` root**, from the
+  newest purdue-af image tag ([RELEASING.md](../../../RELEASING.md)): a
+  change merged to `pixi/global` waits for the next image release, and the
+  env's `version` field names the release it came with.
   The daemon re-verifies after each install and every 6 h: a broken-on-disk
   env alerts and self-heals.
 - **Updates are in place.** With the cache on the same filesystem,
@@ -23,7 +25,7 @@ the share is the persistent package cache at `/work/pixi/.cache`.
   applies) and the live ones, or desired manifests the running daemon has
   not installed yet: a failed install holds `in_sync` at 0 and is retried
   after `FAIL_COOLDOWN`, and each start runs `pixi install --locked` once,
-  a fast no-op on a current env. Change latency merge→live ≈ Flux
+  a fast no-op on a current env. Change latency tag→live ≈ Flux
   interval + 1 min + install time.
 - **A new `sync-global-env.py` restarts the daemon.** Between cycles,
   never during an install, it compares its own file's content and exits 0
@@ -41,7 +43,7 @@ drift and reconciled back within ~1 min. For hands-on experimentation:
     rm /work/pixi/global/.sync-pause       # daemon reconciles back to repo state
 
 Upstream the change via a normal PR to `pixi/global/` when done — CI
-validates the lock and the daemon applies it everywhere.
+validates the lock and the daemon applies it at the next image release.
 
 ## Observability
 
@@ -52,8 +54,9 @@ eventually surfaces as AFGlobalEnvOutOfSync.
 
 ## Runbook
 
-- **Roll back an env change:** revert the lock commit on `main`; the
-  daemon reconciles back (warm cache ⇒ minutes).
+- **Roll back an env change:** revert the lock commit on `main` and
+  release an image; the daemon reconciles back at the new tag (warm cache ⇒
+  minutes).
 - **Watch a sync:** `kubectl logs deploy/pixi-global-sync -f`
 - **Force a re-sync now:** delete the pod (each start installs),
   `rm /work/pixi/global/pixi.lock` (instant drift), or wait ≤60 s after
