@@ -414,6 +414,25 @@ async def test_a_reply_that_mentions_the_bot_is_answered_once(make):
     assert len(server.replies) == 1
 
 
+async def test_a_refused_poll_logs_the_request_it_was(make, caplog, monkeypatch):
+    bot, server, *_ = await make()
+
+    async def refused():
+        request = httpx.Request("GET", "http://mm/api/v4/channels/c1/posts?since=5")
+        response = httpx.Response(403, request=request)
+        raise httpx.HTTPStatusError("403", request=request, response=response)
+
+    monkeypatch.setattr(bot, "poll", refused)
+    monkeypatch.setattr(agent, "POLL_SECONDS", 0)
+    with caplog.at_level("WARNING", logger="mattermost-agent"):
+        running = asyncio.create_task(bot.polling())
+        while not caplog.records:
+            await asyncio.sleep(0)
+        running.cancel()
+    message = caplog.records[0].getMessage()
+    assert message == "poll: HTTP 403 for GET /api/v4/channels/c1/posts"
+
+
 async def test_the_channel_is_found_by_the_names_in_its_url(make):
     bot, *_ = await make()
     home, direct, groups = await bot.mattermost.channels("bot", TEAM_URL, CHANNEL_URL)
