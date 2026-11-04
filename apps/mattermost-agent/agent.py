@@ -124,8 +124,6 @@ DOC_TITLE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 AT_NAME = re.compile(r"(?<![\w.])@(?=[\w.-])")
 SORRY = "I could not answer this just now. Please try again in a few minutes."
 LIMITED = "You have reached my limit of questions for now. Please try again later."
-NOT_MEMBER = "I answer direct messages from members of {channel} only."
-NOT_ALL_MEMBERS = "I answer here only if everyone in this conversation is in {channel}."
 NEEDS_LINK = (
     "I need to know who you are for that. Ask me in a direct message to link your "
     "account; it takes a minute and lasts 30 days."
@@ -157,7 +155,6 @@ FINISH = "Reply now in plain text with what was done and what is left. Call no t
 BAD_CODE = "That code did not work. Send `link` to start again."
 UNLINKED = "Unlinked. I no longer use your account."
 NOT_LINKED = "You are not linked."
-NOT_READY = "I am not in {channel} yet, so I cannot answer here."
 
 
 class Unauthorized(Exception):
@@ -527,15 +524,17 @@ class Mattermost:
     async def channels(
         self, user_id: str, team: str, channel: str
     ) -> tuple[dict[str, Any] | None, set[str], set[str]]:
-        """The bot's channel, looked up by the names in its URL, if the bot
-        belongs to it; its direct messages and its group messages. Why the
-        channel could not be had goes to self.problem, for the log."""
+        """The bot's channel, looked up by the names in its URL, and its direct
+        and group messages. Why the channel could not be had goes to
+        self.problem, for the log."""
         self.problem = ""
         found = await self.client.get(
             f"/api/v4/teams/name/{team}/channels/name/{channel}"
         )
+        home: dict[str, Any] | None = None
         if found.status_code == 200:
-            team_id = found.json()["team_id"]
+            home = found.json()
+            team_id = home["team_id"]
         else:
             self.problem = f"looking up {team}/{channel}: HTTP {found.status_code}"
             named = await self.client.get(f"/api/v4/teams/name/{team}")
@@ -543,31 +542,10 @@ class Mattermost:
                 self.problem += f"; looking up team {team}: HTTP {named.status_code}"
                 return None, set(), set()
             team_id = named.json()["id"]
-        # Its own channels, which it may always list: Mattermost shows the
-        # members of a channel only to its members.
         mine = await self.get(f"/users/{user_id}/teams/{team_id}/channels")
-        home = None
-        if found.status_code == 200:
-            if any(c["id"] == found.json()["id"] for c in mine):
-                home = found.json()
-            else:
-                self.problem = f"this account is not a member of {team}/{channel}"
         direct = {c["id"] for c in mine if c["type"] == "D"}
         groups = {c["id"] for c in mine if c["type"] == "G"}
         return home, direct, groups
-
-    async def members(self, channel: str) -> list[str]:
-        found = await self.get(f"/channels/{channel}/members", per_page=200)
-        return [m["user_id"] for m in found]
-
-    async def is_member(self, channel: str, user_id: str) -> bool:
-        response = await self.client.get(
-            f"/api/v4/channels/{channel}/members/{user_id}"
-        )
-        if response.status_code == 404:
-            return False
-        response.raise_for_status()
-        return True
 
     async def latest(self, channel: str) -> int:
         """Server time of the channel's newest post: where its polling starts."""
@@ -754,10 +732,17 @@ class Agent:
         polled = [self.home] if self.home else []
         for channel in polled + sorted(self.direct | self.groups):
             cursor = self.cursors.get(channel)
-            if cursor is None:
-                self.cursors[channel] = await self.mattermost.latest(channel)
+            try:
+                if cursor is None:
+                    self.cursors[channel] = await self.mattermost.latest(channel)
+                    continue
+                posts = await self.mattermost.since(channel, cursor)
+            except httpx.HTTPStatusError as exc:
+                # One conversation Mattermost refuses must not stop the others.
+                if exc.response.status_code == 401:
+                    raise
+                log.warning("channel %s: HTTP %s", channel, exc.response.status_code)
                 continue
-            posts = await self.mattermost.since(channel, cursor)
             for post in posts:
                 self.cursors[channel] = max(self.cursors[channel], post["update_at"])
                 if self.wanted(post, cursor) or await self.replies_to_bot(post, cursor):
@@ -770,23 +755,6 @@ class Agent:
     def private(self, post: dict[str, Any]) -> bool:
         return post["channel_id"] in self.direct | self.groups
 
-    async def refusal(self, post: dict[str, Any]) -> str | None:
-        """Why a private conversation gets no answer, if it does not."""
-        if not self.private(post):
-            return None
-        if self.home is None:
-            return NOT_READY
-        if post["channel_id"] in self.direct:
-            people, refused = [post["user_id"]], NOT_MEMBER
-        else:
-            people = await self.mattermost.members(post["channel_id"])
-            refused = NOT_ALL_MEMBERS
-        for person in people:
-            if person != self.me["id"]:
-                if not await self.mattermost.is_member(self.home, person):
-                    return refused
-        return None
-
     async def handle(self, post: dict[str, Any]) -> None:
         user = post["user_id"]
         root = post["root_id"] if self.private(post) else post["root_id"] or post["id"]
@@ -798,12 +766,6 @@ class Agent:
                 reply = await self.command(post, command)
                 await self.mattermost.reply(post, root, reply)
                 log.info("post %s: linking", post["id"])
-                return
-            refused = await self.refusal(post)
-            if refused:
-                notice = refused.format(channel=self.channel_name)
-                await self.mattermost.reply(post, root, notice)
-                log.info("post %s: refused", post["id"])
                 return
             if not self.allowed(user, time.monotonic()):
                 if user not in self.warned:
@@ -837,10 +799,6 @@ class Agent:
                 return NOT_LINKED
             self.linking.forget(user)
             return UNLINKED
-        if self.home is None:
-            return NOT_READY.format(channel=self.channel_name)
-        if not await self.mattermost.is_member(self.home, user):
-            return NOT_MEMBER.format(channel=self.channel_name)
         if command.lower() == "link":
             return LINK_REPLY.format(url=self.linking.link_url(user))
         hub_user = await self.linking.confirm(user, command)

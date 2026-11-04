@@ -4,8 +4,8 @@ PurdueAF Agent, a service account on
 [CERN Mattermost](https://mattermost.web.cern.ch), acting through an OAuth 2.0
 application. It
 answers an @mention in one channel, in a thread, later replies in that
-thread that mention nobody else, and a direct message from a member of that
-channel, from the user docs and the
+thread that mention nobody else, direct messages, and @mentions in group
+messages, from the user docs and the
 [agentic interface](../agentic-interface/README.md)'s facility-wide tools, with
 a role of the [LLM proxy](../agentic-analysis/README.md#llm-proxy).
 
@@ -47,12 +47,8 @@ otherwise it runs as above. The bot replies where it was asked.
 ## Running it
 
 `MATTERMOST_TEAM` and `MATTERMOST_CHANNEL` in `deployment.yaml` name the channel,
-by the names in its URL, and its account must belong to it; the log says why when
-it cannot have it. Each
-direct message checks the sender's membership at that moment, so leaving the
-channel ends access. Removing the account from the channel stops the bot in
-both. In a group message it answers an @mention, when everyone there is a member
-at that moment. A new `docs/docs/` page is added to
+by the names in its URL; the log says why when it cannot have it. The bot
+answers anyone who writes to it; personal answers need a linked account. A new `docs/docs/` page is added to
 `mattermost-agent-docs` in [`flux/experimental`](../../flux/experimental/kustomization.yaml).
 
 Tuning, all in `agent.py`: `POLL_SECONDS`, `USER_LIMIT` and

@@ -51,6 +51,8 @@ class FakeMattermost:
         self.members = {"u1", "u2"}
         self.lookup = 200
         self.bot_member = True
+        self.members_hidden = False
+        self.refused_posts = set()
         self.direct = [{"id": "dm", "type": "D", "display_name": ""}]
 
     def __call__(self, request):
@@ -92,6 +94,8 @@ class FakeMattermost:
             members = [{"user_id": user} for user in self.group]
             return httpx.Response(200, json=members)
         if path.startswith("/channels/c1/members/"):
+            if self.members_hidden:
+                return httpx.Response(403, json={})
             member = path.rsplit("/", 1)[1] in self.members
             return httpx.Response(200 if member else 404, json={})
         if path == "/channels/g1/posts":
@@ -100,6 +104,8 @@ class FakeMattermost:
             return httpx.Response(200, json={"posts": {"old": post("old", at=1000)}})
         if path in ("/channels/c1/posts", "/channels/dm/posts"):
             channel = path.split("/")[2]
+            if channel in self.refused_posts:
+                return httpx.Response(403, json={})
             if "since" in request.url.params:
                 if channel == "dm":
                     return httpx.Response(200, json={"posts": self.direct_posts})
@@ -458,19 +464,40 @@ async def test_a_refused_lookup_is_logged_with_its_status(make, caplog, status):
     assert bot.direct == {"dm"}
 
 
-async def test_a_channel_the_bot_left_is_not_its_channel(make, caplog):
-    """Mattermost refuses a non-member the channel members, so the bot reads
-    its own channel list instead, and keeps polling its direct messages."""
+async def test_anyone_is_answered_without_a_membership_check(make):
+    bot, server, llm, _ = await make({"content": "Hi."}, {"content": "Hi all."})
+    await poll(bot)
+    server.members = set()
+    server.members_hidden = True
+    await bot.handle(post("d1", "hello", channel_id="dm"))
+    await bot.handle(group_post())
+    assert [r["message"] for r in server.replies] == ["Hi.", "Hi all."]
+
+
+async def test_anyone_may_ask_for_a_link(make):
+    bot, server, *_ = await make()
+    await poll(bot)
+    server.members_hidden = True
+    await bot.handle(dm("d", "link", user="u7"))
+    assert replies(server)[-1].startswith("Open this within 24 hours")
+
+
+async def test_the_bot_takes_its_channel_without_checking_its_own_membership(make):
     bot, server, *_ = await make()
     server.bot_member = False
+    await poll(bot)
+    assert bot.home == "c1"
+
+
+async def test_a_refused_channel_does_not_stop_direct_messages(make, caplog):
+    bot, server, llm, _ = await make({"content": "Hi."})
+    await poll(bot)
+    server.refused_posts = {"c1"}
+    server.direct_posts = {"d1": post("d1", "hello", channel_id="dm")}
     with caplog.at_level("WARNING", logger="mattermost-agent"):
         await poll(bot)
-    assert bot.home is None
-    assert bot.direct == {"dm"}
-    messages = [r.getMessage() for r in caplog.records]
-    assert messages == [
-        "no channel: this account is not a member of cms-exp/purdue-analysis-facility"
-    ]
+    assert "channel c1: HTTP 403" in [r.getMessage() for r in caplog.records]
+    assert [r["channel_id"] for r in server.replies] == ["dm"]
 
 
 async def test_a_member_is_answered_in_a_direct_message_without_a_mention(make):
@@ -510,34 +537,12 @@ async def test_a_mention_in_a_group_of_members_is_answered(make):
     assert llm.bodies[0]["messages"][1] == {"role": "user", "content": "is the AF up?"}
 
 
-async def test_a_group_with_anyone_outside_the_channel_gets_no_answer(make):
-    bot, server, llm, _ = await make({"content": "never"})
-    await poll(bot)
-    server.members = {"u1"}
-    server.group_posts = {"g": group_post()}
-    await poll(bot)
-    assert llm.bodies == []
-    expected = agent.NOT_ALL_MEMBERS.format(channel=CHANNEL)
-    assert [r["message"] for r in server.replies] == [expected]
-
-
 async def test_a_group_message_without_a_mention_is_left_alone(make):
     bot, server, llm, _ = await make({"content": "never"})
     await poll(bot)
     server.group_posts = {"g": group_post(message="is the AF up?")}
     await poll(bot)
     assert server.replies == []
-
-
-async def test_private_conversations_say_so_while_the_bot_is_outside_the_channel(make):
-    bot, server, llm, _ = await make({"content": "never"})
-    await poll(bot)
-    bot.home = None
-    await bot.handle(post("d1", "hi", channel_id="dm"))
-    await bot.handle(group_post())
-    expected = agent.NOT_READY.format(channel=CHANNEL)
-    assert [r["message"] for r in server.replies] == [expected, expected]
-    assert llm.bodies == []
 
 
 async def test_a_new_direct_message_is_answered_from_its_first_post(make):
@@ -550,17 +555,6 @@ async def test_a_new_direct_message_is_answered_from_its_first_post(make):
     bot.channels_at -= agent.CHANNELS_SECONDS + 1
     await poll(bot)
     assert [r["message"] for r in server.replies] == ["Hello."]
-
-
-async def test_a_direct_message_from_a_non_member_gets_no_answer(make):
-    bot, server, llm, _ = await make({"content": "never"})
-    server.members = set()
-    await poll(bot)
-    server.direct_posts = {"d1": post("d1", "is the AF up?", channel_id="dm")}
-    await poll(bot)
-    assert llm.bodies == []
-    expected = agent.NOT_MEMBER.format(channel=CHANNEL)
-    assert [r["message"] for r in server.replies] == [expected]
 
 
 async def test_tools_are_limited_to_the_facility_ones_and_docs(make):
@@ -967,15 +961,6 @@ async def test_a_link_is_sent_only_in_a_direct_message(make):
     assert replies(server) == [agent.ONLY_IN_DM, agent.ONLY_IN_DM]
     assert server.replies[0]["channel_id"] == "c1"
     assert server.replies[1]["channel_id"] == "g1"
-    assert not bot.linking.pending
-
-
-async def test_a_non_member_gets_no_link(make):
-    bot, server, *_ = await make()
-    await ready(bot)
-    server.members = set()
-    await bot.handle(dm("d", "link"))
-    assert replies(server) == [agent.NOT_MEMBER.format(channel=CHANNEL)]
     assert not bot.linking.pending
 
 
