@@ -18,6 +18,7 @@ APP = REPO / "apps" / "mattermost-agent"
 agent = load_script(APP / "agent.py", "mattermost_agent")
 BOT = {"id": "bot", "username": "purdueaf-agent"}
 TEAM, CHANNEL = "CMS Experiment", "Purdue Analysis Facility"
+TEAM_URL, CHANNEL_URL = "cms-exp", "purdue-analysis-facility"
 KEY = Fernet.generate_key().decode()
 PUBLIC = "https://af.example"
 
@@ -48,6 +49,8 @@ class FakeMattermost:
         self.replies = []
         self.since = []
         self.members = {"u1", "u2"}
+        self.lookup = 200
+        self.bot_member = True
         self.direct = [{"id": "dm", "type": "D", "display_name": ""}]
 
     def __call__(self, request):
@@ -57,6 +60,15 @@ class FakeMattermost:
             return httpx.Response(201, json={})
         if path == "/users/me":
             return httpx.Response(200, json=BOT)
+        if path == f"/teams/name/{TEAM_URL}/channels/name/{CHANNEL_URL}":
+            if self.lookup != 200:
+                return httpx.Response(self.lookup, json={})
+            found = {"id": "c1", "team_id": "t1", "type": "O", "display_name": CHANNEL}
+            return httpx.Response(200, json=found)
+        if path == f"/teams/name/{TEAM_URL}":
+            return httpx.Response(200, json={"id": "t1", "display_name": TEAM})
+        if path == "/channels/c1/members/bot":
+            return httpx.Response(200 if self.bot_member else 404, json={})
         if path == "/users/me/teams":
             teams = [
                 {"id": "t1", "display_name": TEAM},
@@ -280,8 +292,8 @@ def make(tmp_path, docs):
             agent.Docs(docs),
             prompt,
             "facility-assistant",
-            TEAM,
-            CHANNEL,
+            TEAM_URL,
+            CHANNEL_URL,
             FakeAuth(),
             linking,
         )
@@ -402,37 +414,37 @@ async def test_a_reply_that_mentions_the_bot_is_answered_once(make):
     assert len(server.replies) == 1
 
 
-async def test_only_the_named_public_channel_and_direct_messages_are_polled(make):
+async def test_the_channel_is_found_by_the_names_in_its_url(make):
     bot, *_ = await make()
-    found = await bot.mattermost.channels("bot", TEAM, CHANNEL)
-    assert found == ("c1", {"dm"}, {"g1"})
+    home, direct, groups = await bot.mattermost.channels("bot", TEAM_URL, CHANNEL_URL)
+    assert (home["id"], direct, groups) == ("c1", {"dm"}, {"g1"})
 
 
-async def test_the_channel_is_found_when_it_is_made_private(make):
+async def test_messages_name_the_channel_as_people_see_it(make):
+    bot, *_ = await make()
+    await poll(bot)
+    assert bot.home == "c1"
+    assert bot.channel_name == CHANNEL
+
+
+@pytest.mark.parametrize("status", [403, 404])
+async def test_a_refused_lookup_is_logged_with_its_status(make, caplog, status):
     bot, server, *_ = await make()
-    channels = [{"id": "c3", "type": "P", "display_name": CHANNEL}]
-
-    original = server.__call__
-
-    def private_only(request):
-        if request.url.path == "/api/v4/users/bot/teams/t1/channels":
-            return httpx.Response(200, json=channels + server.direct)
-        return original(request)
-
-    bot.mattermost.client._transport = httpx.MockTransport(private_only)
-    found = await bot.mattermost.channels("bot", TEAM, CHANNEL)
-    assert found[0] == "c3"
-
-
-async def test_a_missing_channel_logs_what_the_bot_sees(make, caplog):
-    bot, server, *_ = await make()
-    bot.channel_name = "Renamed Channel"
+    server.lookup = status
     with caplog.at_level("WARNING", logger="mattermost-agent"):
         await poll(bot)
     assert bot.home is None
-    message = caplog.records[-1].getMessage()
-    assert "not in Renamed Channel" in message
-    assert TEAM in message and f"{CHANNEL} (O)" in message
+    assert f"HTTP {status}" in caplog.records[-1].getMessage()
+    assert bot.direct == {"dm"}
+
+
+async def test_a_channel_the_bot_left_is_not_its_channel(make, caplog):
+    bot, server, *_ = await make()
+    server.bot_member = False
+    with caplog.at_level("WARNING", logger="mattermost-agent"):
+        await poll(bot)
+    assert bot.home is None
+    assert "not a member" in caplog.records[-1].getMessage()
 
 
 async def test_a_member_is_answered_in_a_direct_message_without_a_mention(make):
@@ -674,7 +686,9 @@ async def test_a_session_against_a_real_mcp_server_sends_the_hub_token(tmp_path)
     token = tmp_path / "token"
     token.write_text("hub-token\n")
     facility = agent.Facility(f"http://127.0.0.1:{port}/mcp", token)
-    bot = agent.Agent(None, None, facility, None, None, "r", TEAM, CHANNEL, None, None)
+    bot = agent.Agent(
+        None, None, facility, None, None, "r", TEAM_URL, CHANNEL_URL, None, None
+    )
     try:
         async with facility.session() as session:
             listed = await session.list_tools()
