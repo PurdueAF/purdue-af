@@ -170,6 +170,8 @@ gateway:
       TOKEN_SHA256 = re.compile(r"[0-9a-f]{64}")
       # The variables a client's environment names its user by.
       USER_VARIABLES = ("USER", "LOGNAME", "NB_USER", "JUPYTERHUB_USER")
+      # A cluster's pods mount no /home, where a session's environment puts these caches.
+      POD_CACHES = {"XDG_CACHE_HOME": "/tmp/.cache", "MPLCONFIGDIR": "/tmp/.config/matplotlib"}
       # cms pods are in 10.5.0.0/17 (Services in 10.5.128.0/17), from .2 of each node's /24: .0 and .1 are the node's, the source of the traffic it masquerades.
       POD_NETWORK = ipaddress.ip_network("10.5.0.0/17")
       FORWARDED = ("X-Forwarded-For", "Forwarded", "X-Real-Ip")
@@ -345,6 +347,10 @@ gateway:
           options.env["XRD_CONNECTIONRETRY"]="5"
           options.env["XRD_STREAMTIMEOUT"]="300"
           options.env["DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT"]="60s"
+          for name, path in POD_CACHES.items():
+              value = str(options.env.get(name) or "").strip()
+              if not value or under(os.path.normpath(value), "/home"):
+                  options.env[name] = path
           worker_cmd = [f"{conda_env}/bin/dask", "worker", "--death-timeout", "180"]
           # dask-gateway's own idle_timeout compares loop.time() with wall-clock stamps and never fires.
           scheduler_cmd = [f"{conda_env}/bin/dask", "scheduler", "--idle-timeout", "3600s"]
