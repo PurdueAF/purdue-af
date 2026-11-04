@@ -35,6 +35,10 @@ spec:
         - podSelector:
             matchLabels:
               app: mattermost-agent
+        # (e) The AF Prometheus, for the scope audit's metrics.
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
       ports:
         - protocol: TCP
           port: 8888

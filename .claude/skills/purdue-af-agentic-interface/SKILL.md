@@ -1,11 +1,11 @@
 ---
 name: purdue-af-agentic-interface
-description: Manage a Purdue Analysis Facility session — start/stop/restart the JupyterHub pod, run Ray jobs on GPUs, and inspect Dask clusters, storage, and logs. Use whenever the user mentions Purdue AF, their analysis-facility session, AF Dask clusters, Ray jobs or GPUs, or AF logs/storage.
+description: Manage a Purdue Analysis Facility session — start/stop/restart the JupyterHub pod, run Ray jobs on GPUs, and inspect Dask clusters, storage, logs and metrics. Use whenever the user mentions Purdue AF, their analysis-facility session, AF Dask clusters, Ray jobs or GPUs, or AF logs/storage/metrics.
 ---
 
 # Purdue Analysis Facility — Agentic Interface
 
-Skill version: `0.7`
+Skill version: `0.8`
 
 > **Setup** — this skill drives the `purdue-af-agentic-interface` MCP server.
 > Inside a Purdue AF session it is registered at startup with the session's own
@@ -35,6 +35,10 @@ answer for anything the platform tracks centrally:
 
 - `get_facility_metrics` for how busy the facility is: it returns the public
   dashboard's facility-wide numbers, so there is no need to send someone there.
+- `list_prometheus_metrics`, then `query_prometheus`, for any other number
+  the platform measures. A sum over sessions, Dask workers or home
+  directories there counts only the user's own: never report it as the
+  facility's total.
 - `list_af_profiles` before `start_af_session` when the user wants anything
   other than defaults — it carries the exact option keys, valid values, and
   live GPU availability.

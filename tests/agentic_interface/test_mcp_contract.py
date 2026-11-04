@@ -16,6 +16,9 @@ EXPECTED_TOOLS = {
     # health
     "get_facility_health",
     "get_facility_metrics",
+    # prometheus
+    "query_prometheus",
+    "list_prometheus_metrics",
     # logs
     "query_notebook_logs",
     "query_dask_logs",

@@ -169,11 +169,16 @@ plain language, for example:
 * "Show the last 30 minutes of error logs from my notebook"
 * "Is the AF healthy?" — what is affecting the facility, if anything, and for
   how long
+* "How much memory did my Dask workers use over the last day?"
 
 The available tools cover:
 
 * **Facility health** — a summary of anything currently affecting the facility:
   access, storage, scale-out, and the software environment.
+* **Monitoring** — the facility dashboard's numbers, and any PromQL query over
+  the facility's Prometheus. Series of other people's sessions, Dask clusters,
+  Ray jobs and home directories are left out, so a sum over sessions or workers
+  counts only yours.
 * **Session lifecycle** — check status, list available resource profiles,
   start / stop / restart the session, and wait until it is ready. When starting,
   the agent asks you (as multiple-choice questions) which profile and resource

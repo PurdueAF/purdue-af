@@ -1,3 +1,9 @@
+FROM golang:1.26.10-alpine AS promql-scope
+
+WORKDIR /src
+COPY docker/agentic-interface/promql-scope/ ./
+RUN go test ./... && CGO_ENABLED=0 go build -trimpath -ldflags=-s -o /promql-scope .
+
 FROM python:3.12-slim
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /uvx /bin/
@@ -14,6 +20,7 @@ COPY docker/agentic-interface/pyproject.toml docker/agentic-interface/uv.lock ./
 RUN uv sync --frozen --no-dev
 ENV PATH="/app/.venv/bin:$PATH"
 
+COPY --from=promql-scope /promql-scope /usr/local/bin/promql-scope
 COPY docker/agentic-interface/*.py ./
 COPY docker/agentic-interface/tools/ ./tools/
 # The GPU counts: Prometheus' allocatable minus requested, as on the Hub's profile form.

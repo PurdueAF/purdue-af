@@ -193,6 +193,15 @@ serverFiles:
               - "paf-e02.cms.rcac.purdue.edu:9796"
               - "paf-e03.cms.rcac.purdue.edu:9796"
       # Scraped directly: via af-pod-monitor, pod_node would carry the Deployment host.
+      # Only the query_prometheus scope audit: its other metrics carry usernames.
+      - job_name: "agentic-interface"
+        static_configs:
+          - targets:
+              - "agentic-interface:8888"
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: "purdue_af_mcp_promql_.*"
+            action: keep
       - job_name: "af-node-monitor"
         static_configs:
           - targets:
@@ -1030,6 +1039,34 @@ serverFiles:
                 the new scrape jobs and keeps the old rules. The pod cannot
                 start on this config, so fix it before the next restart.
                 Check: kubectl -n cms logs deploy/prometheus-server | grep "Error reloading config"
+          - alert: AFQueryPrometheusUnscopedLabel
+            expr: max by (source, label) (purdue_af_mcp_promql_unscoped_series) > 0
+            for: 15m
+            labels:
+              severity: warning
+              component: observability
+              audience: operators
+            annotations:
+              summary: "query_prometheus shows other people's series through the {{ $labels.label }} label"
+              description: >
+                On the {{ $labels.source }} Prometheus, {{ $value }} series name a
+                session, Dask cluster, Ray job, home directory or another
+                namespace in a label docker/agentic-interface/promql_scope.py
+                does not list. Add the label there.
+          - alert: AFQueryPrometheusAuditStale
+            expr: |
+              time() - purdue_af_mcp_promql_audit_timestamp_seconds > 86400
+              or absent(purdue_af_mcp_promql_audit_timestamp_seconds)
+            for: 1h
+            labels:
+              severity: warning
+              component: observability
+              audience: operators
+            annotations:
+              summary: The query_prometheus scope audit has not finished in a day
+              description: >
+                AFQueryPrometheusUnscopedLabel is blind while this fires. The
+                audit logs its failure: kubectl -n cms logs deploy/agentic-interface | grep "scope audit"
       - name: af-delivery
         rules:
           - alert: AFHubBackupStale
