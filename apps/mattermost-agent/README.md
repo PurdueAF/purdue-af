@@ -47,7 +47,8 @@ otherwise it runs as above. The bot replies where it was asked.
 ## Running it
 
 `MATTERMOST_TEAM` and `MATTERMOST_CHANNEL` in `deployment.yaml` name the channel,
-by the display names Mattermost shows, and its account must belong to it. Each
+by the names in its URL, and its account must belong to it; the log says why when
+it cannot have it. Each
 direct message checks the sender's membership at that moment, so leaving the
 channel ends access. Removing the account from the channel stops the bot in
 both. In a group message it answers an @mention, when everyone there is a member

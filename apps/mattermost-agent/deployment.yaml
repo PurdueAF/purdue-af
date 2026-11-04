@@ -46,10 +46,11 @@ spec:
           env:
             - name: MATTERMOST_URL
               value: "https://mattermost.web.cern.ch"
+            # The names in the channel's URL: mattermost.web.cern.ch/<team>/channels/<channel>.
             - name: MATTERMOST_TEAM
-              value: "CMS Experiment"
+              value: "cms-exp"
             - name: MATTERMOST_CHANNEL
-              value: "Purdue Analysis Facility"
+              value: "purdue-analysis-facility"
             - name: MATTERMOST_CLIENT_ID
               valueFrom:
                 secretKeyRef:

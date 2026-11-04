@@ -517,7 +517,7 @@ class Docs:
 class Mattermost:
     def __init__(self, client: httpx.AsyncClient) -> None:
         self.client = client
-        self.seen: dict[str, list[str]] = {"teams": [], "channels": []}
+        self.problem = ""
 
     async def get(self, path: str, **params: Any) -> Any:
         response = await self.client.get(f"/api/v4{path}", params=params)
@@ -525,29 +525,37 @@ class Mattermost:
         return response.json()
 
     async def channels(
-        self, user_id: str, team_name: str, channel_name: str
-    ) -> tuple[str | None, set[str], set[str]]:
-        """The bot's channel of that name, public or else private, its direct
-        messages and its group messages. What it found instead goes to
-        self.seen, for the log."""
-        home, private, direct, groups = None, None, set(), set()
-        teams = await self.get("/users/me/teams")
-        self.seen = {"teams": [t["display_name"] for t in teams], "channels": []}
-        for team in teams:
-            if team["display_name"] != team_name:
-                continue
-            for c in await self.get(f"/users/{user_id}/teams/{team['id']}/channels"):
-                if c["type"] in ("O", "P"):
-                    self.seen["channels"].append(f"{c['display_name']} ({c['type']})")
-                if c["type"] == "O" and c["display_name"] == channel_name:
-                    home = c["id"]
-                elif c["type"] == "P" and c["display_name"] == channel_name:
-                    private = c["id"]
-                elif c["type"] == "D":
-                    direct.add(c["id"])
-                elif c["type"] == "G":
-                    groups.add(c["id"])
-        return home or private, direct, groups
+        self, user_id: str, team: str, channel: str
+    ) -> tuple[dict[str, Any] | None, set[str], set[str]]:
+        """The bot's channel, looked up by the names in its URL, if the bot
+        belongs to it; its direct messages and its group messages. Why the
+        channel could not be had goes to self.problem, for the log."""
+        self.problem = ""
+        home: dict[str, Any] | None = None
+        found = await self.client.get(
+            f"/api/v4/teams/name/{team}/channels/name/{channel}"
+        )
+        if found.status_code != 200:
+            self.problem = f"looking up {team}/{channel}: HTTP {found.status_code}"
+        elif not await self.is_member(found.json()["id"], user_id):
+            self.problem = f"this account is not a member of {team}/{channel}"
+        else:
+            home = found.json()
+        if home is not None:
+            team_id = home["team_id"]
+        else:
+            named = await self.client.get(f"/api/v4/teams/name/{team}")
+            if named.status_code != 200:
+                self.problem += f"; looking up team {team}: HTTP {named.status_code}"
+                return None, set(), set()
+            team_id = named.json()["id"]
+        direct, groups = set(), set()
+        for c in await self.get(f"/users/{user_id}/teams/{team_id}/channels"):
+            if c["type"] == "D":
+                direct.add(c["id"])
+            elif c["type"] == "G":
+                groups.add(c["id"])
+        return home, direct, groups
 
     async def members(self, channel: str) -> list[str]:
         found = await self.get(f"/channels/{channel}/members", per_page=200)
@@ -650,8 +658,8 @@ class Agent:
         docs: Docs,
         prompt_file: Path,
         role: str,
-        team_name: str,
-        channel_name: str,
+        team: str,
+        channel: str,
         oauth: OAuth,
         linking: Linking,
     ) -> None:
@@ -661,8 +669,10 @@ class Agent:
         self.docs = docs
         self.prompt_file = prompt_file
         self.role = role
-        self.team_name = team_name
-        self.channel_name = channel_name
+        self.team = team
+        self.channel = channel
+        # Its display name, once found: what people see in Mattermost.
+        self.channel_name = channel
         self.oauth = oauth
         self.linking = linking
         self.beat = time.monotonic()
@@ -727,17 +737,14 @@ class Agent:
         now = time.monotonic()
         if not self.channels_at or now - self.channels_at > CHANNELS_SECONDS:
             first = not self.channels_at
-            self.home, direct, groups = await self.mattermost.channels(
-                self.me["id"], self.team_name, self.channel_name
+            home, direct, groups = await self.mattermost.channels(
+                self.me["id"], self.team, self.channel
             )
-            if self.home is None:
-                log.warning(
-                    "not in %s: teams %s; channels in %s: %s",
-                    self.channel_name,
-                    self.mattermost.seen["teams"],
-                    self.team_name,
-                    self.mattermost.seen["channels"],
-                )
+            self.home = home["id"] if home else None
+            if home:
+                self.channel_name = home["display_name"]
+            else:
+                log.warning("no channel: %s", self.mattermost.problem)
             if not first:
                 # A conversation that appeared since the last look is all new.
                 known = self.direct | self.groups
