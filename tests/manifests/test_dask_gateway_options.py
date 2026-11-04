@@ -237,6 +237,38 @@ def request_options(conda_env="", pixi_project="", **env):
     )
 
 
+POD_CACHES = {
+    "XDG_CACHE_HOME": "/tmp/.cache",
+    "MPLCONFIGDIR": "/tmp/.config/matplotlib",
+}
+
+
+@pytest.mark.parametrize(
+    "env, expected",
+    [
+        ({}, POD_CACHES),
+        ({"XDG_CACHE_HOME": "/home/someone/.cache"}, POD_CACHES),
+        ({"XDG_CACHE_HOME": "/home/someone", "MPLCONFIGDIR": " "}, POD_CACHES),
+        (
+            {"XDG_CACHE_HOME": "/home/../tmp/c", "MPLCONFIGDIR": "/homes/m"},
+            {"XDG_CACHE_HOME": "/home/../tmp/c", "MPLCONFIGDIR": "/homes/m"},
+        ),
+        (
+            {"XDG_CACHE_HOME": "/work/users/someone/.cache"},
+            {**POD_CACHES, "XDG_CACHE_HOME": "/work/users/someone/.cache"},
+        ),
+    ],
+)
+def test_caches_go_to_the_pods_tmp_unless_named_on_storage_they_mount(
+    options_handler, conda_env, env, expected
+):
+    """A session exports its home's cache, which no Dask pod mounts."""
+    options = request_options(conda_env, HOME="/home/someone", **env)
+    environment = person_cluster(options_handler, options)["environment"]
+    assert {name: environment[name] for name in POD_CACHES} == expected
+    assert environment["HOME"] == "/home/someone"
+
+
 @pytest.mark.parametrize("option", ["conda_env", "pixi_project"])
 def test_environment_without_prometheus_client_is_refused(
     options_handler, tmp_path, option
