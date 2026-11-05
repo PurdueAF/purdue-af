@@ -94,6 +94,7 @@ async def test_a_range_query_on_the_cluster(tools, scoped):
         ({"start": "1h", "end": "2h"}, "start must come before end"),
         ({"start": "30d", "step": "15s"}, "step of at least"),
         ({"start": "1h", "step": "0s"}, "at least 1s"),
+        ({"start": "1h", "step": "fast"}, "not a duration"),
     ],
 )
 async def test_bad_arguments(tools, kwargs, expected):
@@ -162,3 +163,43 @@ async def test_list_metrics_names_only_what_the_caller_can_read(tools):
     assert "container_memory_working_set_bytes (gauge): Current working set" in out
     assert "secret_metric" not in out
     assert "- up" not in out
+
+
+@respx.mock
+async def test_a_query_prometheus_gives_up_on_says_how_to_narrow_it(tools):
+    respx.post(f"{AF}/api/v1/query").mock(
+        return_value=Response(
+            503, json={"status": "error", "errorType": "timeout", "error": "timed out"}
+        )
+    )
+    assert "Narrow the query" in await failure(tools["query_prometheus"]("up"))
+
+
+@respx.mock
+async def test_a_scalar_and_an_iso_window(tools, scoped):
+    route = respx.post(f"{AF}/api/v1/query_range").mock(
+        return_value=Response(
+            200, json={"data": {"resultType": "matrix", "result": []}}
+        )
+    )
+    out = await tools["query_prometheus"](
+        "x", start="2026-11-01T00:00:00", end="2026-11-02T00:00:00Z"
+    )
+    assert "start=1793491200.000" in route.calls[0].request.content.decode()
+    assert "No series match." in out
+    respx.post(f"{AF}/api/v1/query").mock(
+        return_value=Response(
+            200, json={"data": {"resultType": "scalar", "result": [1, "2.5"]}}
+        )
+    )
+    assert "scalar: 2.5" in await tools["query_prometheus"]("scalar(x)", end="now")
+
+
+@respx.mock
+async def test_list_metrics_with_no_match(tools):
+    respx.post(f"{AF}/api/v1/query").mock(
+        return_value=Response(200, json=vector(({"__name__": "up"}, 1)))
+    )
+    respx.get(f"{AF}/api/v1/metadata").mock(return_value=Response(200, json={}))
+    out = await tools["list_prometheus_metrics"]("gpu")
+    assert out == "No metric on af matches 'gpu'."

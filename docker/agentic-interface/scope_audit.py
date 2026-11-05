@@ -98,25 +98,28 @@ async def audit(client: httpx.AsyncClient) -> dict[tuple[str, str], int]:
     return found
 
 
+def publish(found: dict[tuple[str, str], int]) -> None:
+    """One audit's counts as the gauges the alert reads."""
+    UNSCOPED.clear()
+    for (source, label), count in found.items():
+        UNSCOPED.labels(source=source, label=label).set(count)
+        logger.warning(
+            "query_prometheus shows %d series naming a person or "
+            "another namespace through %s on %s",
+            count,
+            label,
+            source,
+        )
+    AUDITED.set_to_current_time()
+
+
 async def _forever() -> None:
     async with httpx.AsyncClient() as client:
         while True:
             try:
-                found = await audit(client)
+                publish(await audit(client))
             except Exception:
                 logger.exception("query_prometheus scope audit failed")
-            else:
-                UNSCOPED.clear()
-                for (source, label), count in found.items():
-                    UNSCOPED.labels(source=source, label=label).set(count)
-                    logger.warning(
-                        "query_prometheus shows %d series naming a person or "
-                        "another namespace through %s on %s",
-                        count,
-                        label,
-                        source,
-                    )
-                AUDITED.set_to_current_time()
             await asyncio.sleep(INTERVAL)
 
 

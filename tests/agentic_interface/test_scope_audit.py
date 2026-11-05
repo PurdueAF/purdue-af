@@ -6,6 +6,7 @@ from urllib.parse import parse_qs
 
 import respx
 import scope_audit
+from agentic_helpers import counter
 from httpx import AsyncClient, Response
 
 
@@ -52,3 +53,12 @@ async def test_audit_counts_series_per_uncovered_label(monkeypatch):
     async with AsyncClient() as client:
         found = await scope_audit.audit(client)
     assert found == {("af", "csi_volume"): 4, ("cluster", "csi_volume"): 4}
+
+
+def test_publish_replaces_the_last_audits_counts():
+    scope_audit.publish({("af", "old_label"): 2})
+    scope_audit.publish({("cluster", "csi_volume"): 4})
+    name = "purdue_af_mcp_promql_unscoped_series"
+    assert counter(name, source="cluster", label="csi_volume") == 4
+    assert counter(name, source="af", label="old_label") == 0
+    assert counter("purdue_af_mcp_promql_audit_timestamp_seconds") > 0
