@@ -13,6 +13,7 @@ import logging
 import re
 from collections.abc import Iterable
 
+import scope_audit
 import uvicorn
 from auth import HubUnavailable, resolve_user
 from config import SERVICE_PREFIX, SKILL_PATH, STATELESS_HTTP, TOKEN_URL
@@ -20,7 +21,18 @@ from context import current_user
 from metrics import InstrumentedMCPServer, record_request
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
-from tools import dask, health, logs, metrics, profiles, prompts, ray, session, storage
+from tools import (
+    dask,
+    health,
+    logs,
+    metrics,
+    profiles,
+    prompts,
+    promql,
+    ray,
+    session,
+    storage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -283,6 +295,8 @@ mcp = InstrumentedMCPServer(
         'use get_facility_health for "is the AF healthy / is something broken"; '
         'use get_facility_metrics for "how busy is the AF" and other dashboard '
         "numbers; "
+        "use list_prometheus_metrics / query_prometheus for any other metric, "
+        "PromQL over the facility's monitoring; "
         "use list_dask_clusters / list_dask_cluster_options / create_dask_cluster / "
         "get_dask_worker_count / get_dask_cluster_usage / scale_dask_cluster / "
         "stop_dask_cluster for Dask; "
@@ -309,6 +323,7 @@ health.register(mcp)
 dask.register(mcp)
 ray.register(mcp)
 metrics.register(mcp)
+promql.register(mcp)
 profiles.register(mcp)
 session.register(mcp)
 prompts.register(mcp)
@@ -336,6 +351,7 @@ def main() -> None:
         force=True,
     )
     logging.getLogger("uvicorn.access").addFilter(_McpAccessFilter())
+    scope_audit.start()
     uvicorn.run(build_app(), host="0.0.0.0", port=8888, log_level="info")
 
 

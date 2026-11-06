@@ -12,6 +12,7 @@
 //   - Dockerfile base images (FROM tags)
 //   - GitHub Actions versions (+ pins them to commit SHAs)
 //   - Python deps and their uv.lock files via pep621
+//   - Go modules and go.sum via gomod (docker/agentic-interface/promql-scope)
 //   - pixi manifests (pixi/{base,global}/pixi.toml) — NOT lockfiles
 //   - pre-commit hook versions
 //   - `# renovate:` comments on `*_VERSION` pins: Dockerfile ARGs (pixi CLI,
@@ -187,6 +188,8 @@
     {
       matchFileNames: ['docker/agentic-interface/**'],
       groupName: 'agentic-interface-image',
+      // promql-scope's go.sum keeps only what the parser package needs.
+      postUpdateOptions: ['gomodTidy'],
     },
     {
       matchFileNames: ['docker/agentic-analysis/**'],
