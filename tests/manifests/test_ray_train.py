@@ -110,7 +110,7 @@ def test_the_hub_gives_the_gateway_its_token_and_scopes(gateway):
     assert "ray-train-gateway" in hub["services"]
     role = hub["loadRoles"]["ray-train-gateway"]
     assert role["services"] == ["ray-train-gateway"]
-    assert set(role["scopes"]) == {"read:servers", "admin:server_state"}
+    assert set(role["scopes"]) == {"read:servers", "admin:server_state", "list:users"}
     pod = gateway_pod()["spec"]
     volumes = {v["name"]: v for v in pod["volumes"]}
     assert volumes["hub-token"]["secret"] == {

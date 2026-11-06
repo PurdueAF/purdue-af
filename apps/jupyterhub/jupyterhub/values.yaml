@@ -377,10 +377,11 @@ hub:
       description: "Scrape /hub/metrics"
       scopes: ["read:metrics"]
       services: ["prometheus"]
-    # The session pod name gives the AF id, which picks the pooled account of a non-Purdue user, and the GPUs the session holds.
+    # The session pod name gives the AF id, which picks the pooled account of a non-Purdue user, and the GPUs the session holds;
+    # the user names, whose jobs on NRP carry only a hash of them.
     ray-train-gateway:
-      description: "Read session pod names, to run each user's Ray cluster as them, and only for sessions without a GPU"
-      scopes: ["read:servers", "admin:server_state"]
+      description: "Read session pod names, to run each user's Ray cluster as them, and only for sessions without a GPU; list user names, to name the owners of jobs on NRP"
+      scopes: ["read:servers", "admin:server_state", "list:users"]
       services: ["ray-train-gateway"]
 scheduling:
   userScheduler:

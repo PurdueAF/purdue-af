@@ -21,7 +21,7 @@ says.
 | `stage.py`           | What a job's `<RayJob>-in` and `-out` Jobs run: copies its inputs to S3, and its outputs back |
 | `raycluster.yaml`    | The template of a user's cluster, and of a job's; the gateway fills in its name, the user's UID/GID, its environment, its token Secret and its worker groups, one per kind of GPU and priority |
 | `deployment.yaml`    | The gateway pod: the stock Ray image, with the files above from the `ray-train-gateway` ConfigMap and the workload accounts' declarations from `af-accounts` |
-| `service.yaml`       | `ray-train-gateway:10001` for Ray Client and `:8265` for the Jobs API, the addresses notebooks connect to; `ray-train-gateway-metrics:9090`, which both Prometheus instances scrape for `ray_train_job_owner`, the owner of each job's cluster |
+| `service.yaml`       | `ray-train-gateway:10001` for Ray Client and `:8265` for the Jobs API, the addresses notebooks connect to; `ray-train-gateway-metrics:9090`, which both Prometheus instances scrape for `ray_train_job_owner`, the owner of each job's cluster, and `ray_train_nrp_job_gpus` and `ray_train_nrp_job_gpu_utilization`, the user, GPUs and GPU utilization of each job on NRP |
 | `rbac.yaml`          | What the gateway may do to each kind of object |
 | `networkpolicy.yaml` | Admits sessions to the gateway, Rancher Prometheus to its metrics, and the gateway to users' clusters; the namespace's own `np-default` admits its other pods, a workload account's among them, to both |
 

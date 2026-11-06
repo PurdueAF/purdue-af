@@ -62,6 +62,8 @@ SESSIONS = {
 SERVICES = {"metrics-token": "prometheus"}
 # Users the fake Hub was asked about
 LOOKUPS = []
+# The offsets of the pages of users the fake Hub was asked for
+LISTINGS = []
 LDAP = {"user-a": (5001, 500), "paf0042": (6042, 600)}
 # A workload account (apps/dask-gateway/README.md#workload-accounts) and its token.
 WORKLOAD_TOKEN = "workload-token"
@@ -132,8 +134,30 @@ def hub_app():
         )
         return web.json_response({"name": name, "servers": servers})
 
+    async def users(request):
+        if request.headers.get("Authorization") != f"token {SERVICE_TOKEN}":
+            return web.json_response({}, status=403)
+        assert request.headers["Accept"] == "application/jupyterhub-pagination+json"
+        offset = int(request.query["offset"])
+        LISTINGS.append(offset)
+        names = sorted(name for name, _ in SESSIONS.values())
+        # Pages smaller than asked for, as a Hub's page limit makes them.
+        following = offset + 2 < len(names)
+        return web.json_response(
+            {
+                "items": [{"name": n} for n in names[offset : offset + 2]],
+                "_pagination": {
+                    "offset": offset,
+                    "limit": 2,
+                    "total": len(names),
+                    "next": {"offset": offset + 2, "limit": 2} if following else None,
+                },
+            }
+        )
+
     app = web.Application()
     app.router.add_get("/hub/api/user", whoami)
+    app.router.add_get("/hub/api/users", users)
     app.router.add_get("/hub/api/users/{name}", user)
     return app
 
@@ -605,6 +629,7 @@ class FakeHeads:
 @pytest.fixture
 async def env(monkeypatch, tmp_path):
     LOOKUPS.clear()
+    LISTINGS.clear()
     kube, heads, prometheus = FakeKube(), FakeHeads(), FakePrometheus()
     servers = [
         TestServer(hub_app()),
@@ -2716,6 +2741,7 @@ async def nrp_env(env, monkeypatch):
         nrp_gpus.UNSCHEDULABLE: [],
         nrp_gpus.REGIONS: [n[1] for n in nodes],
         nrp_gpus.MODELS: [n[2] for n in nodes],
+        **{promql: [] for promql in gw.nrp_usage_queries("interlink-cms")},
     }
 
     utilization = {}
@@ -3332,6 +3358,103 @@ async def test_jobs_at_purdue_are_listed_while_nrp_does_not_answer(nrp_env, capl
     status, _, body = await job_call(env)
     assert (status, len(json.loads(body))) == (200, 1)
     assert "listing jobs on NRP" in caplog.text
+
+
+def holds(env, held, busy):
+    """NRP's Prometheus reports the pods' GPUs, {pod: (phase, GPUs)}, and how busy each GPU is, {pod: percent}."""
+    queried_held, queried_busy = gw.nrp_usage_queries("interlink-cms")
+    env.answers[queried_held] = [
+        sample(gpus, pod=pod, phase=phase) for pod, (phase, gpus) in held.items()
+    ]
+    env.answers[queried_busy] = [
+        sample(percent, pod=pod, gpu=str(i))
+        for i, (pod, percent) in enumerate(busy.items())
+    ]
+
+
+def nrp_samples(text):
+    return sorted(
+        line for line in text.splitlines() if line.startswith("ray_train_nrp_")
+    )
+
+
+async def test_metrics_name_the_user_gpus_and_utilization_of_each_job_on_nrp(nrp_env):
+    env = nrp_env
+    mine = await nrp_submitted(env)
+    theirs = await nrp_submitted(env, token="session-b")
+    running_for(env, mine, 60, cluster="c1")
+    running_for(env, theirs, 60, cluster="c2")
+    holds(
+        env,
+        held={
+            "c1-gpu-worker-a": ("Running", 1),
+            "c1-gpu-worker-b": ("Running", 1),
+            "c1-gpu-worker-c": ("Pending", 1),
+            "c2-gpu-worker-a": ("Pending", 1),
+            "other-pod": ("Running", 1),
+        },
+        busy={"c1-gpu-worker-a": 90.0, "c1-gpu-worker-b": 30.0, "other-pod": 100.0},
+    )
+    await env.gateway.reap_nrp()
+    status, text = await scrape(env)
+    assert status == 200
+    assert nrp_samples(text) == sorted(
+        [
+            'ray_train_nrp_job_gpus{ray_cluster="c1",user="user-a",phase="Pending"} 1',
+            'ray_train_nrp_job_gpus{ray_cluster="c1",user="user-a",phase="Running"} 2',
+            'ray_train_nrp_job_gpus{ray_cluster="c2",user="user-b-cern",phase="Pending"} 1',
+            'ray_train_nrp_job_gpu_utilization{ray_cluster="c1",user="user-a"} 0.6',
+        ]
+    )
+
+
+async def test_a_job_on_nrp_whose_owner_has_no_known_name_is_reported_without_one(
+    nrp_env,
+):
+    env = nrp_env
+    submission = await nrp_submitted(env)
+    running_for(env, submission, 60)
+    nrp_job(env)["metadata"]["labels"][gw.OWNER_LABEL] = "0" * 32
+    holds(env, held={"c1-gpu-worker-a": ("Running", 1)}, busy={})
+    await env.gateway.reap_nrp()
+    await env.gateway.reap_nrp()
+    _, text = await scrape(env)
+    assert nrp_samples(text) == [
+        'ray_train_nrp_job_gpus{ray_cluster="c1",user="",phase="Running"} 1'
+    ]
+    # Every page once: the Hub is asked again only after the user cache's time.
+    assert LISTINGS == [0, 2, 4]
+
+
+async def test_a_workload_accounts_job_on_nrp_is_named_without_the_hub(nrp_env):
+    env = nrp_env
+    submission = await nrp_submitted(env)
+    running_for(env, submission, 60)
+    nrp_job(env)["metadata"]["labels"][gw.OWNER_LABEL] = gw.nrp_jobs.owner_key(
+        WORKLOAD_CLUSTER, WORKLOAD["name"]
+    )
+    holds(env, held={"c1-gpu-worker-a": ("Running", 1)}, busy={})
+    await env.gateway.reap_nrp()
+    _, text = await scrape(env)
+    assert nrp_samples(text) == [
+        f'ray_train_nrp_job_gpus{{ray_cluster="c1",user="{WORKLOAD["name"]}",phase="Running"}} 1'
+    ]
+    assert LISTINGS == []
+
+
+async def test_metrics_leave_out_jobs_on_nrp_while_nrp_does_not_say_what_they_hold(
+    nrp_env,
+):
+    env = nrp_env
+    submission = await nrp_submitted(env)
+    running_for(env, submission, 60)
+    holds(env, held={"c1-gpu-worker-a": ("Running", 1)}, busy={})
+    await env.gateway.reap_nrp()
+    env.nrp.fail_list = True
+    await env.gateway.reap_nrp()
+    status, text = await scrape(env)
+    assert status == 200
+    assert nrp_samples(text) == []
 
 
 async def test_the_nrp_reaper_ends_what_did_not_start_and_forgets_old_records(nrp_env):
