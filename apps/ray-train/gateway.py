@@ -1151,6 +1151,93 @@ def runs(cluster: dict[str, Any], shape: Shape) -> bool:
     return live(cluster) and cluster_shape(cluster) == shape
 
 
+@dataclass(frozen=True)
+class NrpUsage:
+    """What a job on NRP holds: its owner's name ("" if no known name has its key),
+    its GPUs by the phase of the pods that hold them, and how busy they are, 0 to 1."""
+
+    cluster: str
+    user: str
+    gpus: dict[str, int]
+    utilization: float | None
+
+
+def nrp_usage_queries(namespace: str) -> tuple[str, str]:
+    """The GPUs of each pod of our jobs on NRP by its phase, and each GPU's utilization, as NRP's Prometheus has them."""
+    pods = f'namespace="{namespace}", pod=~"ray-job-.+"'
+    held = (
+        f'sum by (pod, phase) (kube_pod_container_resource_requests{{{pods}, resource="nvidia_com_gpu"}}'
+        f' * on(pod) group_left(phase) (kube_pod_status_phase{{{pods}, phase=~"Pending|Running"}} == 1))'
+    )
+    return held, f"DCGM_FI_DEV_GPU_UTIL{{{pods}}}"
+
+
+def nrp_usage(
+    jobs: list[dict[str, Any]],
+    held: list[dict[str, Any]],
+    busy: list[dict[str, Any]],
+    owners: Mapping[str, str],
+) -> list[NrpUsage]:
+    """The usage of each job whose pods hold GPUs, from the samples of nrp_usage_queries."""
+    found = []
+    for job in jobs:
+        cluster = (job.get("status") or {}).get("rayClusterName")
+        if not cluster:
+            continue
+        gpus: dict[str, int] = collections.Counter()
+        for sample in held:
+            if sample["metric"].get("pod", "").startswith(f"{cluster}-"):
+                gpus[sample["metric"]["phase"]] += round(float(sample["value"][1]))
+        percents = [
+            float(s["value"][1])
+            for s in busy
+            if s["metric"].get("pod", "").startswith(f"{cluster}-")
+        ]
+        if not any(gpus.values()) and not percents:
+            continue
+        key = (job["metadata"].get("labels") or {}).get(OWNER_LABEL, "")
+        found.append(
+            NrpUsage(
+                cluster,
+                owners.get(key, ""),
+                dict(gpus),
+                sum(percents) / len(percents) / 100 if percents else None,
+            )
+        )
+    return found
+
+
+def label_value(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
+def nrp_usage_lines(usage: list[NrpUsage]) -> list[str]:
+    """The jobs on NRP in Prometheus's text format."""
+    lines = [
+        "# HELP ray_train_nrp_job_gpus The GPUs a job on NRP holds, by the phase of the pods that hold them.",
+        "# TYPE ray_train_nrp_job_gpus gauge",
+    ]
+    for job in usage:
+        labels = (
+            f'ray_cluster="{label_value(job.cluster)}",user="{label_value(job.user)}"'
+        )
+        lines += [
+            f'ray_train_nrp_job_gpus{{{labels},phase="{phase}"}} {count}'
+            for phase, count in sorted(job.gpus.items())
+        ]
+    lines += [
+        "# HELP ray_train_nrp_job_gpu_utilization How busy the GPUs of a job on NRP are, on average, 0 to 1.",
+        "# TYPE ray_train_nrp_job_gpu_utilization gauge",
+    ]
+    for job in usage:
+        if job.utilization is not None:
+            labels = f'ray_cluster="{label_value(job.cluster)}",user="{label_value(job.user)}"'
+            lines.append(
+                f"ray_train_nrp_job_gpu_utilization{{{labels}}} {job.utilization:g}"
+            )
+    return lines
+
+
 class Gateway:
     def __init__(
         self,
@@ -1187,6 +1274,11 @@ class Gateway:
         # Jobs on NRP whose code is deleted, until their records are
         self.nrp_cleaned: set[str] = set()
         self.nrp_admitting = asyncio.Lock()
+        # owner key of a job on NRP -> its owner's name, and when the Hub was last asked for names
+        self.nrp_owners: dict[str, str] = {}
+        self.nrp_owners_asked = float("-inf")
+        # What the jobs on NRP held at the reaper's last pass; None if NRP did not say.
+        self.nrp_held: list[NrpUsage] | None = None
 
     @property
     def service_token(self) -> str:
@@ -1988,6 +2080,63 @@ class Gateway:
         self.nrp_cleaned.discard(name)
         await self.bucket.delete_prefix(nrp_jobs.code_prefix(name))
 
+    async def read_nrp_usage(self, jobs: list[dict[str, Any]]) -> list[NrpUsage]:
+        assert self.nrp is not None
+        held, busy = nrp_usage_queries(self.nrp.namespace)
+        samples = await asyncio.gather(
+            nrp_query(self.http, NRP_PROMETHEUS_URL, held),
+            nrp_query(self.http, NRP_PROMETHEUS_URL, busy),
+        )
+        keys = {
+            (job["metadata"].get("labels") or {}).get(OWNER_LABEL, "") for job in jobs
+        }
+        return nrp_usage(jobs, *samples, await self.nrp_owner_names(keys - {""}))
+
+    async def nrp_owner_names(self, keys: set[str]) -> dict[str, str]:
+        """Whose each owner key is: the workload accounts' and the Hub users', the Hub
+        asked again, at most every USER_CACHE_S, while a key matches no name."""
+        for name in accounts():
+            self.nrp_owners[nrp_jobs.owner_key(cluster_name(name), name)] = name
+        now = time.monotonic()
+        if (
+            keys - self.nrp_owners.keys()
+            and now - self.nrp_owners_asked >= USER_CACHE_S
+        ):
+            self.nrp_owners_asked = now
+            try:
+                names = await self.hub_names()
+            except (Refused, ClientError, asyncio.TimeoutError, KeyError) as e:
+                log.warning("listing Hub users: %r", e)
+                names = []
+            for name in names:
+                self.nrp_owners[nrp_jobs.owner_key(cluster_name(name), "")] = name
+        return self.nrp_owners
+
+    async def hub_names(self) -> list[str]:
+        """The names of all Hub users, a page at a time."""
+        names: list[str] = []
+        offset: int | None = 0
+        while offset is not None:
+            async with self.http.get(
+                f"{HUB_API}/users",
+                params={"offset": str(offset), "limit": "200"},
+                headers={
+                    "Authorization": f"token {self.service_token}",
+                    "Accept": "application/jupyterhub-pagination+json",
+                },
+                timeout=API_TIMEOUT,
+            ) as r:
+                if r.status != 200:
+                    raise Refused(
+                        grpc.StatusCode.UNAVAILABLE,
+                        f"JupyterHub answered HTTP {r.status} for its users.",
+                    )
+                page: dict[str, Any] = await r.json()
+            names += [str(user["name"]) for user in page["items"]]
+            following = (page.get("_pagination") or {}).get("next")
+            offset = int(following["offset"]) if following else None
+        return names
+
     async def reap_nrp(self) -> None:
         """Move every job on NRP on (advance_nrp), and delete code no job took."""
         if self.nrp is None or self.bucket is None:
@@ -1996,7 +2145,13 @@ class Gateway:
             jobs = await self.nrp_listing()
         except (Refused, ClientError, asyncio.TimeoutError) as e:
             log.warning("listing Ray jobs on NRP: %r", e)
+            self.nrp_held = None
             return
+        try:
+            self.nrp_held = await self.read_nrp_usage(jobs)
+        except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
+            log.warning("asking NRP's Prometheus what its jobs hold: %r", e)
+            self.nrp_held = None
         now = time.time()
         for job in jobs:
             try:
@@ -3016,6 +3171,8 @@ def metrics_app(gateway: Gateway) -> web.Application:
                 for cluster, owner in sorted(owners.items())
             ),
         ]
+        if gateway.nrp_held is not None:
+            lines += nrp_usage_lines(gateway.nrp_held)
         return web.Response(text="\n".join(lines) + "\n")
 
     app = web.Application()
