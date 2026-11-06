@@ -547,8 +547,9 @@ Good to know on NRP:
   over 30 minutes is stopped.
 * **Starting.** A job can take up to half an hour to start, and is stopped if
   it has not by then.
-* **Workers.** Each has one GPU, 4 CPU cores and 16 GB of memory. All the GPUs
-  of a job are of one model, which you do not choose.
+* **Workers.** Each has one GPU, 4 CPU cores and 16 GB of memory. A job's GPUs
+  can be of several models: set `af-min-gpu-memory-gb` for the least memory
+  your job needs of each.
 * **Environment.** Jobs run the Python (pixi global) environment. Add packages
   with `runtime_env={"pip": ["<package>"]}`.
 * **Results.** They arrive in `af-output` when the job ends, also if it fails

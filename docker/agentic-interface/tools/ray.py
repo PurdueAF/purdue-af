@@ -167,12 +167,13 @@ def _fmt_nrp(nrp: Optional[dict[str, Any]], workers: Optional[int]) -> list[str]
     lines = [
         f"NRP: {nrp['workers_free']} workers free now for one job, of at most "
         f"{nrp['workers_most']} once its nodes are empty; each has {size['gpus']} "
-        f"GPU, {size['cpus']:g} CPU cores and {size['memory_gb']:g} GB. A job takes "
-        "one GPU model, the one with the most room, and cannot choose it."
+        f"GPU, {size['cpus']:g} CPU cores and {size['memory_gb']:g} GB. A job's "
+        "GPUs may be of several models, each with the GPU memory it asks for."
     ]
     lines += [
-        f"  {group['workers']} on {group['model']}, {group['region']}"
-        for group in nrp["groups"][:5]
+        f"  {model['workers']} on {model['model']}"
+        for model in nrp["models"][:5]
+        if model["workers"]
     ]
     if workers:
         fits = nrp["workers_free"] >= workers
@@ -227,7 +228,7 @@ def register(mcp: MCPServer) -> None:
         """How many Ray workers of a shape are free now, at Purdue and on NRP.
 
         Args:
-            min_gpu_memory_gb: The least memory of a GPU: 16 for T4s at Purdue. Any GPU by default.
+            min_gpu_memory_gb: The least memory of a GPU: 16 for T4s. Any GPU by default.
             gpus_per_worker: GPUs of each worker, for a model on several GPUs. One by default.
             workers: A number of workers to check against what is free.
         """
@@ -279,7 +280,7 @@ def register(mcp: MCPServer) -> None:
             workers: The most workers: the job takes as many as are free.
             exact_workers: Start only if all of workers are free, and keep that number: for a model split across GPUs.
             entrypoint_gpus: GPUs of the entrypoint itself: 1 for a plain PyTorch script that uses cuda, 0 for Ray Train, Ray Tune and Ray Data, which place their own work.
-            min_gpu_memory_gb: The least memory of a GPU, at Purdue: 16 for T4s.
+            min_gpu_memory_gb: The least memory of a GPU: 16 for T4s. Any GPU by default.
             gpus_per_worker: GPUs of each worker, at Purdue: 2 for a model on two GPUs.
             cpus_per_worker: CPU cores of each worker, at Purdue.
             ram_per_worker_gb: Memory of each worker in GB, at Purdue.

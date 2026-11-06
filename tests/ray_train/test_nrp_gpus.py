@@ -24,8 +24,8 @@ def allocatable(name, gpus, cpus, memory_gb):
     ]
 
 
-# west-1: 4 of 8 GPUs free, room for two workers; west-2: free GPUs but cordoned;
-# east-1: 2 GPUs free, too few cores for a worker; bare-1: no region label.
+# west-1: 4 of 8 GPUs free, room for two workers, four empty; west-2: free GPUs but
+# cordoned; east-1: 2 GPUs free, too few cores for a worker; bare-1: no DCGM.
 ALLOCATABLE = [
     *allocatable("west-1", 8, 64, 512),
     *allocatable("west-2", 4, 64, 512),
@@ -41,21 +41,50 @@ REQUESTED = [
     sample(8, resource=nrp.GPU),
 ]
 UNSCHEDULABLE = [sample(1, node="west-2")]
-REGIONS = [
-    sample(1, node="west-1", label_topology_kubernetes_io_region="us-west"),
-    sample(1, node="west-2", label_topology_kubernetes_io_region="us-west"),
-    sample(1, node="east-1", label_topology_kubernetes_io_region="us-east"),
-    sample(1, node="bare-1"),
+MODELS = [
+    sample(1, Hostname="west-1", modelName="NVIDIA A10"),
+    sample(1, Hostname="west-2", modelName="NVIDIA A10"),
+    sample(1, Hostname="east-1", modelName="Tesla T4"),
+]
+# Of whole GPUs, in MiB.
+MEMORY = [
+    sample(23_028, modelName="NVIDIA A10"),
+    sample(14_927, modelName="Tesla T4"),
+    # A model on no node of ours.
+    sample(81_182, modelName="NVIDIA H100 80GB HBM3"),
 ]
 
 
+def models():
+    return nrp.by_model(ALLOCATABLE, REQUESTED, UNSCHEDULABLE, MODELS, MEMORY, WORKER)
+
+
 def test_free_gpus_count_schedulable_nodes_and_workers_fit_their_cores_and_memory():
-    regions = nrp.free_by_region(ALLOCATABLE, REQUESTED, UNSCHEDULABLE, REGIONS, WORKER)
-    assert nrp.as_dict(regions) == {
-        "unlabeled": {"gpus": 2, "free_gpus": 2, "workers": 1},
-        "us-east": {"gpus": 4, "free_gpus": 2, "workers": 0},
-        "us-west": {"gpus": 12, "free_gpus": 4, "workers": 2},
+    assert {
+        name: (m.gpus, m.free_gpus, m.workers, m.workers_empty)
+        for name, m in models().items()
+    } == {
+        "": (2, 2, 1, 1),
+        "NVIDIA A10": (12, 4, 2, 4),
+        "Tesla T4": (4, 2, 0, 2),
     }
+    assert round(models()["Tesla T4"].memory_gb, 1) == 15.7
+    assert models()[""].memory_gb is None
+
+
+def test_a_job_of_any_gpu_may_take_every_node_with_room():
+    assert nrp.room(models(), 0) == nrp.Room(3, 7, None)
+
+
+def test_a_job_asking_for_gpu_memory_takes_the_models_that_report_nearly_as_much():
+    # A T4 reports 15.7 GB of its 16; a node DCGM does not report has no known memory.
+    assert nrp.room(models(), 16) == nrp.Room(2, 6, ["NVIDIA A10", "Tesla T4"])
+    assert nrp.room(models(), 24) == nrp.Room(2, 4, ["NVIDIA A10"])
+    assert nrp.room(models(), 80) == nrp.Room(0, 0, [])
+
+
+def test_a_gpu_model_is_named_on_its_nodes_with_hyphens():
+    assert nrp.product("NVIDIA GeForce RTX 2080 Ti") == "NVIDIA-GeForce-RTX-2080-Ti"
 
 
 def test_the_worker_shape_is_the_nrp_templates_worker():
@@ -71,46 +100,6 @@ def test_a_new_template_sets_the_worker_the_gateway_counts(monkeypatch, tmp_path
     assert gw.nrp_worker().memory_gb == 20
 
 
-MODELS = [
-    sample(1, Hostname="west-1", modelName="NVIDIA A10"),
-    sample(1, Hostname="west-2", modelName="NVIDIA A10"),
-    sample(1, Hostname="east-1", modelName="Tesla V100-SXM2-16GB"),
-    sample(1, Hostname="bare-1", modelName="NVIDIA A10"),
-]
-
-
-def test_open_nodes_have_room_a_region_and_a_gpu_model():
-    nodes = nrp.open_nodes(
-        ALLOCATABLE, REQUESTED, UNSCHEDULABLE, REGIONS, MODELS, WORKER
-    )
-    # west-2 is cordoned, east-1 has too few cores left, bare-1 is of no region.
-    assert nodes == [
-        nrp.Node("bare-1", "unlabeled", "NVIDIA A10", 1),
-        nrp.Node("west-1", "us-west", "NVIDIA A10", 2),
-    ]
-
-
-def node(name, workers, region="us-west", model="NVIDIA A10"):
-    return nrp.Node(name, region, model, workers)
-
-
-def test_a_job_is_placed_where_one_region_and_model_has_the_most_room():
-    nodes = [
-        node("a", 1),
-        node("b", 3),
-        node("c", 2),
-        node("d", 5, region="us-east"),
-        node("e", 4, model="NVIDIA L40"),
-    ]
-    # Every node of that region and model: another job
-    # placed from the same reading may take the room of one.
-    group = [node("a", 1), node("b", 3), node("c", 2)]
-    assert nrp.placement(nodes, least=1) == group
-    assert nrp.placement(nodes, least=2) == group
-    assert nrp.placement(nodes, least=7) is None
-    assert nrp.placement([], least=1) is None
-
-
 @pytest.fixture
 async def prometheus():
     state = SimpleNamespace(up=True)
@@ -118,7 +107,8 @@ async def prometheus():
         nrp.ALLOCATABLE: ALLOCATABLE,
         nrp.REQUESTED: REQUESTED,
         nrp.UNSCHEDULABLE: UNSCHEDULABLE,
-        nrp.REGIONS: REGIONS,
+        nrp.MODELS: MODELS,
+        nrp.MEMORY: MEMORY,
     }
 
     async def query(request):
@@ -160,11 +150,8 @@ async def test_the_gateway_answers_nrp_gpus_without_a_token(dashboard):
     async with ClientSession() as session:
         async with session.get(f"{dashboard}/af/nrp-gpus") as response:
             assert response.status == 200
-            assert (await response.json())["us-west"] == {
-                "gpus": 12,
-                "free_gpus": 4,
-                "workers": 2,
-            }
+            found = (await response.json())["NVIDIA A10"]
+            assert (found["gpus"], found["free_gpus"], found["workers"]) == (12, 4, 2)
 
 
 async def test_the_gateway_answers_capacity_without_a_token(dashboard):

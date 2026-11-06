@@ -36,7 +36,10 @@ NRP = {
     "worker": {"gpus": 1, "cpus": 4.0, "memory_gb": 16.0},
     "workers_free": 12,
     "workers_most": 95,
-    "groups": [{"region": "us-west", "model": "NVIDIA A10", "workers": 12}],
+    "models": [
+        {"model": "NVIDIA A10", "memory_gb": 24.1, "workers": 12},
+        {"model": "Tesla T4", "memory_gb": 15.7, "workers": 0},
+    ],
 }
 
 
@@ -73,7 +76,8 @@ async def test_capacity_names_the_shape_and_both_sites(tools):
     assert "8 workers: do not fit now" in out
     assert "NRP: 12 workers free" in out
     assert "8 workers: fit now" in out
-    assert "NVIDIA A10" in out
+    assert "12 on NVIDIA A10" in out
+    assert "Tesla T4" not in out
 
 
 @respx.mock

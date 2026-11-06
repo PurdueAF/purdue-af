@@ -6,23 +6,27 @@ import pytest
 import yaml
 from common import REPO, load_script
 
-gpus = load_script(REPO / "apps" / "ray-train" / "nrp_gpus.py", "nrp_gpus")
+load_script(REPO / "apps" / "ray-train" / "nrp_gpus.py", "nrp_gpus")
 nrp = load_script(REPO / "apps" / "ray-train" / "nrp_jobs.py", "nrp_jobs")
 
 TEMPLATE = yaml.safe_load((REPO / "apps" / "ray-train" / "rayjob-nrp.yaml").read_text())
-NODES = [
-    gpus.Node("node-2", "us-west", "NVIDIA A10", 1),
-    gpus.Node("node-1", "us-west", "NVIDIA A10", 2),
-]
 
 
-def build(data=None, **submitted):
+def build(data=None, models=None, **submitted):
     submission = {
         "entrypoint": "python train.py",
         "submission_id": "raysubmit_1",
     } | submitted
     return nrp.build_job(
-        TEMPLATE, "ray-job-0123", "owner-key", submission, "bucket", 3, 900, data or {}
+        TEMPLATE,
+        "ray-job-0123",
+        "owner-key",
+        submission,
+        "bucket",
+        3,
+        models,
+        900,
+        data or {},
     )
 
 
@@ -42,7 +46,7 @@ def test_uploaded_packages_move_to_the_jobs_prefix_and_nothing_else_does():
     }
 
 
-def test_a_job_runs_its_submission_suspended_until_placed():
+def test_a_job_runs_its_submission_suspended_until_its_inputs_are_there():
     job = build(
         {"AF_INPUTS": "s3://bucket/ray-nrp/jobs/ray-job-0123/inputs"},
         runtime_env={"working_dir": "gcs://_ray_pkg_a.zip", "env_vars": {"A": "1"}},
@@ -74,29 +78,35 @@ def test_a_job_runs_its_submission_suspended_until_placed():
     assert nrp.workers_of(job) == 3
 
 
-def test_a_placed_job_runs_its_workers_on_its_nodes_and_its_head_in_their_region():
-    job = build()
-    cluster = nrp.placed(job, 2, NODES)
+def test_a_job_without_inputs_starts_at_once_on_any_gpu_and_knows_its_workers():
+    spec = build()["spec"]
+    assert spec["suspend"] is False
+    cluster = spec["rayClusterSpec"]
     (group,) = cluster["workerGroupSpecs"]
-    assert (group["replicas"], group["minReplicas"], group["maxReplicas"]) == (2, 2, 2)
+    assert (group["replicas"], group["minReplicas"], group["maxReplicas"]) == (3, 3, 3)
+    assert "affinity" not in group["template"]["spec"]
+    head = cluster["headGroupSpec"]["template"]["spec"]
+    assert "nodeSelector" not in head and "affinity" not in head
+    for pod in (head, group["template"]["spec"]):
+        (container,) = pod["containers"]
+        sized = [e for e in container["env"] if e["name"] == "AF_MAX_WORKERS"]
+        assert sized == [{"name": "AF_MAX_WORKERS", "value": "3"}]
+
+
+def test_a_job_asking_for_gpu_memory_runs_its_workers_on_gpus_of_those_models():
+    spec = build(models=["Tesla T4", "NVIDIA A10"])["spec"]["rayClusterSpec"]
+    (group,) = spec["workerGroupSpecs"]
     (term,) = group["template"]["spec"]["affinity"]["nodeAffinity"][
         "requiredDuringSchedulingIgnoredDuringExecution"
     ]["nodeSelectorTerms"]
     assert term["matchExpressions"] == [
         {
-            "key": "kubernetes.io/hostname",
+            "key": "nvidia.com/gpu.product",
             "operator": "In",
-            "values": ["node-1", "node-2"],
+            "values": ["NVIDIA-A10", "Tesla-T4"],
         }
     ]
-    head = cluster["headGroupSpec"]["template"]["spec"]
-    assert head["nodeSelector"] == {"topology.kubernetes.io/region": "us-west"}
-    for pod in (head, group["template"]["spec"]):
-        (container,) = pod["containers"]
-        sized = [e for e in container["env"] if e["name"] == "AF_MAX_WORKERS"]
-        assert sized == [{"name": "AF_MAX_WORKERS", "value": "2"}]
-    # The job itself keeps its cluster until the patch reaches NRP.
-    assert "affinity" not in json.dumps(job)
+    assert "affinity" not in spec["headGroupSpec"]["template"]["spec"]
 
 
 def test_a_jobs_data_is_under_its_prefix():
