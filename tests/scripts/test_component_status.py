@@ -124,13 +124,14 @@ def test_configmap_files_join_their_owning_component(cs, components):
     """Generator inputs from outside apps/ must not become phantom components:
     the pixi global manifests are an input of the daemon that applies them,
     and the node healthcheck script belongs to af-monitoring."""
-    experimental = components["experimental"]
+    af_image = components["af-image"]
 
-    assert "pixi" not in experimental
-    assert "pixi/global" not in experimental
-    sync_inputs = experimental["apps/af-utils/pixi-global-sync"]
+    assert "pixi" not in af_image
+    assert "pixi/global" not in af_image
+    sync_inputs = af_image["apps/af-utils/pixi-global-sync"]
     assert "pixi/global/pixi.lock" in sync_inputs
 
+    experimental = components["experimental"]
     assert "docker/af-node-monitor" not in experimental
     monitoring = experimental["apps/monitoring/af-monitoring"]
     assert any(p.startswith("docker/af-node-monitor/") for p in monitoring)
@@ -286,16 +287,89 @@ def test_latest_platform_tag_orders_numerically(cs, monkeypatch):
     assert cs.latest_platform_tag() is None
 
 
-def test_commits_touching_counts_nonblank_lines(cs, monkeypatch):
+def test_latest_image_tag_orders_numerically(cs, monkeypatch):
+    """v0.14.10 is newer than v0.14.9; other v-tags are ignored."""
+    tags = "v0.14.9\nv0.14.10\nv0.2.30\nv1.0\nvalidated\n"
+    monkeypatch.setattr(cs, "git", lambda *a: tags)
+    assert cs.latest_image_tag() == "v0.14.10"
+    monkeypatch.setattr(cs, "git", lambda *a: "")
+    assert cs.latest_image_tag() is None
+
+
+STAMP_DIFF = """diff --git a/pixi/global/pixi.toml b/pixi/global/pixi.toml
+index 1111111..2222222 100644
+--- a/pixi/global/pixi.toml
++++ b/pixi/global/pixi.toml
+@@ -9 +9 @@ requires-pixi = ">=0.81"
+-version = "0.14.5"
++version = "0.14.5+dev"
+"""
+
+
+def test_only_version_stamps_recognises_the_release_stamp(cs):
+    assert cs.only_version_stamps(STAMP_DIFF)
+    assert cs.only_version_stamps(STAMP_DIFF + STAMP_DIFF.replace("global", "base"))
+    second_hunk = '@@ -40 +40 @@\n-version = "0.14.5"\n+version = "0.14.5+dev"\n'
+    assert cs.only_version_stamps(
+        STAMP_DIFF + second_hunk + "\\ No newline at end of file\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "diff",
+    [
+        "",
+        STAMP_DIFF + '+numpy = "*"\n',
+        STAMP_DIFF.replace("pixi.toml", "pixi.lock"),
+        STAMP_DIFF.replace("version = ", "  version: "),
+        STAMP_DIFF
+        + "diff --git a/apps/x.yaml b/apps/x.yaml\nindex 1..2 100644\n"
+        + "--- a/apps/x.yaml\n+++ b/apps/x.yaml\n@@ -1 +1 @@\n-a\n+b\n",
+        "diff --git a/pixi/old/pixi.toml b/pixi/new/pixi.toml\n"
+        + "similarity index 100%\nrename from pixi/old/pixi.toml\nrename to pixi/new/pixi.toml\n",
+    ],
+    ids=[
+        "empty",
+        "a-dependency",
+        "a-lock",
+        "not-a-pixi-version",
+        "another-file",
+        "a-rename",
+    ],
+)
+def test_only_version_stamps_rejects_any_other_change(cs, diff):
+    assert not cs.only_version_stamps(diff)
+
+
+def test_commits_touching_skips_version_stamps(cs, monkeypatch):
     calls = []
+    shows = {"aaa": STAMP_DIFF, "bbb": STAMP_DIFF + '+numpy = "*"\n'}
 
     def fake_git(*args):
         calls.append(args)
-        return "abc one\n\ndef two\n"
+        if args[0] == "log":
+            return "aaa\n\nbbb\n"
+        return shows[args[3]]
 
     monkeypatch.setattr(cs, "git", fake_git)
-    assert cs.commits_touching("base", "head", ["apps/x", "docker/y"]) == 2
-    assert calls == [("log", "--oneline", "base..head", "--", "apps/x", "docker/y")]
+    assert cs.commits_touching("base", "head", ["pixi/global", "docker/y"]) == 1
+    assert calls[0] == (
+        "log",
+        "--format=%H",
+        "base..head",
+        "--",
+        "pixi/global",
+        "docker/y",
+    )
+    assert calls[1] == (
+        "show",
+        "--format=",
+        "-U0",
+        "aaa",
+        "--",
+        "pixi/global",
+        "docker/y",
+    )
 
 
 def test_paths_outside_the_repo_are_dropped(cs, monkeypatch, tmp_path):
@@ -329,6 +403,7 @@ def fake_repo(cs, monkeypatch):
         "origin/main-validated",
         "2026.9.1",
         "v0.13.7",
+        "v0.13.8",
         "agentic-interface-v0.2.7",
     }
     components = {
@@ -337,6 +412,7 @@ def fake_repo(cs, monkeypatch):
             "apps/storage": ["apps/storage/pvc.yaml"],
             "apps/interlink/hammer": ["apps/interlink/hammer/values.yaml"],
         },
+        "af-image": {"apps/af-utils/pixi-global-sync": ["pixi/global/pixi.lock"]},
     }
     # (released ref, first path) -> commits; unlisted pairs are 0
     drift = {
@@ -344,10 +420,15 @@ def fake_repo(cs, monkeypatch):
         ("origin/main-validated", "apps/interlink/hammer/values.yaml"): 1,
         ("v0.13.7", "docker/purdue-af"): 3,
         ("origin/main-validated", "docker/af-pod-monitor"): 1,
+        ("v0.13.8", "pixi/global/pixi.lock"): 2,
+        ("origin/main-validated", "pixi/global/pixi.lock"): 0,
     }
     monkeypatch.setattr(cs, "ref_exists", lambda ref: ref in refs)
     monkeypatch.setattr(
         cs, "latest_platform_tag", lambda: "2026.9.1" if "2026.9.1" in refs else None
+    )
+    monkeypatch.setattr(
+        cs, "latest_image_tag", lambda: "v0.13.8" if "v0.13.8" in refs else None
     )
     monkeypatch.setattr(cs, "discover_components", lambda ch: components[ch])
     monkeypatch.setattr(cs, "image_paths", lambda name: [f"docker/{name}"])
@@ -381,13 +462,18 @@ def test_main_writes_a_badge_per_row(cs, fake_repo, monkeypatch, tmp_path, capsy
     assert badges["image-purdue-af"]["message"] == "0.13.7 · awaiting release · 3"
     assert badges["image-agentic-interface"]["message"] == "0.2.7 · released"
     assert badges["image-af-pod-monitor"]["message"] == "failed CI · 1"
+    pixi = badges["af-image-af-utils-pixi-global-sync"]
+    assert (pixi["label"], pixi["message"]) == (
+        "pixi-global",
+        "0.13.8 · awaiting release · 2",
+    )
     assert set(badges) >= {f"image-{name}" for name in cs.CI_IMAGES}
     assert badges["_pending"]["label"] == "unreleased"
-    assert badges["_pending"]["message"] == "4 components"
+    assert badges["_pending"]["message"] == "5 components"
     assert badges["_pending"]["color"] == "blue"
 
     table = capsys.readouterr().out
-    assert "platform tag: 2026.9.1 · main: abc1234" in table
+    assert "platform tag: 2026.9.1 · image tag: v0.13.8 · main: abc1234" in table
     assert "| image | `purdue-af` | awaiting release | 3 |" in table
     assert "| experimental | `apps/storage` | released |  |" in table
 
@@ -405,6 +491,7 @@ def test_main_reports_nothing_unreleased(cs, fake_repo, monkeypatch, tmp_path):
     [
         ("origin/main-validated", "origin/main-validated"),
         ("2026.9.1", "platform tag"),
+        ("v0.13.8", "image tag"),
         ("v0.13.7", "v0.13.7"),
         ("agentic-interface-v0.2.7", "agentic-interface-v0.2.7"),
     ],

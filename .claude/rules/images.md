@@ -12,6 +12,7 @@ paths:
   `/work/pixi/global`) are the analysis environments the platform ships. A
   component's own dependency does not go there; the component gets its own
   `pixi.toml`. For these two, edit the `pixi.toml` only: CI regenerates the
-  lock and commits it to the branch.
+  lock and commits it to the branch. Their workspace `version` is Release
+  image's to write.
 - Images are `linux/amd64`; on an arm64 machine build with
   `--platform linux/amd64`.

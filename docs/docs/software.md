@@ -31,7 +31,9 @@ code that is not part of any Pixi project.
 
     The canonical definition lives in
     [`pixi/global/pixi.toml`](https://github.com/PurdueAF/purdue-af/blob/main/pixi/global/pixi.toml)
-    in this repository:
+    in this repository. `/work/pixi/global/` holds the version released with
+    the latest Purdue AF image, named by the `version` field of its
+    `pixi.toml`. The definition below, from `main`, can be newer than it:
 
     ```toml
     --8<-- "pixi/global/pixi.toml"

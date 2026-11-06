@@ -24,6 +24,7 @@ REPO = Path(__file__).resolve().parents[2]
 CHANNELS = {
     "core": Path("flux/core-production/kustomization.yaml"),
     "experimental": Path("flux/experimental/kustomization.yaml"),
+    "af-image": Path("flux/af-image/kustomization.yaml"),
 }
 IMAGE_INPUTS = Path(".github/workflows/image-inputs.sh")
 CI_IMAGES_WORKFLOW = Path(".github/workflows/ci-images.yml")
@@ -84,10 +85,50 @@ def latest_platform_tag() -> str | None:
     return max(tags, key=lambda t: [int(p) for p in t.split(".")])
 
 
+def latest_image_tag() -> str | None:
+    """Newest purdue-af image tag `vX.Y.Z` — what the af-image root tracks."""
+    tags = [
+        t
+        for t in git("tag", "-l", "v*").splitlines()
+        if re.fullmatch(r"v\d+\.\d+\.\d+", t)
+    ]
+    if not tags:
+        return None
+    return max(tags, key=lambda t: [int(p) for p in t[1:].split(".")])
+
+
+VERSION_STAMP = re.compile(r"[+-]version = ")
+
+
+def only_version_stamps(diff: str) -> bool:
+    """True when every change in a `git show -U0` diff is a pixi.toml workspace
+    version: bump-af-version.py's stamp, which image-inputs.sh does not hash."""
+    sections = [s for s in re.split(r"(?m)^diff --git ", diff) if s.strip()]
+    if not sections:
+        return False
+    for section in sections:
+        header, hunk, body = section.partition("\n@@")
+        if not hunk or not re.search(r"(?m)^\+\+\+ b/(.*/)?pixi\.toml$", header):
+            return False
+        for line in body.splitlines()[1:]:
+            if line.startswith("@@") or line.startswith("\\"):
+                continue
+            if line[:1] in "+-" and not VERSION_STAMP.match(line):
+                return False
+    return True
+
+
 def commits_touching(base: str, head: str, paths: Iterable[str]) -> int:
-    """Number of commits in base..head that touch any of `paths`."""
-    out = git("log", "--oneline", f"{base}..{head}", "--", *paths)
-    return len([line for line in out.splitlines() if line.strip()])
+    """Number of commits in base..head that touch any of `paths`, version
+    stamps aside."""
+    paths = list(paths)
+    out = git("log", "--format=%H", f"{base}..{head}", "--", *paths)
+    shas = [line.strip() for line in out.splitlines() if line.strip()]
+    return sum(
+        1
+        for sha in shas
+        if not only_version_stamps(git("show", "--format=", "-U0", sha, "--", *paths))
+    )
 
 
 def _read_kustomization(
@@ -197,6 +238,7 @@ LABEL_OVERRIDES = {
     "apps/interlink/hammer": "interlink-hammer",
     "apps/interlink/nrp": "interlink-nrp",
     "apps/interlink/traefik": "interlink-traefik",
+    "apps/af-utils/pixi-global-sync": "pixi-global",
 }
 
 
@@ -266,12 +308,16 @@ def main() -> int:
     platform_tag = latest_platform_tag()
     if platform_tag is None:
         sys.exit("component-status: missing git ref: no platform tag YYYY.M.SEQ")
+    image_tag = latest_image_tag()
+    if image_tag is None:
+        sys.exit("component-status: missing git ref: no image tag vX.Y.Z")
 
     rows: list[tuple[str, str, str, int]] = []
 
     for channel, released in (
         ("core", platform_tag),
         ("experimental", validated),
+        ("af-image", image_tag),
     ):
         for component, paths in sorted(discover_components(channel).items()):
             drift = commits_touching(released, head, paths)
@@ -295,6 +341,9 @@ def main() -> int:
         ("image", "purdue-af"): af_version,
         ("image", "agentic-interface"): agentic_version,
     }
+    for channel, component, _, _ in rows:
+        if channel == "af-image":
+            versions[(channel, component)] = image_tag.removeprefix("v")
     for name in CI_IMAGES:
         released_ref = release_tags.get(name, validated)
         paths = image_paths(name)
@@ -329,7 +378,10 @@ def main() -> int:
             },
         )
 
-    print(f"platform tag: {platform_tag} · main: {git('rev-parse', '--short', head)}\n")
+    print(
+        f"platform tag: {platform_tag} · image tag: {image_tag} · "
+        f"main: {git('rev-parse', '--short', head)}\n"
+    )
     print("| channel | component | status | commits ahead |")
     print("| --- | --- | --- | --- |")
     for channel, component, status, ahead in rows:

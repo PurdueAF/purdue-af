@@ -16,11 +16,15 @@ Spots rewritten (each must match exactly once):
   5. the production profile kubespawner image ref
 and, in apps/af-utils/pixi-global-sync/deployment.yaml:
   6. the pixi-global-sync container image
+and the workspace `version` of pixi/base and pixi/global:
+  7. X.Y.Z on the release commit; --mark-dev then writes X.Y.Z+dev, so
+     no other commit carries a released version
 
 Usage:
   bump-af-version.py --print-current
   bump-af-version.py --bump patch|minor|major   [--dry-run]
   bump-af-version.py --set 0.13.0               [--dry-run]
+  bump-af-version.py --mark-dev                 [--dry-run]
 """
 
 import argparse
@@ -30,12 +34,14 @@ from pathlib import Path
 
 DEFAULT_FILE = Path("apps/jupyterhub/jupyterhub/values.yaml")
 DEFAULT_SYNC_FILE = Path("apps/af-utils/pixi-global-sync/deployment.yaml")
+DEFAULT_PIXI_FILES = [Path("pixi/base/pixi.toml"), Path("pixi/global/pixi.toml")]
 # Same pull path as the pre-release profile (geddes Harbor proxy of ghcr;
 # the CI-promoted semver tags live on ghcr.io/purdueaf/purdue-af).
 DEFAULT_REGISTRY = (
     "geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af"
 )
 VERSION_RE = r"\d+\.\d+\.\d+"
+DEV_SUFFIX = "+dev"
 
 
 def bump_version(cur: str, kind: str) -> str:
@@ -109,14 +115,41 @@ def apply_sync(text: str, new_version: str, registry: str) -> str:
     return text
 
 
+def apply_pixi(text: str, version: str) -> str:
+    """→ new pixi.toml text; the workspace version must match exactly once."""
+    text, n = re.subn(
+        rf'(?m)^(version = "){VERSION_RE}(?:\+dev)?(")$',
+        rf"\g<1>{version}\g<2>",
+        text,
+    )
+    if n != 1:
+        sys.exit(
+            f"expected exactly 1 workspace version in a pixi.toml, found {n} — "
+            "update bump-af-version.py"
+        )
+    return text
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--print-current", action="store_true")
     group.add_argument("--bump", choices=["patch", "minor", "major"])
     group.add_argument("--set", dest="explicit", metavar="X.Y.Z")
+    group.add_argument(
+        "--mark-dev",
+        action="store_true",
+        help="write <current>+dev into the pixi manifests, after a release commit",
+    )
     parser.add_argument("--file", type=Path, default=DEFAULT_FILE)
     parser.add_argument("--sync-file", type=Path, default=DEFAULT_SYNC_FILE)
+    parser.add_argument(
+        "--pixi-file",
+        dest="pixi_files",
+        type=Path,
+        action="append",
+        help="a pixi.toml to stamp (repeatable; default: pixi/base and pixi/global)",
+    )
     parser.add_argument("--registry", default=DEFAULT_REGISTRY)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -125,6 +158,20 @@ def main() -> None:
     cur = current_version(text)
     if args.print_current:
         print(cur)
+        return
+    pixi_files = args.pixi_files or DEFAULT_PIXI_FILES
+
+    if args.mark_dev:
+        dev = f"{cur}{DEV_SUFFIX}"
+        stamped = [(f, apply_pixi(f.read_text(), dev)) for f in pixi_files]
+        if not args.dry_run:
+            for f, text in stamped:
+                f.write_text(text)
+        print(
+            f"pixi manifests -> {dev}{' — dry run' if args.dry_run else ''}",
+            file=sys.stderr,
+        )
+        print(dev)
         return
 
     if args.explicit:
@@ -136,9 +183,12 @@ def main() -> None:
 
     updated = apply(text, new, args.registry)
     sync_updated = apply_sync(args.sync_file.read_text(), new, args.registry)
+    stamped = [(f, apply_pixi(f.read_text(), new)) for f in pixi_files]
     if not args.dry_run:
         args.file.write_text(updated)
         args.sync_file.write_text(sync_updated)
+        for f, text in stamped:
+            f.write_text(text)
     # stdout carries ONLY the new version (workflow captures it); log to stderr
     print(
         f"{cur} -> {new} ({args.file}{' — dry run' if args.dry_run else ''})",
