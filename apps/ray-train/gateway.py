@@ -47,9 +47,9 @@ from gpu_queries import (
     PREEMPTIBLE_QUERY,
     USED_QUERY,
 )
-from nrp_gpus import Worker, as_dict, free_gpus, most_when_empty, placement, worker_of
-from nrp_gpus import nodes as nrp_nodes
+from nrp_gpus import Worker, as_dict, free_gpus, worker_of
 from nrp_gpus import query as nrp_query
+from nrp_gpus import room as nrp_room
 from nrp_jobs import (
     ENTRYPOINT_ANNOTATION,
     MOST_VARIABLE,
@@ -217,22 +217,19 @@ SETTINGS = {
 NRP_SETTINGS = {
     WORKERS_METADATA,
     MOST_METADATA,
+    MEMORY_METADATA,
     SITE_METADATA,
     INPUTS_METADATA,
     OUTPUT_METADATA,
 }
-# A job on NRP's progress, on its RayJob: the stage it is at and since when, whether
-# it has outputs to copy back, and the fewest workers it starts with.
+# A job on NRP's progress, on its RayJob: the stage it is at and since when, and whether
+# it has outputs to copy back.
 STAGE_ANNOTATION = "purdue-af/ray-stage"
 SINCE_ANNOTATION = "purdue-af/ray-since"
 OUTPUT_ANNOTATION = "purdue-af/ray-output"
-LEAST_WORKERS_ANNOTATION = "purdue-af/ray-least"
 OUTPUT_FAILED = "Copying its outputs back failed: they stay on NRP until the job is deleted, and the AF's admins can fetch them."
 STOPPED_BY_USER = "The job was stopped."
 STOPPED_INPUTS = "Copying its inputs to NRP failed: is it a directory you can read?"
-STOPPED_NO_ROOM = (
-    "NRP had no room for its workers in time: ask for fewer, or try again later."
-)
 STOPPED_NOT_STARTED = "Its Ray cluster on NRP did not start in time."
 STOPPED_IDLE = (
     "Its idlest GPU was {busy:.0f}% busy over the last {minutes} minutes, and NRP asks each GPU "
@@ -786,8 +783,6 @@ def job_details(job: dict[str, Any]) -> dict[str, Any]:
     stage = annotations.get(STAGE_ANNOTATION)
     if stage == "inputs":
         state, message = "PENDING", "Copying its inputs to NRP."
-    elif stage == "placing":
-        state, message = "PENDING", "Waiting for room for its workers on NRP."
     elif stage == "outputs" or (
         # Ended, and the reaper not yet at it.
         stage == "running"
@@ -962,15 +957,23 @@ def requested_size(name: str, value: str, default: str, least: int, most: int) -
     )
 
 
-def requested_memory(value: str) -> str:
-    """The GPU memory a call asks of each worker, as that of the smallest GPU that has it."""
+def gpu_memory(value: str) -> float:
+    """The GPU memory a call asks of each worker, in GB: 0 for any GPU."""
     try:
         wanted = float(value or 0)
     except ValueError:
+        wanted = -1
+    if not 0 <= wanted < float("inf"):
         raise Refused(
             grpc.StatusCode.INVALID_ARGUMENT,
             f"{MEMORY_METADATA} is a number of GB.",
-        ) from None
+        )
+    return wanted
+
+
+def requested_memory(value: str) -> str:
+    """The GPU memory a call asks of each worker, as that of the smallest GPU that has it."""
+    wanted = gpu_memory(value)
     enough = [f.memory for f in FLAVORS if f.memory >= wanted]
     if not enough:
         raise Refused(
@@ -998,7 +1001,7 @@ def requested_workers(
 ) -> tuple[str, str]:
     """The most workers a call asks for and the fewest its cluster starts with:
     all of `exactly`, or one of up to `at_most`; one worker by default. On NRP
-    there is no `most`: start_nrp_job holds a job to what NRP's nodes have room for."""
+    there is no `most`: start_nrp_job holds a job to what NRP's nodes hold empty."""
     if exactly and at_most:
         raise Refused(
             grpc.StatusCode.INVALID_ARGUMENT,
@@ -1273,7 +1276,6 @@ class Gateway:
         self.nrp_waiting: dict[str, tuple[str, float]] = {}
         # Jobs on NRP whose code is deleted, until their records are
         self.nrp_cleaned: set[str] = set()
-        self.nrp_admitting = asyncio.Lock()
         # owner key of a job on NRP -> its owner's name, and when the Hub was last asked for names
         self.nrp_owners: dict[str, str] = {}
         self.nrp_owners_asked = float("-inf")
@@ -1375,12 +1377,13 @@ class Gateway:
                 worker = nrp_worker()
                 raise Refused(
                     grpc.StatusCode.INVALID_ARGUMENT,
-                    f"{', '.join(others)} sets a Ray cluster at Purdue: a job on NRP runs the AF's global environment on workers of {worker.gpus} GPU, {worker.cpus:g} CPUs and {worker.memory_gb:g} GB, and takes only {WORKERS_METADATA} or {MOST_METADATA}.",
+                    f"{', '.join(others)} sets a Ray cluster at Purdue: a job on NRP runs the AF's global environment on workers of {worker.gpus} GPU, {worker.cpus:g} CPUs and {worker.memory_gb:g} GB, and takes only {WORKERS_METADATA}, {MOST_METADATA} or {MEMORY_METADATA}.",
                 )
             workers, least = requested_workers(
                 values.get(WORKERS_METADATA, ""), values.get(MOST_METADATA, "")
             )
-            return user, Shape("", workers, "", "", "", "1", least, site)
+            memory = f"{gpu_memory(values.get(MEMORY_METADATA, '')):g}"
+            return user, Shape("", workers, memory, "", "", "1", least, site)
         template = cluster_template(user)
         cpus, ram = worker_size(template)
         memory = requested_memory(values.get(MEMORY_METADATA, ""))
@@ -1672,27 +1675,34 @@ class Gateway:
         submitted: dict[str, Any],
         data: dict[str, str],
     ) -> None:
-        """Create the job's RayJob on NRP, suspended until its inputs are there and
-        its workers placed, and the Jobs that copy its inputs there and its outputs back."""
+        """Create the job's RayJob on NRP, of as many workers as are free of those it
+        asks for and no fewer than it starts with, on GPUs of the memory it asks for, and
+        the Jobs that copy its inputs there and its outputs back."""
         assert self.nrp is not None and self.bucket is not None
         wanted, least = int(shape.workers), int(shape.least)
+        memory = float(shape.memory or 0)
         template = nrp_template()
         try:
-            room = await most_when_empty(
-                self.http, NRP_PROMETHEUS_URL, worker_of(template)
-            )
+            models = await free_gpus(self.http, NRP_PROMETHEUS_URL, worker_of(template))
         except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
             log.warning("asking NRP's Prometheus: %r", e)
-            room = 0
-        if not room:
+            models = {}
+        if not models:
             raise Refused(
                 grpc.StatusCode.UNAVAILABLE,
                 "NRP's Prometheus shows none of its GPU nodes now: try again later.",
             )
-        if room < least:
+        room = nrp_room(models, memory)
+        if room.models == []:
+            raise Refused(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"No GPU on NRP has {memory:g} GB.",
+            )
+        if room.workers_empty < least:
+            gpus = f"GPUs of {memory:g} GB or more" if memory else "GPU nodes"
             raise Refused(
                 grpc.StatusCode.RESOURCE_EXHAUSTED,
-                f"Your job asks for {least} workers, and the GPU nodes of one region and model on NRP have room for at most {room}, empty: ask for fewer.",
+                f"Your job asks for {least} workers, and NRP's {gpus} have room for at most {room.workers_empty}, empty: ask for fewer.",
             )
         job = nrp_jobs.build_job(
             template,
@@ -1700,7 +1710,8 @@ class Gateway:
             nrp_jobs.owner_key(user.cluster, user.owner),
             submitted,
             self.bucket.name,
-            min(wanted, room),
+            min(wanted, max(room.workers, least)),
+            room.models,
             # Its log is its submitter's, which outlasts the cluster: the GPUs go at once.
             0,
             {
@@ -1710,9 +1721,8 @@ class Gateway:
         )
         job["metadata"]["annotations"].update(
             {
-                STAGE_ANNOTATION: "inputs" if "inputs" in data else "placing",
+                STAGE_ANNOTATION: "inputs" if "inputs" in data else "running",
                 SINCE_ANNOTATION: stamp(time.time()),
-                LEAST_WORKERS_ANNOTATION: str(least),
                 OUTPUT_ANNOTATION: "true" if "output" in data else "",
             }
         )
@@ -1752,46 +1762,15 @@ class Gateway:
                     )
         await self.advance_nrp(created)
 
-    async def place_nrp(self, job: dict[str, Any]) -> bool:
-        """Place the job's workers on nodes of one region and GPU model with room, and
-        let KubeRay start its cluster; False if there is no room for the fewest it starts with."""
-        assert self.nrp is not None
-        name = job["metadata"]["name"]
-        wanted = nrp_jobs.workers_of(job)
-        least = int(job["metadata"]["annotations"][LEAST_WORKERS_ANNOTATION])
-        async with self.nrp_admitting:
-            try:
-                found = await nrp_nodes(self.http, NRP_PROMETHEUS_URL, nrp_worker())
-            except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
-                log.warning("asking NRP's Prometheus: %r", e)
-                return False
-            chosen = placement(found, least)
-            if chosen is None:
-                return False
-            workers = min(wanted, sum(n.workers for n in chosen))
-            await self.nrp_patch(
-                name,
-                {
-                    "metadata": {
-                        "annotations": {
-                            STAGE_ANNOTATION: "running",
-                            SINCE_ANNOTATION: stamp(time.time()),
-                        }
-                    },
-                    "spec": {
-                        "suspend": False,
-                        "rayClusterSpec": nrp_jobs.placed(job, workers, chosen),
-                    },
-                },
-            )
-        log.info(
-            "placed %s on NRP: %d workers on %s, %s",
-            name,
-            workers,
-            chosen[0].region,
-            chosen[0].model,
+    async def resume_nrp(self, job: dict[str, Any]) -> None:
+        """Let KubeRay start the job's cluster, from when its start is timed."""
+        stage = {STAGE_ANNOTATION: "running", SINCE_ANNOTATION: stamp(time.time())}
+        await self.nrp_patch(
+            job["metadata"]["name"],
+            {"metadata": {"annotations": stage}, "spec": {"suspend": False}},
         )
-        return True
+        job["metadata"].setdefault("annotations", {}).update(stage)
+        job["spec"]["suspend"] = False
 
     async def nrp_patch(self, name: str, body: dict[str, Any]) -> None:
         assert self.nrp is not None
@@ -1879,7 +1858,7 @@ class Gateway:
         return busy if busy < NRP_MIN_UTILIZATION else None
 
     async def advance_nrp(self, job: dict[str, Any]) -> None:
-        """Move a job on NRP on: its inputs copied, its workers placed, its outputs
+        """Move a job on NRP on: its inputs copied and its cluster started, its outputs
         copied back once it ends, its code deleted, and its record once kept long enough."""
         assert self.nrp is not None and self.bucket is not None
         name = job["metadata"]["name"]
@@ -1895,13 +1874,12 @@ class Gateway:
             if copied in ("failed", None):
                 await self.stop_nrp(job, STOPPED_INPUTS)
                 return
-            if copied != "succeeded":
-                return
-            await self.set_stage(job, "placing")
-            stage, since = "placing", now
+            if copied == "succeeded":
+                await self.resume_nrp(job)
+            return
+        # Left suspended by a gateway that placed workers itself.
         if stage == "placing":
-            if not await self.place_nrp(job) and now - since >= NRP_START_TIMEOUT_S:
-                await self.stop_nrp(job, STOPPED_NO_ROOM)
+            await self.resume_nrp(job)
             return
         if stage == "running":
             if job_ended(job):
@@ -2673,10 +2651,16 @@ class Gateway:
     async def capacity(self, values: Mapping[str, str]) -> dict[str, Any]:
         """How many workers of the GPU memory and GPUs per worker that `values` ask for
         fit now at either site, and the most a job there may ask for."""
-        memory = requested_memory(values.get(MEMORY_METADATA, ""))
-        per_worker = requested_per_worker(values.get(PER_WORKER_METADATA, ""), memory)
+        wanted = gpu_memory(values.get(MEMORY_METADATA, ""))
+        at_purdue = any(f.memory >= wanted for f in FLAVORS)
+        memory = requested_memory(f"{wanted:g}") if at_purdue else f"{wanted:g}"
+        per_worker = (
+            requested_per_worker(values.get(PER_WORKER_METADATA, ""), memory)
+            if at_purdue
+            else values.get(PER_WORKER_METADATA) or "1"
+        )
         shape = Shape("", "1", memory, "", "", per_worker, "1")
-        each = int(per_worker)
+        each = int(per_worker) if whole(per_worker) else 0
         free = await self.free_gpus()
         kinds = [
             {
@@ -2700,34 +2684,35 @@ class Gateway:
                 "workers_most": sum(k["workers_most"] for k in kinds),
                 "kinds": kinds,
             },
-            "nrp": await self.nrp_capacity() if each == nrp_worker().gpus else None,
+            "nrp": (
+                await self.nrp_capacity(wanted) if each == nrp_worker().gpus else None
+            ),
         }
 
-    async def nrp_capacity(self) -> dict[str, Any]:
-        """The workers of a job on NRP that fit now, by region and GPU model."""
+    async def nrp_capacity(self, memory: float) -> dict[str, Any]:
+        """The workers of a job on NRP with GPUs of `memory` GB or more that fit now,
+        and on empty nodes, by GPU model."""
         worker = nrp_worker()
         known = dataclasses.asdict(worker)
         try:
-            found, most = await asyncio.gather(
-                nrp_nodes(self.http, NRP_PROMETHEUS_URL, worker),
-                most_when_empty(self.http, NRP_PROMETHEUS_URL, worker),
-            )
+            models = await free_gpus(self.http, NRP_PROMETHEUS_URL, worker)
         except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
             log.warning("asking NRP's Prometheus: %r", e)
             return {"known": False, "worker": known}
-        groups: dict[tuple[str, str], int] = collections.defaultdict(int)
-        for node in found:
-            groups[(node.region, node.model)] += node.workers
+        room = nrp_room(models, memory)
         return {
-            "known": bool(most),
+            "known": bool(models),
             "worker": known,
-            "workers_free": max(groups.values(), default=0),
-            "workers_most": most,
-            "groups": [
-                {"region": region, "model": model, "workers": workers}
-                for (region, model), workers in sorted(
-                    groups.items(), key=lambda group: -group[1]
-                )
+            "workers_free": room.workers,
+            "workers_most": room.workers_empty,
+            "models": [
+                {
+                    "model": name,
+                    "memory_gb": model.memory_gb,
+                    "workers": model.workers,
+                }
+                for name, model in sorted(models.items(), key=lambda m: -m[1].workers)
+                if name and (room.models is None or name in room.models)
             ],
         }
 
@@ -3133,13 +3118,13 @@ async def reap_forever(gateway: Gateway) -> None:
 
 def dashboard_app(gateway: Gateway) -> web.Application:
     async def nrp_gpus(request: web.Request) -> web.Response:
-        """The GPUs free on NRP for Ray workers, by region: public, so asked by no user."""
+        """The GPUs free on NRP for Ray workers, by GPU model: public, so asked by no user."""
         try:
-            regions = await free_gpus(gateway.http, NRP_PROMETHEUS_URL, nrp_worker())
+            models = await free_gpus(gateway.http, NRP_PROMETHEUS_URL, nrp_worker())
         except (ClientError, asyncio.TimeoutError, KeyError, ValueError) as error:
             log.warning("asking NRP's Prometheus: %r", error)
             return web.Response(status=503, text="NRP's Prometheus did not answer")
-        return web.json_response(as_dict(regions))
+        return web.json_response(as_dict(models))
 
     async def capacity(request: web.Request) -> web.Response:
         """The workers of a shape that fit at either site: as public as the above."""

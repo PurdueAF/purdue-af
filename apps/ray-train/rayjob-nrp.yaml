@@ -1,6 +1,6 @@
 # The template of a job on NRP Nautilus (nrp_jobs.py): the gateway fills in its
-# name, owner, job, runtime environment, the number of workers and the nodes
-# they may run on. Its worker's requests are what nrp_gpus.py counts by.
+# name, owner, job, runtime environment, the number of workers and the GPU
+# models they may hold. Its worker's requests are what nrp_gpus.py counts by.
 apiVersion: ray.io/v1
 kind: RayJob
 metadata:

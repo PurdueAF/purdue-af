@@ -19,7 +19,7 @@ from typing import Any
 
 import yaml
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
-from nrp_gpus import Node
+from nrp_gpus import PRODUCT_LABEL, product
 
 # Whose a job is: at Purdue the name of their own cluster, on NRP its hash.
 OWNER_LABEL = "purdue-af/ray-owner"
@@ -156,19 +156,21 @@ def build_job(
     submission: dict[str, Any],
     bucket: str,
     workers: int,
+    models: list[str] | None,
     ttl: int,
     data: dict[str, str],
 ) -> dict[str, Any]:
-    """The RayJob of a submission: the template's, with `workers` workers, created
-    suspended until the gateway places them (placed), which KubeRay removes `ttl`
-    seconds after the job ends. `data` are the job's AF_ variables, its inputs and outputs in S3."""
+    """The RayJob of a submission: the template's, with `workers` workers on GPUs of
+    `models`, or any, which KubeRay removes `ttl` seconds after the job ends. `data`
+    are the job's AF_ variables, its inputs and outputs in S3; a job with inputs is
+    created suspended until they are there."""
     job = copy.deepcopy(template)
     metadata = job["metadata"]
     metadata["name"] = name
     metadata["labels"][OWNER_LABEL] = owner
     metadata["annotations"] = {ENTRYPOINT_ANNOTATION: entrypoint_of(submission)}
     spec = job["spec"]
-    spec["suspend"] = True
+    spec["suspend"] = "AF_INPUTS" in data
     spec["jobId"] = submission["submission_id"]
     spec["entrypoint"] = str(submission["entrypoint"])
     spec["ttlSecondsAfterFinished"] = ttl
@@ -182,37 +184,27 @@ def build_job(
             spec[field] = submission[asked]
     if submission.get("entrypoint_resources"):
         spec["entrypointResources"] = json.dumps(submission["entrypoint_resources"])
-    (group,) = spec["rayClusterSpec"]["workerGroupSpecs"]
-    group.update(replicas=workers, minReplicas=workers, maxReplicas=workers)
-    return job
-
-
-def placed(job: dict[str, Any], workers: int, nodes: list[Node]) -> dict[str, Any]:
-    """The job's cluster with `workers` workers on `nodes`, and its head in their region."""
-    cluster: dict[str, Any] = copy.deepcopy(job["spec"]["rayClusterSpec"])
+    cluster = spec["rayClusterSpec"]
     (group,) = cluster["workerGroupSpecs"]
     group.update(replicas=workers, minReplicas=workers, maxReplicas=workers)
-    hosts = sorted(n.name for n in nodes)
-    group["template"]["spec"]["affinity"] = {
-        "nodeAffinity": {
-            "requiredDuringSchedulingIgnoredDuringExecution": {
-                "nodeSelectorTerms": [
-                    {
-                        "matchExpressions": [
-                            {
-                                "key": "kubernetes.io/hostname",
-                                "operator": "In",
-                                "values": hosts,
-                            }
-                        ]
-                    }
-                ]
+    if models is not None:
+        group["template"]["spec"]["affinity"] = {
+            "nodeAffinity": {
+                "requiredDuringSchedulingIgnoredDuringExecution": {
+                    "nodeSelectorTerms": [
+                        {
+                            "matchExpressions": [
+                                {
+                                    "key": PRODUCT_LABEL,
+                                    "operator": "In",
+                                    "values": sorted(product(m) for m in models),
+                                }
+                            ]
+                        }
+                    ]
+                }
             }
         }
-    }
-    cluster["headGroupSpec"]["template"]["spec"]["nodeSelector"] = {
-        "topology.kubernetes.io/region": nodes[0].region
-    }
     # What a training sizes itself by, as on a cluster at Purdue.
     for pod in (cluster["headGroupSpec"]["template"], group["template"]):
         for container in pod["spec"]["containers"]:
@@ -220,7 +212,7 @@ def placed(job: dict[str, Any], workers: int, nodes: list[Node]) -> dict[str, An
                 *(e for e in container.get("env", []) if e["name"] != MOST_VARIABLE),
                 {"name": MOST_VARIABLE, "value": str(workers)},
             ]
-    return cluster
+    return job
 
 
 def workers_of(job: dict[str, Any]) -> int:

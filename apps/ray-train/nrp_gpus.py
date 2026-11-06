@@ -1,9 +1,9 @@
-"""The GPUs free on NRP Nautilus for Ray workers of ours, by region, from NRP's
+"""The GPUs free on NRP Nautilus for Ray workers of ours, by GPU model, from NRP's
 public Prometheus: those of nodes that are Ready, not cordoned and carry no
 NoSchedule or NoExecute taint, less what the pods bound to them request, and
-how many workers of a shape fit beside them; and the nodes a job's workers
-may run on, of one region and one GPU model. An upper bound: NRP's scheduler
-also weighs affinities and policies that Prometheus does not show.
+how many workers of a shape fit beside them; and the GPU models with at least
+the memory a job asks for. An upper bound: NRP's scheduler also weighs
+affinities and policies that Prometheus does not show.
 
     python nrp_gpus.py    # beside config.yaml and rayjob-nrp.yaml
 """
@@ -38,9 +38,18 @@ UNSCHEDULABLE = (
     " or max by (node) (kube_node_spec_unschedulable) == 1"
     ' or max by (node) (kube_node_status_condition{condition="Ready", status="true"}) == 0'
 )
-REGIONS = "max by (node, label_topology_kubernetes_io_region) (kube_node_labels)"
 # DCGM names a node's GPU model, which no kube-state-metrics label does.
 MODELS = "count by (Hostname, modelName) (max_over_time(DCGM_FI_DEV_GPU_UTIL[1h]))"
+# The memory of each model's whole GPUs, in MiB: the median, as single readings stray.
+MEMORY = (
+    "quantile by (modelName) (0.5,"
+    ' sum by (modelName, UUID) (DCGM_FI_DEV_FB_FREE{GPU_I_ID=""})'
+    ' + on(modelName, UUID) sum by (modelName, UUID) (DCGM_FI_DEV_FB_USED{GPU_I_ID=""}))'
+)
+# A GPU reports less memory than it is sold with: a 16 GB T4 reports 15.6 GB.
+MEMORY_SLACK = 0.95
+# The node label NVIDIA's feature discovery names a node's GPU model by.
+PRODUCT_LABEL = "nvidia.com/gpu.product"
 TIMEOUT = ClientTimeout(total=60)
 
 
@@ -53,21 +62,26 @@ class Worker:
     memory_gb: float
 
 
-@dataclass(frozen=True)
-class Node:
-    """A node with room for workers: its region, its GPU model, and how many fit."""
-
-    name: str
-    region: str
-    model: str
-    workers: int
-
-
 @dataclass
-class Region:
+class Model:
+    """The GPUs of one model: their memory in GB, how many, how many are free,
+    and how many workers fit beside what holds them now, and on empty nodes."""
+
+    memory_gb: float | None = None
     gpus: int = 0
     free_gpus: int = 0
     workers: int = 0
+    workers_empty: int = 0
+
+
+@dataclass(frozen=True)
+class Room:
+    """The workers that fit now and on empty nodes, of the GPU models a job may
+    hold: None for any GPU."""
+
+    workers: int
+    workers_empty: int
+    models: list[str] | None
 
 
 def free_by_node(
@@ -105,69 +119,57 @@ def fitting(has: dict[str, float], held: dict[str, float], worker: Worker) -> in
     )
 
 
-def regions_of(regions: list[dict[str, Any]]) -> dict[str, str]:
-    return {
-        s["metric"]["node"]: s["metric"].get("label_topology_kubernetes_io_region")
-        or "unlabeled"
-        for s in regions
-    }
-
-
-def free_by_region(
+def by_model(
     allocatable: list[dict[str, Any]],
     requested: list[dict[str, Any]],
     unschedulable: list[dict[str, Any]],
-    regions: list[dict[str, Any]],
+    models: list[dict[str, Any]],
+    memory: list[dict[str, Any]],
     worker: Worker,
-) -> dict[str, Region]:
-    """Prometheus's results of the four queries, summed by region."""
+) -> dict[str, Model]:
+    """Prometheus's results of the five queries, summed by GPU model; a node DCGM
+    does not report is of the model ""."""
     free, held, closed = free_by_node(allocatable, requested, unschedulable)
-    region_of = regions_of(regions)
-    out: dict[str, Region] = defaultdict(Region)
+    model_of = {s["metric"]["Hostname"]: s["metric"]["modelName"] for s in models}
+    out: dict[str, Model] = defaultdict(Model)
+    for s in memory:
+        out[s["metric"]["modelName"]].memory_gb = float(s["value"][1]) * 2**20 / 1e9
     for node, has in free.items():
-        region = out[region_of.get(node, "unlabeled")]
-        region.gpus += int(has[GPU])
+        model = out[model_of.get(node, "")]
+        model.gpus += int(has[GPU])
         if node in closed:
             continue
-        region.free_gpus += max(int(has[GPU] - held[node][GPU]), 0)
-        region.workers += fitting(has, held[node], worker)
-    return dict(sorted(out.items()))
+        model.free_gpus += max(int(has[GPU] - held[node][GPU]), 0)
+        model.workers += fitting(has, held[node], worker)
+        model.workers_empty += fitting(has, defaultdict(float), worker)
+    return {name: model for name, model in sorted(out.items()) if model.gpus}
 
 
-def open_nodes(
-    allocatable: list[dict[str, Any]],
-    requested: list[dict[str, Any]],
-    unschedulable: list[dict[str, Any]],
-    regions: list[dict[str, Any]],
-    models: list[dict[str, Any]],
-    worker: Worker,
-) -> list[Node]:
-    """The nodes with room for a worker, of a known region and GPU model; with no
-    `requested`, the room each would have empty."""
-    free, held, closed = free_by_node(allocatable, requested, unschedulable)
-    region_of = regions_of(regions)
-    model_of = {s["metric"]["Hostname"]: s["metric"]["modelName"] for s in models}
-    out = []
-    for node, has in sorted(free.items()):
-        workers = 0 if node in closed else fitting(has, held[node], worker)
-        if workers and node in region_of and node in model_of:
-            out.append(Node(node, region_of[node], model_of[node], workers))
-    return out
-
-
-def placement(nodes: list[Node], least: int) -> list[Node] | None:
-    """The nodes a job's workers may run on: all of the region and GPU model with room
-    for the most, so that the scheduler finds room on another
-    when a job placed from the same reading took one; None if no such pair has room for `least`."""
-    groups: dict[tuple[str, str], list[Node]] = defaultdict(list)
-    for node in nodes:
-        groups[(node.region, node.model)].append(node)
-    if not groups:
+def with_memory(models: dict[str, Model], memory_gb: float) -> list[str] | None:
+    """The models whose GPUs have `memory_gb`; None, for any GPU, if it is 0."""
+    if not memory_gb:
         return None
-    best = max(groups.values(), key=lambda group: sum(n.workers for n in group))
-    if sum(n.workers for n in best) < least:
-        return None
-    return best
+    return [
+        name
+        for name, model in models.items()
+        if name
+        and model.memory_gb is not None
+        and model.memory_gb >= memory_gb * MEMORY_SLACK
+    ]
+
+
+def room(models: dict[str, Model], memory_gb: float) -> Room:
+    """The workers that fit on GPUs of `memory_gb` or more, now and empty."""
+    allowed = with_memory(models, memory_gb)
+    held = [m for name, m in models.items() if allowed is None or name in allowed]
+    return Room(
+        sum(m.workers for m in held), sum(m.workers_empty for m in held), allowed
+    )
+
+
+def product(model: str) -> str:
+    """A GPU model's value of PRODUCT_LABEL: its name with hyphens for spaces."""
+    return model.replace(" ", "-")
 
 
 async def query(
@@ -182,36 +184,14 @@ async def query(
 
 async def free_gpus(
     http: ClientSession, prometheus: str, worker: Worker
-) -> dict[str, Region]:
-    allocatable, requested, unschedulable, regions = await asyncio.gather(
+) -> dict[str, Model]:
+    allocatable, requested, unschedulable, models, memory = await asyncio.gather(
         *(
             query(http, prometheus, promql)
-            for promql in (ALLOCATABLE, REQUESTED, UNSCHEDULABLE, REGIONS)
+            for promql in (ALLOCATABLE, REQUESTED, UNSCHEDULABLE, MODELS, MEMORY)
         )
     )
-    return free_by_region(allocatable, requested, unschedulable, regions, worker)
-
-
-async def nodes(
-    http: ClientSession, prometheus: str, worker: Worker, empty: bool = False
-) -> list[Node]:
-    """The nodes with room for a worker now, or `empty`, with no pod on them."""
-    asked = () if empty else (REQUESTED,)
-    allocatable, unschedulable, regions, models, *requested = await asyncio.gather(
-        *(
-            query(http, prometheus, promql)
-            for promql in (ALLOCATABLE, UNSCHEDULABLE, REGIONS, MODELS, *asked)
-        )
-    )
-    held = requested[0] if requested else []
-    return open_nodes(allocatable, held, unschedulable, regions, models, worker)
-
-
-async def most_when_empty(http: ClientSession, prometheus: str, worker: Worker) -> int:
-    """The most workers one job may have: those nodes of one region and GPU model
-    that take pods have room for when nothing else runs on them."""
-    found = placement(await nodes(http, prometheus, worker, empty=True), 0)
-    return sum(node.workers for node in found or [])
+    return by_model(allocatable, requested, unschedulable, models, memory, worker)
 
 
 def worker_of(template: dict[str, Any]) -> Worker:
@@ -228,28 +208,25 @@ def worker_of(template: dict[str, Any]) -> Worker:
     )
 
 
+def as_dict(models: dict[str, Model]) -> dict[str, dict[str, Any]]:
+    return {name: dataclasses.asdict(model) for name, model in models.items()}
+
+
 async def main() -> None:
     here = Path(__file__).parent
     config = yaml.safe_load((here / "config.yaml").read_text())
     worker = worker_of(yaml.safe_load((here / "rayjob-nrp.yaml").read_text()))
     async with ClientSession() as http:
-        regions = await free_gpus(http, config["nrpPrometheusUrl"], worker)
+        models = await free_gpus(http, config["nrpPrometheusUrl"], worker)
     print(
-        f"{'region':<12}{'GPUs':>7}{'free':>7}{'workers':>9}"
+        f"{'model':<44}{'GB':>6}{'GPUs':>7}{'free':>7}{'workers':>9}"
         f"   (a worker: {worker.gpus} GPUs, {worker.cpus:g} CPUs, {worker.memory_gb:g} GB)"
     )
-    for name, region in regions.items():
-        print(f"{name:<12}{region.gpus:>7}{region.free_gpus:>7}{region.workers:>9}")
-    total = Region(
-        sum(r.gpus for r in regions.values()),
-        sum(r.free_gpus for r in regions.values()),
-        sum(r.workers for r in regions.values()),
-    )
-    print(f"{'total':<12}{total.gpus:>7}{total.free_gpus:>7}{total.workers:>9}")
-
-
-def as_dict(regions: dict[str, Region]) -> dict[str, dict[str, int]]:
-    return {name: dataclasses.asdict(region) for name, region in regions.items()}
+    for name, model in models.items():
+        memory = "" if model.memory_gb is None else f"{model.memory_gb:.0f}"
+        print(
+            f"{name or 'unknown':<44}{memory:>6}{model.gpus:>7}{model.free_gpus:>7}{model.workers:>9}"
+        )
 
 
 if __name__ == "__main__":

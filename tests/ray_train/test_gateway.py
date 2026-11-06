@@ -2638,7 +2638,11 @@ class FakeNrp:
         async def create(request):
             body = await request.json()
             body["metadata"]["creationTimestamp"] = stamp(0)
-            body["status"] = {"jobDeploymentStatus": "Suspended"}
+            body["status"] = {
+                "jobDeploymentStatus": "Suspended"
+                if body["spec"]["suspend"]
+                else "Initializing"
+            }
             self.jobs[body["metadata"]["name"]] = body
             return web.json_response(body, status=201)
 
@@ -2714,33 +2718,35 @@ class FakeBucket:
         return newest
 
 
-def nrp_node(name, gpus, region="us-west", model="NVIDIA A10"):
+def nrp_node(name, gpus, model="NVIDIA A10"):
     return (
         [
             sample(gpus, node=name, resource="nvidia_com_gpu"),
             sample(64, node=name, resource="cpu"),
             sample(512 * 2**30, node=name, resource="memory"),
         ],
-        sample(1, node=name, label_topology_kubernetes_io_region=region),
         sample(1, Hostname=name, modelName=model),
     )
 
 
 @pytest.fixture
 async def nrp_env(env, monkeypatch):
-    """The env, with NRP's API, its S3 bucket and its Prometheus: four free A10s in us-west, two V100s in us-east."""
+    """The env, with NRP's API, its S3 bucket and its Prometheus: four free A10s and two V100s."""
     fake = FakeNrp()
     nodes = [
         nrp_node("west-1", 3),
         nrp_node("west-2", 1),
-        nrp_node("east-1", 2, "us-east", "Tesla V100-SXM2-16GB"),
+        nrp_node("east-1", 2, "Tesla V100-SXM2-16GB"),
     ]
     answers = {
         nrp_gpus.ALLOCATABLE: [s for n in nodes for s in n[0]],
         nrp_gpus.REQUESTED: [],
         nrp_gpus.UNSCHEDULABLE: [],
-        nrp_gpus.REGIONS: [n[1] for n in nodes],
-        nrp_gpus.MODELS: [n[2] for n in nodes],
+        nrp_gpus.MODELS: [n[1] for n in nodes],
+        nrp_gpus.MEMORY: [
+            sample(23_028, modelName="NVIDIA A10"),
+            sample(16_179, modelName="Tesla V100-SXM2-16GB"),
+        ],
         **{promql: [] for promql in gw.nrp_usage_queries("interlink-cms")},
     }
 
@@ -2851,56 +2857,83 @@ async def test_a_job_on_nrp_is_a_rayjob_there_named_for_no_one(nrp_env):
     job = nrp_job(env)
     assert job["spec"]["jobId"] == submission
     assert job["spec"]["entrypoint"] == "python train.py"
-    # Without inputs it is placed at once.
+    # Without inputs it starts at once, on any GPU.
     assert job["spec"]["suspend"] is False
     # Its cluster goes as soon as it ends; its log is its submitter's.
     assert job["spec"]["ttlSecondsAfterFinished"] == 0
-    assert nrp_workers(job) == (1, ["west-1", "west-2"])
+    assert nrp_workers(job) == (1, None)
     assert "user-a" not in json.dumps(job)
     # Nothing runs at Purdue.
     assert env.kube.jobs == {} and env.kube.clusters == {} and env.kube.batch == {}
 
 
-async def test_a_job_on_nrp_gets_its_workers_in_one_region_and_gpu_model(nrp_env):
-    await nrp_submitted(nrp_env, gpus="4")
-    assert nrp_workers(nrp_job(nrp_env)) == (4, ["west-1", "west-2"])
+async def test_a_job_on_nrp_asking_for_gpu_memory_runs_on_gpus_that_have_it(nrp_env):
+    await nrp_submitted(nrp_env, gpus="4", memory="24")
+    assert nrp_workers(nrp_job(nrp_env)) == (4, ["NVIDIA-A10"])
 
 
 async def test_a_job_on_nrp_of_up_to_some_workers_takes_those_with_room(nrp_env):
+    nrp_env.answers[nrp_gpus.REQUESTED] = [
+        sample(1, node="west-2", resource="nvidia_com_gpu")
+    ]
     await nrp_submitted(nrp_env, most="9")
-    assert nrp_workers(nrp_job(nrp_env))[0] == 4
+    assert nrp_workers(nrp_job(nrp_env))[0] == 5
 
 
-async def test_a_job_on_nrp_waits_for_room_and_is_stopped_if_none_comes(nrp_env):
+async def test_a_job_on_nrp_of_a_number_of_workers_is_created_without_room_for_them(
+    nrp_env,
+):
     env = nrp_env
     env.answers[nrp_gpus.REQUESTED] = [
-        sample(1, node="west-2", resource="nvidia_com_gpu")
+        sample(3, node="west-1", resource="nvidia_com_gpu")
     ]
     submission = await nrp_submitted(env, gpus="4")
     job = nrp_job(env)
-    assert job["spec"]["suspend"] is True
-    found = await details(env, submission)
-    assert (found["status"], found["message"]) == (
-        "PENDING",
-        "Waiting for room for its workers on NRP.",
-    )
+    # NRP's scheduler starts its workers as room comes, or the gateway stops it in time.
+    assert (job["spec"]["suspend"], nrp_workers(job)[0]) == (False, 4)
     job["metadata"]["annotations"][gw.SINCE_ANNOTATION] = stamp(
         gw.NRP_START_TIMEOUT_S + 1
     )
     await env.gateway.reap_nrp()
     found = await details(env, submission)
-    assert (found["status"], found["message"]) == ("STOPPED", gw.STOPPED_NO_ROOM)
+    assert (found["status"], found["message"]) == ("STOPPED", gw.STOPPED_NOT_STARTED)
 
 
-async def test_a_job_on_nrp_asks_for_no_more_workers_than_one_group_holds_empty(
+async def test_a_job_on_nrp_asks_for_no_more_workers_than_its_gpus_hold_empty(
     nrp_env,
 ):
-    status, reason, _ = await nrp_submit(nrp_env, gpus="5")
+    status, reason, _ = await nrp_submit(nrp_env, gpus="7")
     assert status == 429
-    assert "at most 4" in reason
+    assert "GPU nodes have room for at most 6" in reason
+    status, reason, _ = await nrp_submit(nrp_env, gpus="5", memory="20")
+    assert status == 429
+    assert "GPUs of 20 GB or more have room for at most 4" in reason
     # Room taken by other pods still counts: such a job waits for it.
-    await nrp_submitted(nrp_env, gpus="4")
-    await nrp_submitted(nrp_env, gpus="4")
+    await nrp_submitted(nrp_env, gpus="6")
+    await nrp_submitted(nrp_env, gpus="6")
+
+
+async def test_a_job_on_nrp_asking_for_more_gpu_memory_than_any_has_is_refused(
+    nrp_env,
+):
+    status, reason, _ = await nrp_submit(nrp_env, memory="80")
+    assert (status, reason) == (400, "No GPU on NRP has 80 GB")
+    status, reason, _ = await nrp_submit(nrp_env, memory="lots")
+    assert status == 400
+    assert "is a number of GB" in reason
+    assert nrp_env.nrp.jobs == {}
+
+
+async def test_a_job_on_nrp_left_suspended_for_placing_is_started(nrp_env):
+    env = nrp_env
+    submission = await nrp_submitted(env)
+    job = nrp_job(env)
+    job["spec"]["suspend"] = True
+    job["metadata"]["annotations"][gw.STAGE_ANNOTATION] = "placing"
+    await env.gateway.reap_nrp()
+    assert job["spec"]["suspend"] is False
+    assert job["metadata"]["annotations"][gw.STAGE_ANNOTATION] == "running"
+    assert (await details(env, submission))["status"] == "PENDING"
 
 
 async def test_a_job_on_nrp_is_refused_while_nrp_prometheus_shows_no_nodes(nrp_env):
@@ -3011,12 +3044,11 @@ async def test_capacity_counts_workers_of_a_shape_at_both_sites(nrp_env, monkeyp
     assert (purdue["workers_free"], purdue["workers_preemptible"]) == (5, 3)
     assert purdue["workers_most"] == 22
     # Taken room counts now, and not for the most a job may ask for.
-    assert (on_nrp["workers_free"], on_nrp["workers_most"]) == (3, 4)
-    assert on_nrp["groups"][0] == {
-        "region": "us-west",
-        "model": "NVIDIA A10",
-        "workers": 3,
-    }
+    assert (on_nrp["workers_free"], on_nrp["workers_most"]) == (5, 6)
+    assert [(m["model"], m["workers"]) for m in on_nrp["models"]] == [
+        ("NVIDIA A10", 3),
+        ("Tesla V100-SXM2-16GB", 2),
+    ]
 
 
 async def test_capacity_of_a_shape_only_t4s_can_be(nrp_env, monkeypatch):
@@ -3044,9 +3076,26 @@ async def test_capacity_is_unknown_rather_than_zero_without_metrics(
     assert found["nrp"]["known"] is False
 
 
-async def test_capacity_refuses_a_shape_no_gpu_has(nrp_env):
-    with pytest.raises(gw.Refused, match="has 4000 GB"):
-        await nrp_env.gateway.capacity({gw.MEMORY_METADATA: "4000"})
+async def test_capacity_of_more_gpu_memory_than_purdues_gpus_have_is_nrps(
+    nrp_env, monkeypatch
+):
+    free_gpus_of(
+        nrp_env.gateway,
+        monkeypatch,
+        {"nvidia.com/mig-1g.5gb": (3, 0), "nvidia.com/gpu": (5, 1)},
+    )
+    found = await nrp_env.gateway.capacity({gw.MEMORY_METADATA: "20"})
+    assert (found["purdue"]["workers_most"], found["purdue"]["kinds"]) == (0, [])
+    on_nrp = found["nrp"]
+    assert (on_nrp["workers_free"], on_nrp["workers_most"]) == (4, 4)
+    assert [m["model"] for m in on_nrp["models"]] == ["NVIDIA A10"]
+    found = await nrp_env.gateway.capacity({gw.MEMORY_METADATA: "4000"})
+    assert (found["purdue"]["workers_most"], found["nrp"]["workers_most"]) == (0, 0)
+
+
+async def test_capacity_refuses_gpu_memory_that_is_no_number(nrp_env):
+    with pytest.raises(gw.Refused, match="is a number of GB"):
+        await nrp_env.gateway.capacity({gw.MEMORY_METADATA: "lots"})
 
 
 async def test_the_code_a_job_on_nrp_uploads_reaches_it_through_its_s3_prefix(nrp_env):
@@ -3096,7 +3145,7 @@ async def test_a_job_on_nrp_has_its_inputs_copied_there_and_its_outputs_back(nrp
     copied(env, f"{name}-in")
     await env.gateway.reap_nrp()
     assert job["spec"]["suspend"] is False
-    assert nrp_workers(job) == (1, ["west-1", "west-2"])
+    assert nrp_workers(job) == (1, None)
 
     kuberay_ends(env, submission)
     # Before the reaper's next pass, as after it.
@@ -3294,18 +3343,6 @@ async def test_a_job_on_nrp_whose_gpus_sit_idle_is_stopped_and_says_why(nrp_env)
     assert (await details(env, submission))["status"] == "RUNNING"
     await env.gateway.reap_nrp()
     assert env.kube.batch[f"{job['metadata']['name']}-out"]["spec"]["suspend"] is False
-
-
-async def test_jobs_on_nrp_placed_from_one_reading_may_use_every_node_of_the_group(
-    nrp_env,
-):
-    env = nrp_env
-    # Prometheus has not yet seen the first job's pods when the second is placed:
-    # both may run on any node of the group, so the scheduler finds the room left.
-    first = await nrp_submitted(env)
-    second = await nrp_submitted(env)
-    for submission in (first, second):
-        assert nrp_workers(nrp_job(env, submission)) == (1, ["west-1", "west-2"])
 
 
 async def test_a_job_on_nrp_with_one_idle_gpu_is_stopped_though_its_average_is_high(

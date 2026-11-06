@@ -15,7 +15,7 @@ says.
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `gateway.py`         | The gateway: relays Ray Client and Jobs API calls, creates and deletes users' RayClusters, and creates a RayJob per submission |
 | `config.yaml`        | The gateway's settings |
-| `nrp_gpus.py`        | How many GPUs NRP Nautilus has free for Ray workers, by region, from NRP's public Prometheus; `GET /af/nrp-gpus` and `GET /af/capacity` on the gateway's `:8265` answer it |
+| `nrp_gpus.py`        | How many GPUs NRP Nautilus has free for Ray workers, by GPU model with its memory, from NRP's public Prometheus; `GET /af/nrp-gpus` and `GET /af/capacity` on the gateway's `:8265` answer it |
 | `rayjob-nrp.yaml`    | The template of a job on NRP: its image, its head's and worker's sizes, its NCCL settings, and the nrp-s3 keys its pods read |
 | `nrp_jobs.py`        | A job on NRP: its RayJob, the NRP API it is made through, and the S3 prefix of its code and data |
 | `stage.py`           | What a job's `<RayJob>-in` and `-out` Jobs run: copies its inputs to S3, and its outputs back |
@@ -48,8 +48,11 @@ A submission with the header `af-site: nrp` runs on
 creates there through NRP's API with the interLink plugin's kubeconfig
 (`kubeconfig-nrp-interlink`), from [`rayjob-nrp.yaml`](rayjob-nrp.yaml): the
 image of the AF's global environment ([`docker/ray-nrp`](../../docker/ray-nrp)),
-whose job takes only `af-n-workers` or `af-max-workers`, up to as many workers
-as the GPU nodes of one region and model there would hold empty. A RayJob there carries a hash of its
+whose job takes only `af-n-workers`, `af-max-workers` and
+`af-min-gpu-memory-gb`, up to as many workers as NRP's GPU nodes would hold
+empty. Its pods carry only their requests; a job asking for GPU memory has its
+workers' node affinity name the `nvidia.com/gpu.product` of each model whose
+memory, as DCGM reports it on NRP's Prometheus, is nearly that (`MEMORY_SLACK`). A RayJob there carries a hash of its
 owner, and no name or path of theirs. [`nrp_jobs.py`](nrp_jobs.py) is that NRP
 side.
 
@@ -63,20 +66,19 @@ A job on NRP keeps its progress in its RayJob's annotations, and the reaper
 moves it on:
 
 1. **inputs** — created suspended, while a Job in `cms`, `<RayJob>-in`, runs
-   [`stage.py`](stage.py) as the user to copy its inputs to S3;
-2. **placing** — its workers placed, when there is room, on nodes of one region
-   and GPU model, as [`nrp_gpus.py`](nrp_gpus.py) reads NRP's Prometheus, with
-   its head in that region and `AF_MAX_WORKERS` their number, and resumed;
-3. **running** — until it ends, or until it is stopped, which suspends it and
-   says why: by its user, for want of room or a cluster within
-   `nrpStartTimeoutSeconds`, for inputs that could not be copied, or for any
+   [`stage.py`](stage.py) as the user to copy its inputs to S3, and resumed;
+2. **running** — from its creation without inputs, with as many workers as
+   [`nrp_gpus.py`](nrp_gpus.py) finds room for of those it asks for, and no fewer
+   than it starts with, `AF_MAX_WORKERS` their number; until it ends, or until
+   it is stopped, which suspends it and says why: by its user, for want of a
+   cluster within `nrpStartTimeoutSeconds`, for inputs that could not be copied, or for any
    GPU of it busy less than `nrpMinGpuUtilization` percent on average over
    `nrpUtilizationWindowSeconds` of its running, by NRP's GPU metrics, since NRP
    bans a namespace that keeps its GPUs idle;
-4. **outputs** — `<RayJob>-out`, made suspended at the submission, copies its
+3. **outputs** — `<RayJob>-out`, made suspended at the submission, copies its
    outputs back to `af-output`, unless the job never started; the job reports
    RUNNING until it has;
-5. **done** — its prefix deleted, unless its outputs could not be copied
+4. **done** — its prefix deleted, unless its outputs could not be copied
    back; its RayJob and Jobs, and such a prefix, go `jobRecordSeconds` later.
 
 Its status comes from its RayJob, and its log from the pod that submits it,
