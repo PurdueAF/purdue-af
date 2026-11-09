@@ -122,7 +122,44 @@ EXPIRY_MARGIN_SECONDS = 300.0
 DOC_TITLE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 # Before a name, so a reply can never ping @channel, @all or a person.
 AT_NAME = re.compile(r"(?<![\w.])@(?=[\w.-])")
-SORRY = "I could not answer this just now. Please try again in a few minutes."
+# Each way an answer can fail, said as what happened.
+LLM_UNREACHABLE = (
+    "I could not reach my language model just now, so I cannot answer. "
+    "Please try again in a few minutes."
+)
+LLM_BUSY = (
+    "My language model is busy right now (HTTP {status}). "
+    "Please try again in a few minutes."
+)
+LLM_TOO_LONG = (
+    "This conversation is too long for my language model. "
+    "Please ask again in a new thread."
+)
+LLM_FAILED = (
+    "My language model returned an error (HTTP {status}). Please try again later."
+)
+EMPTY_REPLY = "My language model returned an empty answer. Please ask again."
+TOOLS_UNREACHABLE = (
+    "I could not reach the facility tools just now, so I cannot look this up. "
+    "Please try again in a few minutes."
+)
+HUB_UNREACHABLE = (
+    "I could not reach the Analysis Facility hub to use your linked account. "
+    "Please try again in a few minutes."
+)
+CONVERSATION_UNREADABLE = (
+    "I could not read this conversation from Mattermost (HTTP {status}), "
+    "so I cannot answer it."
+)
+LINK_FAILED = (
+    "Linking failed: the Analysis Facility hub answered HTTP {status}. "
+    "Send `link` to start again."
+)
+TIMED_OUT = (
+    "Answering took longer than {minutes} minutes, so I stopped. "
+    "Please ask again, perhaps about less at once."
+)
+UNEXPECTED = "Something went wrong on my side ({kind}), so I cannot answer this."
 LIMITED = "You have reached my limit of questions for now. Please try again later."
 NEEDS_LINK = (
     "I need to know who you are for that. Ask me in a direct message to link your "
@@ -155,6 +192,15 @@ FINISH = "Reply now in plain text with what was done and what is left. Call no t
 BAD_CODE = "That code did not work. Send `link` to start again."
 UNLINKED = "Unlinked. I no longer use your account."
 NOT_LINKED = "You are not linked."
+
+
+class Failure(Exception):
+    """Why an answer failed, worded for the person who asked."""
+
+
+def status_of(exc: Exception) -> str:
+    response = getattr(exc, "response", None)
+    return str(response.status_code) if response is not None else type(exc).__name__
 
 
 class Unauthorized(Exception):
@@ -774,15 +820,26 @@ class Agent:
                 log.info("post %s: over the limit", post["id"])
                 return
             async with self.slots:
-                try:
-                    answer = await asyncio.wait_for(self.answer(post), ANSWER_SECONDS)
-                except Exception:
-                    log.exception("post %s: no answer", post["id"])
-                    answer = SORRY
-            await self.mattermost.reply(post, root, clean(answer) or SORRY)
+                answer = await self.answer_or_why(post)
+            await self.mattermost.reply(post, root, clean(answer))
             log.info("post %s: answered", post["id"])
         except (httpx.HTTPError, Unauthorized):
             log.exception("post %s: no reply", post["id"])
+
+    async def answer_or_why(self, post: dict[str, Any]) -> str:
+        """The answer, or the reason there is none: never nothing."""
+        try:
+            answer = await asyncio.wait_for(self.answer(post), ANSWER_SECONDS)
+        except Failure as failure:
+            log.warning("post %s: %s", post["id"], failure)
+            return str(failure)
+        except TimeoutError:
+            log.warning("post %s: timed out", post["id"])
+            return TIMED_OUT.format(minutes=round(ANSWER_SECONDS / 60))
+        except Exception as exc:
+            log.exception("post %s: no answer", post["id"])
+            return UNEXPECTED.format(kind=type(exc).__name__)
+        return clean(answer) or EMPTY_REPLY
 
     def text(self, post: dict[str, Any]) -> str:
         message: str = post["message"]
@@ -801,7 +858,11 @@ class Agent:
             return UNLINKED
         if command.lower() == "link":
             return LINK_REPLY.format(url=self.linking.link_url(user))
-        hub_user = await self.linking.confirm(user, command)
+        try:
+            hub_user = await self.linking.confirm(user, command)
+        except httpx.HTTPError as exc:
+            log.exception("post %s: linking", post["id"])
+            return LINK_FAILED.format(status=status_of(exc))
         return LINKED.format(hub_user=hub_user) if hub_user else BAD_CODE
 
     def thread_messages(
@@ -832,11 +893,23 @@ class Agent:
         body: dict[str, Any] = {"model": self.role, "messages": messages}
         if tools:
             body["tools"] = tools
-        response = await self.llm.post(
-            "/v1/chat/completions", json=body, headers={"x-af-session": session}
-        )
-        response.raise_for_status()
-        message: dict[str, Any] = response.json()["choices"][0]["message"]
+        try:
+            response = await self.llm.post(
+                "/v1/chat/completions", json=body, headers={"x-af-session": session}
+            )
+        except httpx.TransportError as exc:
+            raise Failure(LLM_UNREACHABLE) from exc
+        status = response.status_code
+        if status == 413:
+            raise Failure(LLM_TOO_LONG)
+        if status in (429, 502, 503, 504):
+            raise Failure(LLM_BUSY.format(status=status))
+        if status != 200:
+            raise Failure(LLM_FAILED.format(status=status))
+        try:
+            message: dict[str, Any] = response.json()["choices"][0]["message"]
+        except (ValueError, KeyError, IndexError) as exc:
+            raise Failure(LLM_FAILED.format(status=status)) from exc
         return message
 
     async def intent(self, thread: list[dict[str, Any]], post: dict[str, Any]) -> str:
@@ -884,16 +957,30 @@ class Agent:
 
     async def answer(self, post: dict[str, Any]) -> str:
         root = post["root_id"] or post["id"]
-        if self.private(post):
-            thread = await self.mattermost.recent(post["channel_id"], MAX_THREAD_POSTS)
-        else:
-            thread = await self.mattermost.thread(post["id"])
+        try:
+            if self.private(post):
+                thread = await self.mattermost.recent(
+                    post["channel_id"], MAX_THREAD_POSTS
+                )
+            else:
+                thread = await self.mattermost.thread(post["id"])
+        except httpx.HTTPError as exc:
+            raise Failure(
+                CONVERSATION_UNREADABLE.format(status=status_of(exc))
+            ) from exc
         intent = await self.intent(thread, post)
         if intent in ("link", "unlink"):
             return await self.command(post, intent)
         personal = intent == "personal"
         token = self.linking.token(post["user_id"]) if personal else None
-        if personal and (token is None or await self.linking.hub.owner(token) is None):
+        if personal and token is not None:
+            try:
+                owner = await self.linking.hub.owner(token)
+            except httpx.HTTPError as exc:
+                raise Failure(HUB_UNREACHABLE) from exc
+            if owner is None:
+                token = None
+        if personal and token is None:
             self.linking.forget(post["user_id"])
             return NEEDS_LINK
         allowed = FACILITY_TOOLS | PERSONAL_TOOLS if personal else FACILITY_TOOLS
@@ -913,47 +1000,59 @@ class Agent:
             {"role": "system", "content": system},
             *self.thread_messages(thread, post, only_author=personal),
         ]
-        async with self.facility.session(token) as session:
-            listed = await session.list_tools()
-            tools = [read_doc_tool()] + [
-                openai_tool(t) for t in listed.tools if t.name in allowed
-            ]
-            ran: list[str] = []
-            for turn in range(MAX_TURNS):
-                last = turn == MAX_TURNS - 1
-                if last:
-                    messages.append({"role": "user", "content": FINISH})
-                reply = await self.complete(messages, [] if last else tools, root)
-                # The last turn runs nothing: it offered no tools.
-                calls = None if last else reply.get("tool_calls")
-                if not calls:
-                    text = str(reply.get("content") or "")
-                    if text.strip():
-                        return text
-                    break
-                messages.append(
-                    {
-                        "role": "assistant",
-                        "content": reply.get("content"),
-                        "tool_calls": calls,
-                    }
-                )
-                for call in calls:
-                    function = call["function"]
-                    if function["name"] in PERSONAL_TOOLS:
-                        ran.append(function["name"])
-                    log.info("post %s: tool %s", post["id"], function["name"])
-                    content = await self.call(
-                        session,
-                        function["name"],
-                        function.get("arguments", ""),
-                        allowed,
-                    )
+        try:
+            async with self.facility.session(token) as session:
+                listed = await session.list_tools()
+                tools = [read_doc_tool()] + [
+                    openai_tool(t) for t in listed.tools if t.name in allowed
+                ]
+                ran: list[str] = []
+                for turn in range(MAX_TURNS):
+                    last = turn == MAX_TURNS - 1
+                    if last:
+                        messages.append({"role": "user", "content": FINISH})
+                    reply = await self.complete(messages, [] if last else tools, root)
+                    # The last turn runs nothing: it offered no tools.
+                    calls = None if last else reply.get("tool_calls")
+                    if not calls:
+                        text = str(reply.get("content") or "")
+                        if text.strip():
+                            return text
+                        break
                     messages.append(
-                        {"role": "tool", "tool_call_id": call["id"], "content": content}
+                        {
+                            "role": "assistant",
+                            "content": reply.get("content"),
+                            "tool_calls": calls,
+                        }
                     )
+                    for call in calls:
+                        function = call["function"]
+                        if function["name"] in PERSONAL_TOOLS:
+                            ran.append(function["name"])
+                        log.info("post %s: tool %s", post["id"], function["name"])
+                        content = await self.call(
+                            session,
+                            function["name"],
+                            function.get("arguments", ""),
+                            allowed,
+                        )
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": call["id"],
+                                "content": content,
+                            }
+                        )
+        except Failure:
+            raise
+        except Exception as exc:
+            log.exception("post %s: facility tools", post["id"])
+            raise Failure(TOOLS_UNREACHABLE) from exc
         log.warning("post %s: no text after %d tools", post["id"], len(ran))
-        return ACTED.format(tools=", ".join(dict.fromkeys(ran))) if ran else ""
+        if ran:
+            return ACTED.format(tools=", ".join(dict.fromkeys(ran)))
+        raise Failure(EMPTY_REPLY)
 
     def alive(self) -> bool:
         """Not stuck: polling recently, or waiting for the login."""

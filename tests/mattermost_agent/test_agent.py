@@ -623,7 +623,7 @@ async def test_an_empty_reply_after_no_action_is_a_failure(make):
     question = post("q", "@purdueaf-agent is the AF up?")
     server.thread = {"q": question}
     await bot.handle(question)
-    assert replies(server)[-1] == agent.SORRY
+    assert replies(server)[-1] == agent.EMPTY_REPLY
 
 
 async def test_a_reply_cannot_mention_anyone(make):
@@ -657,7 +657,7 @@ async def test_a_failed_answer_says_so(make):
     server.posts = server.thread = {"p1": post()}
     bot.cursors["c1"] = 1000
     await poll(bot)
-    assert server.replies[0]["message"] == agent.SORRY
+    assert server.replies[0]["message"] == agent.LLM_FAILED.format(status=500)
 
 
 async def test_a_user_over_the_limit_is_told_once(make):
@@ -1389,6 +1389,143 @@ async def test_the_model_knows_whether_the_asker_is_linked(make):
     system = llm.bodies[1]["messages"][0]["content"]
     assert "has linked their facility account until" in system
     assert "alice" not in system and "token-" not in system
+
+
+async def asked(make, *answers, private=False, **setup):
+    """Asks one question and returns what the bot replied."""
+    bot, server, llm, facility = await make(*answers)
+    await ready(bot)
+    for name, value in setup.items():
+        setattr(server if hasattr(server, name) else bot, name, value)
+    question = dm("q", "is the AF up?") if private else post("q", "@purdueaf-agent up?")
+    server.thread = server.direct_posts = {"q": question}
+    await bot.handle(question)
+    return bot, server, replies(server)[-1]
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (413, agent.LLM_TOO_LONG),
+        (429, agent.LLM_BUSY.format(status=429)),
+        (503, agent.LLM_BUSY.format(status=503)),
+        (500, agent.LLM_FAILED.format(status=500)),
+    ],
+)
+async def test_a_language_model_error_is_named(make, status, expected):
+    *_, reply = await asked(make, status)
+    assert reply == expected
+
+
+async def test_an_unreachable_language_model_is_named(make):
+    bot, server, llm, facility = await make()
+    await ready(bot)
+
+    def down(request):
+        raise httpx.ConnectError("down")
+
+    bot.llm = httpx.AsyncClient(
+        base_url="http://llm", transport=httpx.MockTransport(down)
+    )
+    question = post("q", "@purdueaf-agent up?")
+    server.thread = {"q": question}
+    await bot.handle(question)
+    assert replies(server)[-1] == agent.LLM_UNREACHABLE
+
+
+async def test_unreachable_facility_tools_are_named(make):
+    bot, server, llm, facility = await make({"content": "never"})
+    await ready(bot)
+
+    class Broken:
+        async def __aenter__(self):
+            raise ConnectionRefusedError("mcp down")
+
+        async def __aexit__(self, *exc):
+            return False
+
+    facility.session = lambda token=None: Broken()
+    question = post("q", "@purdueaf-agent up?")
+    server.thread = {"q": question}
+    await bot.handle(question)
+    assert replies(server)[-1] == agent.TOOLS_UNREACHABLE
+
+
+async def test_an_unreachable_hub_is_named_for_a_personal_question(make):
+    bot, server, llm, facility = await make({"content": "never"})
+    await ready(bot)
+    await link(bot, server)
+    llm.personal = "personal"
+
+    def down(request):
+        raise httpx.ConnectError("down")
+
+    bot.linking.hub.client = httpx.AsyncClient(
+        base_url="http://hub", transport=httpx.MockTransport(down)
+    )
+    question = post("q", "@purdueaf-agent my session?")
+    server.thread = {"q": question}
+    await bot.handle(question)
+    assert replies(server)[-1] == agent.HUB_UNREACHABLE
+    assert bot.linking.token("u1") is not None
+
+
+async def test_an_unreadable_conversation_is_named(make):
+    bot, server, llm, facility = await make()
+    await ready(bot)
+    original = server.__call__
+
+    def refuse_threads(request):
+        if request.url.path.startswith("/api/v4/posts/") and request.method == "GET":
+            return httpx.Response(403, json={})
+        return original(request)
+
+    bot.mattermost.client._transport = httpx.MockTransport(refuse_threads)
+    await bot.handle(post("q", "@purdueaf-agent up?"))
+    assert replies(server)[-1] == agent.CONVERSATION_UNREADABLE.format(status=403)
+
+
+async def test_a_slow_answer_is_stopped_and_named(make, monkeypatch):
+    bot, server, *_ = await make()
+    await ready(bot)
+
+    async def slow(post):
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(bot, "answer", slow)
+    monkeypatch.setattr(agent, "ANSWER_SECONDS", 0.01)
+    await bot.handle(post("q", "@purdueaf-agent up?"))
+    assert replies(server)[-1] == agent.TIMED_OUT.format(minutes=0)
+
+
+async def test_an_unexpected_error_is_named_by_its_kind(make, monkeypatch):
+    bot, server, *_ = await make()
+    await ready(bot)
+
+    async def broken(post):
+        raise KeyError("x")
+
+    monkeypatch.setattr(bot, "answer", broken)
+    await bot.handle(post("q", "@purdueaf-agent up?"))
+    assert replies(server)[-1] == agent.UNEXPECTED.format(kind="KeyError")
+
+
+async def test_a_hub_error_while_linking_is_named(make):
+    bot, server, *_ = await make()
+    await ready(bot)
+    await bot.handle(dm("d", "link"))
+    state = next(iter(bot.linking.pending))
+    code = await bot.linking.login(state, "alice-login")
+
+    async def refused(*args):
+        request = httpx.Request("POST", "http://hub/hub/api/users/alice/tokens")
+        raise httpx.HTTPStatusError(
+            "403", request=request, response=httpx.Response(403, request=request)
+        )
+
+    bot.linking.hub.mint = refused
+    await bot.handle(dm("c", code))
+    assert replies(server)[-1] == agent.LINK_FAILED.format(status=403)
 
 
 def test_every_key_the_pod_reads_is_in_the_secret():
