@@ -2180,7 +2180,7 @@ class Gateway:
                             raise
                         raise Refused(
                             grpc.StatusCode.NOT_FOUND,
-                            f"You have no job {about[1]}: a job's record goes when it is deleted, or {int(JOB_RECORD_S // 86400)} days after the job ends.",
+                            f"You have no job {about[1]}: a job's record goes when it is deleted, or {int(JOB_RECORD_S // 60)} minutes after the job ends.",
                         ) from e
                 else:
                     job, cluster = found
