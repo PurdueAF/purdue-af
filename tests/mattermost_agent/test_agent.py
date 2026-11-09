@@ -672,17 +672,17 @@ async def test_a_failed_answer_says_so(make):
     assert server.replies[0]["message"] == agent.LLM_FAILED.format(status=500)
 
 
-async def test_a_user_over_the_limit_is_told_once(make):
+async def test_a_user_over_the_limit_is_told_each_time(make):
     bot, server, *_ = await make(*[{"content": "ok"}] * agent.USER_LIMIT)
     for n in range(agent.USER_LIMIT + 2):
         await bot.handle(post(f"p{n}"))
     messages = [r["message"] for r in server.replies]
-    assert messages == ["ok"] * agent.USER_LIMIT + [agent.LIMITED]
+    assert messages == ["ok"] * agent.USER_LIMIT + [agent.LIMITED] * 2
 
 
 def test_the_limit_frees_up_with_time(make):
     bot = agent.Agent.__new__(agent.Agent)
-    bot.asked, bot.warned = agent.defaultdict(agent.deque), set()
+    bot.asked = agent.defaultdict(agent.deque)
     assert all(bot.allowed("u", 0.0) for _ in range(agent.USER_LIMIT))
     assert not bot.allowed("u", 1.0)
     assert bot.allowed("u", agent.USER_WINDOW_SECONDS + 1)
@@ -1245,15 +1245,19 @@ async def test_only_a_clear_word_sets_the_intent(make, reply, intent):
     assert await bot.intent([post()], post()) == intent
 
 
-async def test_a_failed_check_is_a_public_question(make):
+async def test_a_failed_check_says_why(make):
     bot, server, llm, facility = await make()
     await ready(bot)
+    llm.unhealthy = set()
 
     async def broken(*args):
-        raise httpx.ConnectError("down")
+        raise agent.Failure(agent.LLM_UNREACHABLE)
 
     bot.complete = broken
-    assert await bot.intent([post()], post()) == "general"
+    question = post("q", "@purdueaf-agent up?")
+    server.thread = {"q": question}
+    await bot.handle(question)
+    assert replies(server)[-1] == agent.LLM_UNREACHABLE
 
 
 async def test_a_personal_answer_stays_where_it_was_asked(make):

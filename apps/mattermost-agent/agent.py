@@ -713,7 +713,6 @@ class Agent:
         self.groups: set[str] = set()
         self.channels_at = 0.0
         self.asked: defaultdict[str, deque[float]] = defaultdict(deque)
-        self.warned: set[str] = set()
         self.slots = asyncio.Semaphore(CONCURRENT_ANSWERS)
         self.tasks: set[asyncio.Task[None]] = set()
 
@@ -759,7 +758,6 @@ class Agent:
         if len(asked) >= USER_LIMIT:
             return False
         asked.append(now)
-        self.warned.discard(user_id)
         return True
 
     async def poll(self) -> list[asyncio.Task[None]]:
@@ -820,16 +818,15 @@ class Agent:
                 log.info("post %s: linking", post["id"])
                 return
             if not self.allowed(user, time.monotonic()):
-                if user not in self.warned:
-                    self.warned.add(user)
-                    await self.mattermost.reply(post, root, LIMITED)
+                await self.mattermost.reply(post, root, LIMITED)
                 log.info("post %s: over the limit", post["id"])
                 return
             async with self.slots:
                 answer = await self.answer_or_why(post)
             await self.mattermost.reply(post, root, clean(answer))
             log.info("post %s: answered", post["id"])
-        except (httpx.HTTPError, Unauthorized):
+        except Exception:
+            # Posting the reply is what failed, so nothing can be said in Mattermost.
             log.exception("post %s: no reply", post["id"])
 
     async def answer_or_why(self, post: dict[str, Any]) -> str:
@@ -845,7 +842,7 @@ class Agent:
         except Exception as exc:
             log.exception("post %s: no answer", post["id"])
             return UNEXPECTED.format(kind=type(exc).__name__)
-        return clean(answer) or EMPTY_REPLY
+        return answer if answer.strip() else EMPTY_REPLY
 
     def text(self, post: dict[str, Any]) -> str:
         message: str = post["message"]
@@ -955,11 +952,7 @@ class Agent:
             {"role": "system", "content": INTENT_CHECK},
             {"role": "user", "content": text[-MAX_POST_CHARS:]},
         ]
-        try:
-            reply = await self.complete(messages, [], post["id"])
-        except (httpx.HTTPError, KeyError, IndexError):
-            log.warning("post %s: intent check failed", post["id"])
-            return "general"
+        reply = await self.complete(messages, [], post["id"])
         found = INTENT.match(str(reply.get("content") or ""))
         intent = found[1].lower() if found else "general"
         log.info("post %s: intent=%s", post["id"], intent)
