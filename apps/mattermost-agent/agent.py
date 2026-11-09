@@ -76,6 +76,8 @@ MAX_THREAD_POSTS = 20
 MAX_POST_CHARS = 4_000
 MAX_TOOL_CHARS = 24_000
 ANSWER_SECONDS = 300.0
+# Each model call: the LLM proxy holds a request through an outage for hours.
+LLM_CALL_SECONDS = 120.0
 CONCURRENT_ANSWERS = 4
 USER_LIMIT = 5
 USER_WINDOW_SECONDS = 600.0
@@ -130,6 +132,10 @@ LLM_UNREACHABLE = (
 LLM_BUSY = (
     "My language model is busy right now (HTTP {status}). "
     "Please try again in a few minutes."
+)
+LLM_SLOW = (
+    "My language model did not answer within {seconds} seconds; it may be "
+    "unreachable. Please try again later."
 )
 LLM_TOO_LONG = (
     "This conversation is too long for my language model. "
@@ -887,6 +893,22 @@ class Agent:
                 )
         return messages
 
+    async def llm_down(self) -> bool:
+        """Whether the LLM proxy has marked every model of this role
+        unhealthy. Anything it cannot tell counts as up."""
+        try:
+            config = await self.llm.get("/config", timeout=10.0)
+            status = await self.llm.get("/status", timeout=10.0)
+        except httpx.TransportError as exc:
+            raise Failure(LLM_UNREACHABLE) from exc
+        try:
+            backends = config.json()[self.role]["backends"]
+            models = {backend.split("#")[0] for backend in backends}
+            gates = status.json()
+            return bool(models) and not any(gates[m]["healthy"] for m in models)
+        except (ValueError, KeyError, TypeError):
+            return False
+
     async def complete(
         self, messages: list[dict[str, Any]], tools: list[dict[str, Any]], session: str
     ) -> dict[str, Any]:
@@ -895,8 +917,13 @@ class Agent:
             body["tools"] = tools
         try:
             response = await self.llm.post(
-                "/v1/chat/completions", json=body, headers={"x-af-session": session}
+                "/v1/chat/completions",
+                json=body,
+                headers={"x-af-session": session},
+                timeout=LLM_CALL_SECONDS,
             )
+        except httpx.TimeoutException as exc:
+            raise Failure(LLM_SLOW.format(seconds=round(LLM_CALL_SECONDS))) from exc
         except httpx.TransportError as exc:
             raise Failure(LLM_UNREACHABLE) from exc
         status = response.status_code
@@ -957,6 +984,8 @@ class Agent:
 
     async def answer(self, post: dict[str, Any]) -> str:
         root = post["root_id"] or post["id"]
+        if await self.llm_down():
+            raise Failure(LLM_UNREACHABLE)
         try:
             if self.private(post):
                 thread = await self.mattermost.recent(

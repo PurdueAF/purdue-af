@@ -124,9 +124,21 @@ class FakeLLM:
         self.replies = list(replies)
         self.bodies = []
         self.checks = []
+        self.unhealthy = set()
         self.personal = "general"
 
     def __call__(self, request):
+        if request.url.path == "/config":
+            backends = ["deepseek-v4-flash", "qwen3-small#medium"]
+            return httpx.Response(
+                200, json={"facility-assistant": {"backends": backends}}
+            )
+        if request.url.path == "/status":
+            gates = {
+                name: {"healthy": name not in self.unhealthy}
+                for name in ("deepseek-v4-flash", "qwen3-small", "glm-5")
+            }
+            return httpx.Response(200, json=gates)
         body = json.loads(request.content)
         if body["messages"][0]["content"] == agent.INTENT_CHECK:
             self.checks.append(body["messages"][1]["content"])
@@ -1431,6 +1443,47 @@ async def test_an_unreachable_language_model_is_named(make):
     server.thread = {"q": question}
     await bot.handle(question)
     assert replies(server)[-1] == agent.LLM_UNREACHABLE
+
+
+async def test_a_model_the_proxy_marks_down_is_named_at_once(make):
+    bot, server, llm, _ = await make({"content": "never"})
+    await ready(bot)
+    llm.unhealthy = {"deepseek-v4-flash", "qwen3-small"}
+    question = post("q", "@purdueaf-agent up?")
+    server.thread = {"q": question}
+    await bot.handle(question)
+    assert replies(server)[-1] == agent.LLM_UNREACHABLE
+    assert llm.bodies == [] and llm.checks == []
+
+
+async def test_one_healthy_model_is_enough(make):
+    bot, server, llm, _ = await make({"content": "Up."})
+    await ready(bot)
+    llm.unhealthy = {"deepseek-v4-flash"}
+    question = post("q", "@purdueaf-agent up?")
+    server.thread = {"q": question}
+    await bot.handle(question)
+    assert replies(server)[-1] == "Up."
+
+
+async def test_a_model_that_does_not_answer_in_time_is_named(make):
+    bot, server, llm, _ = await make()
+    await ready(bot)
+    original = llm.__call__
+
+    def stalls(request):
+        if request.url.path == "/v1/chat/completions":
+            raise httpx.ReadTimeout("no answer", request=request)
+        return original(request)
+
+    bot.llm = httpx.AsyncClient(
+        base_url="http://llm", transport=httpx.MockTransport(stalls)
+    )
+    question = post("q", "@purdueaf-agent up?")
+    server.thread = {"q": question}
+    await bot.handle(question)
+    expected = agent.LLM_SLOW.format(seconds=round(agent.LLM_CALL_SECONDS))
+    assert replies(server)[-1] == expected
 
 
 async def test_unreachable_facility_tools_are_named(make):
