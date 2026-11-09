@@ -1490,6 +1490,80 @@ async def test_a_model_that_does_not_answer_in_time_is_named(make):
     assert replies(server)[-1] == expected
 
 
+def llm_with(llm, chat):
+    """An LLM client whose health endpoints answer as usual and whose chat
+    calls go to `chat`."""
+
+    def route(request):
+        if request.url.path == "/v1/chat/completions":
+            return chat(request)
+        return llm(request)
+
+    return httpx.AsyncClient(
+        base_url="http://llm", transport=httpx.MockTransport(route)
+    )
+
+
+async def ask(bot, server):
+    question = post("q", "@purdueaf-agent up?")
+    server.thread = {"q": question}
+    await bot.handle(question)
+    return replies(server)[-1]
+
+
+async def test_a_model_call_that_cannot_connect_is_named(make):
+    bot, server, llm, _ = await make()
+    await ready(bot)
+
+    def down(request):
+        raise httpx.ConnectError("down")
+
+    bot.llm = llm_with(llm, down)
+    assert await ask(bot, server) == agent.LLM_UNREACHABLE
+
+
+async def test_a_model_reply_that_cannot_be_read_is_named(make):
+    bot, server, llm, _ = await make()
+    await ready(bot)
+    bot.llm = llm_with(llm, lambda request: httpx.Response(200, json={"choices": []}))
+    assert await ask(bot, server) == agent.LLM_FAILED.format(status=200)
+
+
+async def test_a_malformed_health_report_counts_as_up(make):
+    bot, server, llm, _ = await make({"content": "Up."})
+    await ready(bot)
+    original = llm.__call__
+
+    def garbled(request):
+        if request.url.path == "/status":
+            return httpx.Response(200, text="not json")
+        return original(request)
+
+    bot.llm = httpx.AsyncClient(
+        base_url="http://llm", transport=httpx.MockTransport(garbled)
+    )
+    assert await ask(bot, server) == "Up."
+
+
+async def test_a_reply_mattermost_refuses_is_logged(make, caplog):
+    bot, server, *_ = await make({"content": "Up."})
+    await ready(bot)
+    original = server.__call__
+
+    def refuse_posting(request):
+        if request.method == "POST" and request.url.path == "/api/v4/posts":
+            return httpx.Response(403, json={})
+        return original(request)
+
+    bot.mattermost.client._transport = httpx.MockTransport(refuse_posting)
+    question = post("q", "@purdueaf-agent up?")
+    server.thread = {"q": question}
+    with caplog.at_level("ERROR", logger="mattermost-agent"):
+        await bot.handle(question)
+    assert server.replies == []
+    assert "post q: no reply" in [r.getMessage() for r in caplog.records]
+
+
 async def test_unreachable_facility_tools_are_named(make):
     bot, server, llm, facility = await make({"content": "never"})
     await ready(bot)
