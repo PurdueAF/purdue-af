@@ -23,7 +23,7 @@ on:
 permissions:
   contents: write # release commit, git tag, GitHub Release
   packages: write # semver tag on ghcr
-  actions: write # dispatch Component status
+  actions: write # dispatch Component status and Docs deploy
 
 concurrency:
   group: release-image # never run two releases concurrently, never cancel one
@@ -117,7 +117,7 @@ jobs:
         run: |
           git config user.name "af-release-bot"
           git config user.email "af-release-bot@users.noreply.github.com"
-          git add apps/jupyterhub/jupyterhub/values.yaml apps/af-utils/pixi-global-sync/deployment.yaml \
+          git add apps/jupyterhub/jupyterhub/values.yaml apps/af-utils/pixi-global-sync \
             pixi/base/pixi.toml pixi/global/pixi.toml
           git commit -m "release purdue-af image $VERSION"
           # the v prefix keeps image tags distinct from bare platform CalVer tags
@@ -140,3 +140,5 @@ jobs:
       # A tag pushed with the workflow token triggers no workflow; a dispatch does.
       - name: Refresh the README status badges
         run: gh workflow run component-status.yml --ref main
+      - name: Publish the released global env in the docs
+        run: gh workflow run docs-deploy.yml --ref main

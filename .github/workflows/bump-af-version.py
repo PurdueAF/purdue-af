@@ -19,6 +19,9 @@ and, in apps/af-utils/pixi-global-sync/deployment.yaml:
 and the workspace `version` of pixi/base and pixi/global:
   7. X.Y.Z on the release commit; --mark-dev then writes X.Y.Z+dev, so
      no other commit carries a released version
+and, in apps/af-utils/pixi-global-sync/release/:
+  8. a copy of the stamped pixi/global manifest and its lock, the env
+     pixi-global-sync installs
 
 Usage:
   bump-af-version.py --print-current
@@ -35,6 +38,8 @@ from pathlib import Path
 DEFAULT_FILE = Path("apps/jupyterhub/jupyterhub/values.yaml")
 DEFAULT_SYNC_FILE = Path("apps/af-utils/pixi-global-sync/deployment.yaml")
 DEFAULT_PIXI_FILES = [Path("pixi/base/pixi.toml"), Path("pixi/global/pixi.toml")]
+DEFAULT_GLOBAL_DIR = Path("pixi/global")
+DEFAULT_RELEASE_DIR = Path("apps/af-utils/pixi-global-sync/release")
 # Same pull path as the pre-release profile (geddes Harbor proxy of ghcr;
 # the CI-promoted semver tags live on ghcr.io/purdueaf/purdue-af).
 DEFAULT_REGISTRY = (
@@ -150,6 +155,8 @@ def main() -> None:
         action="append",
         help="a pixi.toml to stamp (repeatable; default: pixi/base and pixi/global)",
     )
+    parser.add_argument("--global-dir", type=Path, default=DEFAULT_GLOBAL_DIR)
+    parser.add_argument("--release-dir", type=Path, default=DEFAULT_RELEASE_DIR)
     parser.add_argument("--registry", default=DEFAULT_REGISTRY)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -184,11 +191,18 @@ def main() -> None:
     updated = apply(text, new, args.registry)
     sync_updated = apply_sync(args.sync_file.read_text(), new, args.registry)
     stamped = [(f, apply_pixi(f.read_text(), new)) for f in pixi_files]
+    released = {
+        "pixi.toml": apply_pixi((args.global_dir / "pixi.toml").read_text(), new),
+        "pixi.lock": (args.global_dir / "pixi.lock").read_text(),
+    }
     if not args.dry_run:
         args.file.write_text(updated)
         args.sync_file.write_text(sync_updated)
         for f, text in stamped:
             f.write_text(text)
+        args.release_dir.mkdir(parents=True, exist_ok=True)
+        for name, text in released.items():
+            (args.release_dir / name).write_text(text)
     # stdout carries ONLY the new version (workflow captures it); log to stderr
     print(
         f"{cur} -> {new} ({args.file}{' — dry run' if args.dry_run else ''})",

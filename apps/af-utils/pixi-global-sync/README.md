@@ -10,10 +10,12 @@ the share is the persistent package cache at `/work/pixi/.cache`.
 
 ## How a change arrives
 
-- **The manifests arrive through the Flux `af-image` root**, from the
-  newest purdue-af image tag ([RELEASING.md](../../../RELEASING.md)): a
-  change merged to `pixi/global` waits for the next image release, and the
-  env's `version` field names the release it came with.
+- **The manifests arrive through the Flux core root**, from
+  [`release/`](release): the copy of `pixi/global` that each purdue-af
+  image release writes and the next platform release deploys, with the
+  hub's new default image ([RELEASING.md](../../../RELEASING.md)). A change
+  merged to `pixi/global` waits for both; the env's `version` field names
+  the release it came with.
   The daemon re-verifies after each install and every 6 h: a broken-on-disk
   env alerts and self-heals.
 - **Updates are in place.** With the cache on the same filesystem,
@@ -25,7 +27,7 @@ the share is the persistent package cache at `/work/pixi/.cache`.
   applies) and the live ones, or desired manifests the running daemon has
   not installed yet: a failed install holds `in_sync` at 0 and is retried
   after `FAIL_COOLDOWN`, and each start runs `pixi install --locked` once,
-  a fast no-op on a current env. Change latency tag→live ≈ Flux
+  a fast no-op on a current env. Change latency platform tag→live ≈ Flux
   interval + 1 min + install time.
 - **A new `sync-global-env.py` restarts the daemon.** Between cycles,
   never during an install, it compares its own file's content and exits 0
@@ -54,9 +56,9 @@ eventually surfaces as AFGlobalEnvOutOfSync.
 
 ## Runbook
 
-- **Roll back an env change:** revert the lock commit on `main` and
-  release an image; the daemon reconciles back at the new tag (warm cache ⇒
-  minutes).
+- **Roll back an env change:** roll back the image release
+  ([RELEASING.md](../../../RELEASING.md)); the daemon reconciles back to the
+  previous `release/` at the new platform tag (warm cache ⇒ minutes).
 - **Watch a sync:** `kubectl logs deploy/pixi-global-sync -f`
 - **Force a re-sync now:** delete the pod (each start installs),
   `rm /work/pixi/global/pixi.lock` (instant drift), or wait ≤60 s after

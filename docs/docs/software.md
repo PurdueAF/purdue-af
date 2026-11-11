@@ -29,14 +29,14 @@ code that is not part of any Pixi project.
 
 ??? note "List of packages in the global environment (pixi.toml configuration)"
 
-    The canonical definition lives in
-    [`pixi/global/pixi.toml`](https://github.com/PurdueAF/purdue-af/blob/main/pixi/global/pixi.toml)
-    in this repository. `/work/pixi/global/` holds the version released with
-    the latest Purdue AF image, named by the `version` field of its
-    `pixi.toml`. The definition below, from `main`, can be newer than it:
+    `/work/pixi/global/` is released with the Purdue AF image, and its
+    `version` field names that release. Changes for the next release
+    collect in
+    [`pixi/global/pixi.toml`](https://github.com/PurdueAF/purdue-af/blob/main/pixi/global/pixi.toml).
+    The released environment:
 
     ```toml
-    --8<-- "pixi/global/pixi.toml"
+    --8<-- "apps/af-utils/pixi-global-sync/release/pixi.toml"
     ```
 
 If a package that you consider common is missing from the global environment,

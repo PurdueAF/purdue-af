@@ -46,6 +46,7 @@ Whether the ref behind each component holds what is on `main`
 ![grafana][core-monitoring-grafana]
 ![prometheus][core-monitoring-prometheus]
 ![storage][core-storage]
+![pixi-global-sync][core-af-utils-pixi-global-sync]
 
 **Experimental**
 
@@ -72,11 +73,6 @@ Whether the ref behind each component holds what is on `main`
 ![krab][experimental-krab]
 ![mattermost-agent][experimental-mattermost-agent]
 
-**purdue-af image release** — the [`af-image` root](flux/README.md) applies
-the newest `vX.Y.Z` image tag
-
-![pixi-global][af-image-af-utils-pixi-global-sync]
-
 **Images** — which tag each one ships on: [RELEASING.md](RELEASING.md).
 
 ![purdue-af][image-purdue-af]
@@ -89,6 +85,11 @@ the newest `vX.Y.Z` image tag
 ![interlink-kubernetes-plugin][image-interlink-kubernetes-plugin]
 ![ray-nrp][image-ray-nrp]
 
+**Environments** — released with the purdue-af image the hub runs.
+
+![pixi-base][env-pixi-base]
+![pixi-global][env-pixi-global]
+
 Reading the badges:
 
 - `released` — the Flux source holds this commit, which is a fact about git,
@@ -100,7 +101,7 @@ Reading the badges:
 - `failed CI` — do not release; the drift is broken
 - the trailing number is how many commits it has moved since it was released
 - a leading `X.Y.Z` is the released version, for images on a version stream
-  and for what the `af-image` root applies
+  and the environments they ship
 
 Recomputed after every CI run on `main`, after every release, and hourly by
 [`component-status.yml`](.github/workflows/component-status.yml); the badge
@@ -119,6 +120,7 @@ How a change reaches the cluster, version rules and rollback:
 [core-monitoring-grafana]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-monitoring-grafana.json
 [core-monitoring-prometheus]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-monitoring-prometheus.json
 [core-storage]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-storage.json
+[core-af-utils-pixi-global-sync]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/core-af-utils-pixi-global-sync.json
 [experimental-agentic-interface]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-agentic-interface.json
 [experimental-dask-gateway]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-dask-gateway.json
 [experimental-flyte]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-flyte.json
@@ -141,7 +143,6 @@ How a change reaches the cluster, version rules and rollback:
 [experimental-ray-train]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-ray-train.json
 [experimental-mattermost-agent]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-mattermost-agent.json
 [experimental-krab]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/experimental-krab.json
-[af-image-af-utils-pixi-global-sync]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/af-image-af-utils-pixi-global-sync.json
 [image-purdue-af]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-purdue-af.json
 [image-agentic-interface]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-agentic-interface.json
 [image-af-pod-monitor]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-af-pod-monitor.json
@@ -151,5 +152,7 @@ How a change reaches the cluster, version rules and rollback:
 [image-interlink-slurm-plugin]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-interlink-slurm-plugin.json
 [image-interlink-kubernetes-plugin]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-interlink-kubernetes-plugin.json
 [image-ray-nrp]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/image-ray-nrp.json
+[env-pixi-base]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/env-pixi-base.json
+[env-pixi-global]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/env-pixi-global.json
 [status-pending]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PurdueAF/purdue-af/status/badges/_pending.json
 [platform-version]: https://img.shields.io/github/v/tag/PurdueAF/purdue-af?filter=2*&sort=semver&label=platform&color=blue

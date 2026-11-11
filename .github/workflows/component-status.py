@@ -24,12 +24,14 @@ REPO = Path(__file__).resolve().parents[2]
 CHANNELS = {
     "core": Path("flux/core-production/kustomization.yaml"),
     "experimental": Path("flux/experimental/kustomization.yaml"),
-    "af-image": Path("flux/af-image/kustomization.yaml"),
 }
 IMAGE_INPUTS = Path(".github/workflows/image-inputs.sh")
 CI_IMAGES_WORKFLOW = Path(".github/workflows/ci-images.yml")
 VALUES_YAML = Path("apps/jupyterhub/jupyterhub/values.yaml")
 AGENTIC_DEPLOYMENT = Path("apps/agentic-interface/deployment.yaml")
+# The pixi environments a purdue-af image release ships: pixi/base in the
+# image, pixi/global through pixi-global-sync's release copy.
+ENVIRONMENTS = {"pixi-base": ["pixi/base"], "pixi-global": ["pixi/global"]}
 
 COLORS = {
     "released": "brightgreen",
@@ -83,18 +85,6 @@ def latest_platform_tag() -> str | None:
     if not tags:
         return None
     return max(tags, key=lambda t: [int(p) for p in t.split(".")])
-
-
-def latest_image_tag() -> str | None:
-    """Newest purdue-af image tag `vX.Y.Z` — what the af-image root tracks."""
-    tags = [
-        t
-        for t in git("tag", "-l", "v*").splitlines()
-        if re.fullmatch(r"v\d+\.\d+\.\d+", t)
-    ]
-    if not tags:
-        return None
-    return max(tags, key=lambda t: [int(p) for p in t[1:].split(".")])
 
 
 VERSION_STAMP = re.compile(r"[+-]version = ")
@@ -238,7 +228,6 @@ LABEL_OVERRIDES = {
     "apps/interlink/hammer": "interlink-hammer",
     "apps/interlink/nrp": "interlink-nrp",
     "apps/interlink/traefik": "interlink-traefik",
-    "apps/af-utils/pixi-global-sync": "pixi-global",
 }
 
 
@@ -308,16 +297,12 @@ def main() -> int:
     platform_tag = latest_platform_tag()
     if platform_tag is None:
         sys.exit("component-status: missing git ref: no platform tag YYYY.M.SEQ")
-    image_tag = latest_image_tag()
-    if image_tag is None:
-        sys.exit("component-status: missing git ref: no image tag vX.Y.Z")
 
     rows: list[tuple[str, str, str, int]] = []
 
     for channel, released in (
         ("core", platform_tag),
         ("experimental", validated),
-        ("af-image", image_tag),
     ):
         for component, paths in sorted(discover_components(channel).items()):
             drift = commits_touching(released, head, paths)
@@ -341,9 +326,6 @@ def main() -> int:
         ("image", "purdue-af"): af_version,
         ("image", "agentic-interface"): agentic_version,
     }
-    for channel, component, _, _ in rows:
-        if channel == "af-image":
-            versions[(channel, component)] = image_tag.removeprefix("v")
     for name in CI_IMAGES:
         released_ref = release_tags.get(name, validated)
         paths = image_paths(name)
@@ -351,6 +333,14 @@ def main() -> int:
         unvalidated = commits_touching(validated, head, paths)
         status, ahead = classify(drift, unvalidated, args.ci_state)
         rows.append(("image", name, status, ahead))
+
+    # the environments ship with the purdue-af image the hub runs
+    for name, paths in ENVIRONMENTS.items():
+        drift = commits_touching(release_tags["purdue-af"], head, paths)
+        unvalidated = commits_touching(validated, head, paths)
+        status, ahead = classify(drift, unvalidated, args.ci_state)
+        rows.append(("env", name, status, ahead))
+        versions[("env", name)] = af_version
 
     if args.out:
         args.out.mkdir(parents=True, exist_ok=True)
@@ -378,10 +368,7 @@ def main() -> int:
             },
         )
 
-    print(
-        f"platform tag: {platform_tag} · image tag: {image_tag} · "
-        f"main: {git('rev-parse', '--short', head)}\n"
-    )
+    print(f"platform tag: {platform_tag} · main: {git('rev-parse', '--short', head)}\n")
     print("| channel | component | status | commits ahead |")
     print("| --- | --- | --- | --- |")
     for channel, component, status, ahead in rows:

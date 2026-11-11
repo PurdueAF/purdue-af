@@ -196,6 +196,9 @@ def test_main_set_writes_every_file(
 ):
     path = tmp_path / "values.yaml"
     path.write_text(values_text)
+    global_dir = pixi_files[1].parent
+    (global_dir / "pixi.lock").write_text("the lock\n")
+    release_dir = tmp_path / "release"
 
     _run_main(
         bump,
@@ -206,6 +209,10 @@ def test_main_set_writes_every_file(
         str(path),
         "--sync-file",
         str(sync_file),
+        "--global-dir",
+        str(global_dir),
+        "--release-dir",
+        str(release_dir),
         *_pixi_args(pixi_files),
     )
 
@@ -215,6 +222,16 @@ def test_main_set_writes_every_file(
     assert "/purdue-af:9.9.9\n" in sync_file.read_text()
     for pixi in pixi_files:
         assert '\nversion = "9.9.9"\n' in pixi.read_text()
+    assert (release_dir / "pixi.toml").read_text() == pixi_files[1].read_text()
+    assert (release_dir / "pixi.lock").read_text() == "the lock\n"
+
+
+def test_release_copy_is_the_global_env_but_its_version(bump):
+    """pixi-global-sync installs a stamped manifest and a lock from here."""
+    release = REPO / "apps" / "af-utils" / "pixi-global-sync" / "release"
+    toml = (release / "pixi.toml").read_text()
+    assert re.search(r'(?m)^version = "\d+\.\d+\.\d+(\+dev)?"$', toml)
+    assert (release / "pixi.lock").read_text().startswith("version: ")
 
 
 def test_main_mark_dev_writes_only_the_pixi_manifests(
@@ -226,6 +243,7 @@ def test_main_mark_dev_writes_only_the_pixi_manifests(
         pixi.write_text(bump.apply_pixi(pixi.read_text(), "9.9.9"))
     path.write_text(bump.apply(values_text, "9.9.9", bump.DEFAULT_REGISTRY))
     values_before = path.read_text()
+    release_before = (REPO / bump.DEFAULT_RELEASE_DIR / "pixi.toml").read_text()
 
     _run_main(
         bump, monkeypatch, "--mark-dev", "--file", str(path), *_pixi_args(pixi_files)
@@ -233,6 +251,7 @@ def test_main_mark_dev_writes_only_the_pixi_manifests(
 
     assert capsys.readouterr().out.strip() == "9.9.9+dev"
     assert path.read_text() == values_before
+    assert (REPO / bump.DEFAULT_RELEASE_DIR / "pixi.toml").read_text() == release_before
     for pixi in pixi_files:
         assert '\nversion = "9.9.9+dev"\n' in pixi.read_text()
 
