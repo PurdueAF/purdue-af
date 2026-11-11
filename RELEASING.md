@@ -13,7 +13,7 @@ CI-owned. Never create a version tag or move a channel tag by hand.
 | Continuous (`:latest`, `:pre-release`, `sha-`) | moving tags                                | `ci.yml` publish stage, behind `ci-ok`                   | on pod restart / session spawn                                                                                         |
 | `:latest`-only images                          | `:latest`                                  | `ci.yml` publish stage, behind `ci-ok` — no release step | af-pod-monitor at the next spawn; af-node-monitor, supersonic-model-manager, agentic-analysis and ray-nrp on pod restart; a node keeps the af-node-monitor it first pulled |
 | interLink plugin images                        | upstream ref `:$PLUGIN_REF`                | a `PLUGIN_REF` bump                                      | when the interLink values pin the new ref ([slurm](docker/interlink-slurm-plugin/README.md), [kubernetes](docker/interlink-kubernetes-plugin/README.md)) |
-| Global env (`pixi/global`)                     | the CI-owned lock                          | CI validates the lock                                    | `pixi-global-sync` applies it to `/work/pixi/global`                                                                   |
+| Global env (`pixi/global`) | the purdue-af image version | **Release image** workflow, as a copy in `apps/af-utils/pixi-global-sync/release/` | with the hub's new default image, at the next platform release; `pixi-global-sync` installs it into `/work/pixi/global` |
 | Upstream sources                               | branches and moving tags outside this repo | upstream commits                                         | next reconcile or pod restart, with no commit here: krab's chart and code location image, servicex-eos's fork chart and its `:local` images. No rollback below applies |
 
 Every commit runs one pipeline ([ci.yml](.github/workflows/ci.yml)) and
@@ -83,18 +83,28 @@ the current repo state. Complete the manual checklist in
 1. **Actions → Release image → Run workflow** — choose the bump (or an
    explicit `version`). It adds the semver tag to the **same digest** that
    passed CI (never a rebuild), rewrites every version spot in the hub's
-   values.yaml and the pixi-global-sync image (`bump-af-version.py`,
-   count-verified), commits to `main`, tags `v<version>`, and publishes a
-   Release.
+   values.yaml, the pixi-global-sync image and the workspace `version` of
+   `pixi/base` and `pixi/global`, and copies the stamped `pixi/global`
+   manifest and lock to `apps/af-utils/pixi-global-sync/release/`, the env
+   pixi-global-sync installs (`bump-af-version.py`, count-verified). It
+   commits to `main` and tags `v<version>`. A second commit then sets the
+   two workspace versions in `pixi/` to `<version>+dev`, so no other commit
+   there carries a released version; both commits and the tag go in one
+   atomic push, and the workflow publishes a Release.
 2. **Actions → Release platform → Run workflow** — always the second step:
-   the bump commit reaches the hub only once a platform tag covers it.
-   pixi-global-sync is experimental and takes it at the next `main-validated`
-   advance.
+   the bump commit reaches the hub, pixi-global-sync and
+   `/work/pixi/global` only once a platform tag covers it.
 
-**Rollback**: `git revert` the release commit on `main`, then mint a new
-platform tag. Never delete a `v*` tag — the pin lives in a values.yaml
-commit, so deleting the tag rolls back nothing. Old semver tags stay on ghcr
-forever; the registry GC never deletes release tags.
+A workspace version is not an image input (`image-inputs.sh` hashes a
+`pixi.toml` without it), so neither commit rebuilds an image or re-runs a
+memoized pixi check.
+
+**Rollback**: `git revert` both Release image commits on `main`
+(`git revert <+dev commit> <release commit>`), then mint a new platform tag;
+the hub and `/work/pixi/global` go back together. Never delete a `v*` tag —
+the pins live in a values.yaml commit, so deleting the tag rolls back
+nothing. Old semver tags stay on ghcr forever; the
+registry GC never deletes release tags.
 
 ## agentic-interface image auto-release
 
@@ -153,10 +163,10 @@ Never delete an `agentic-interface-v*` tag.
   a re-run of a commit behind it fails, and after a history rewrite publish
   refuses until the branch is moved by its owner.
 - Workflows push with `GITHUB_TOKEN`, whose pushes trigger no workflow:
-  - the **Release image** commit gets no CI run and no `ci-ok`. Gate 1 of the
-    next image release fails until another commit lands on `main` and passes
-    CI, or `force` is used. The platform tag of step 2 points at that commit,
-    which CI has not run on.
+  - the two **Release image** commits get no CI run and no `ci-ok`. Gate 1
+    of the next image release fails until another commit lands on `main` and
+    passes CI, or `force` is used. The platform tag of step 2 points at the
+    `+dev` commit, which CI has not run on.
   - a lock commit from `ci-pixi-base.yml` / `ci-pixi-global.yml` gets its
     follow-up run from `retrigger-after-lock-push.sh`: an approved
     `pull_request` run, or else a `workflow_dispatch` run, which never

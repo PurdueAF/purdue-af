@@ -7,6 +7,8 @@ resources:
   - ../../apps/af-utils/af-users-graph/ingress.yaml
   - ../../apps/af-utils/af-users-graph/cronjob.yaml
 
+  - ../../apps/af-utils/pixi-global-sync/deployment.yaml
+
   - ../../apps/jupyterhub/af-x509-secrets/cronjob.yaml
   - ../../apps/jupyterhub/af-x509-secrets/rbac.yaml
   - ../../apps/jupyterhub/jupyterhub/helmrelease.yaml
@@ -44,6 +46,17 @@ configMapGenerator:
   - name: af-users-graph-nginx-config
     files:
       - ../../apps/af-utils/af-users-graph/nginx.conf
+
+  # The global env from the release copy, which only Release image writes.
+  - name: pixi-global-sync
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../apps/af-utils/pixi-global-sync/sync-global-env.py
+      - ../../pixi/check-env.py
+      - ../../apps/af-utils/pixi-global-sync/release/pixi.toml
+      - ../../apps/af-utils/pixi-global-sync/release/pixi.lock
 
   - name: jupyterhub-config
     files:

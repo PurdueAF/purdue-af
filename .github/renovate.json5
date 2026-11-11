@@ -45,9 +45,10 @@
   // Renovate treats the branch as hand-edited and never merges it.
   gitIgnoredAuthors: ['41898282+github-actions[bot]@users.noreply.github.com'],
 
-  // Empty, not absent: `config:recommended` skips `**/tests/**`, which holds the
-  // integration-challenge pin and the test suite's own dependencies.
-  ignorePaths: [],
+  // Set, not absent: `config:recommended` skips `**/tests/**`, which holds the
+  // integration-challenge pin and the test suite's own dependencies. The
+  // released global env is Release image's copy of pixi/global.
+  ignorePaths: ['apps/af-utils/pixi-global-sync/release/**'],
 
   // Flux manager is opt-in by path: parse everything Flux reconciles.
   flux: {

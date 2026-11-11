@@ -45,11 +45,16 @@ jobs:
             -q '.check_runs[0].conclusion // "missing"')
           echo "ci-ok on ${sha}: ${conclusion}"
           [ "$conclusion" != success ] || exit 0
-          # A release commit gets no pipeline; its parent passed Gate 1 of Release image.
+          # Release image pushes a release commit and a +dev commit; neither gets a pipeline,
+          # and the release commit's parent passed Gate 1 of Release image.
           runs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${sha}" --jq .total_count)
+          release=HEAD
+          if [[ "$(git log -1 --format=%s)" == "pixi: mark the environments "*+dev ]]; then
+            release=HEAD^
+          fi
           if [ "$conclusion" = missing ] && [ "$runs" = 0 ] \
-            && [[ "$(git log -1 --format=%s)" == "release purdue-af image "* ]]; then
-            echo "::warning::${sha} is a release commit, which gets no pipeline"
+            && [[ "$(git log -1 --format=%s "$release")" == "release purdue-af image "* ]]; then
+            echo "::warning::${sha} is a Release image commit, which gets no pipeline"
             exit 0
           fi
           if [ "$FORCE" = true ]; then

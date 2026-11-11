@@ -23,7 +23,7 @@ on:
 permissions:
   contents: write # release commit, git tag, GitHub Release
   packages: write # semver tag on ghcr
-  actions: write # dispatch Component status
+  actions: write # dispatch Component status and Docs deploy
 
 concurrency:
   group: release-image # never run two releases concurrently, never cancel one
@@ -117,13 +117,18 @@ jobs:
         run: |
           git config user.name "af-release-bot"
           git config user.email "af-release-bot@users.noreply.github.com"
-          git add apps/jupyterhub/jupyterhub/values.yaml apps/af-utils/pixi-global-sync/deployment.yaml
+          git add apps/jupyterhub/jupyterhub/values.yaml apps/af-utils/pixi-global-sync \
+            pixi/base/pixi.toml pixi/global/pixi.toml
           git commit -m "release purdue-af image $VERSION"
           # the v prefix keeps image tags distinct from bare platform CalVer tags
           git tag -a "v$VERSION" -m "purdue-af image $VERSION
           image: $IMAGE_REPO:$VERSION
           digest: $DIGEST"
-          git push origin main "v$VERSION"
+          # Only the tagged commit carries the bare version in the pixi manifests.
+          python3 .github/workflows/bump-af-version.py --mark-dev
+          git add pixi/base/pixi.toml pixi/global/pixi.toml
+          git commit -m "pixi: mark the environments $VERSION+dev"
+          git push --atomic origin main "v$VERSION"
           gh release create "v$VERSION" \
             --title "purdue-af image $VERSION" \
             --generate-notes \
@@ -135,3 +140,5 @@ jobs:
       # A tag pushed with the workflow token triggers no workflow; a dispatch does.
       - name: Refresh the README status badges
         run: gh workflow run component-status.yml --ref main
+      - name: Publish the released global env in the docs
+        run: gh workflow run docs-deploy.yml --ref main

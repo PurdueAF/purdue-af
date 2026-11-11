@@ -29,6 +29,9 @@ IMAGE_INPUTS = Path(".github/workflows/image-inputs.sh")
 CI_IMAGES_WORKFLOW = Path(".github/workflows/ci-images.yml")
 VALUES_YAML = Path("apps/jupyterhub/jupyterhub/values.yaml")
 AGENTIC_DEPLOYMENT = Path("apps/agentic-interface/deployment.yaml")
+# The pixi environments a purdue-af image release ships: pixi/base in the
+# image, pixi/global through pixi-global-sync's release copy.
+ENVIRONMENTS = {"pixi-base": ["pixi/base"], "pixi-global": ["pixi/global"]}
 
 COLORS = {
     "released": "brightgreen",
@@ -84,10 +87,38 @@ def latest_platform_tag() -> str | None:
     return max(tags, key=lambda t: [int(p) for p in t.split(".")])
 
 
+VERSION_STAMP = re.compile(r"[+-]version = ")
+
+
+def only_version_stamps(diff: str) -> bool:
+    """True when every change in a `git show -U0` diff is a pixi.toml workspace
+    version: bump-af-version.py's stamp, which image-inputs.sh does not hash."""
+    sections = [s for s in re.split(r"(?m)^diff --git ", diff) if s.strip()]
+    if not sections:
+        return False
+    for section in sections:
+        header, hunk, body = section.partition("\n@@")
+        if not hunk or not re.search(r"(?m)^\+\+\+ b/(.*/)?pixi\.toml$", header):
+            return False
+        for line in body.splitlines()[1:]:
+            if line.startswith("@@") or line.startswith("\\"):
+                continue
+            if line[:1] in "+-" and not VERSION_STAMP.match(line):
+                return False
+    return True
+
+
 def commits_touching(base: str, head: str, paths: Iterable[str]) -> int:
-    """Number of commits in base..head that touch any of `paths`."""
-    out = git("log", "--oneline", f"{base}..{head}", "--", *paths)
-    return len([line for line in out.splitlines() if line.strip()])
+    """Number of commits in base..head that touch any of `paths`, version
+    stamps aside."""
+    paths = list(paths)
+    out = git("log", "--format=%H", f"{base}..{head}", "--", *paths)
+    shas = [line.strip() for line in out.splitlines() if line.strip()]
+    return sum(
+        1
+        for sha in shas
+        if not only_version_stamps(git("show", "--format=", "-U0", sha, "--", *paths))
+    )
 
 
 def _read_kustomization(
@@ -302,6 +333,14 @@ def main() -> int:
         unvalidated = commits_touching(validated, head, paths)
         status, ahead = classify(drift, unvalidated, args.ci_state)
         rows.append(("image", name, status, ahead))
+
+    # the environments ship with the purdue-af image the hub runs
+    for name, paths in ENVIRONMENTS.items():
+        drift = commits_touching(release_tags["purdue-af"], head, paths)
+        unvalidated = commits_touching(validated, head, paths)
+        status, ahead = classify(drift, unvalidated, args.ci_state)
+        rows.append(("env", name, status, ahead))
+        versions[("env", name)] = af_version
 
     if args.out:
         args.out.mkdir(parents=True, exist_ok=True)

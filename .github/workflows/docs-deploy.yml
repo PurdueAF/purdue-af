@@ -8,6 +8,7 @@ on:
     paths: &paths
       - "docs/**"
       - "pixi/**"
+      - "apps/af-utils/pixi-global-sync/release/**"
       - ".github/workflows/docs-deploy.yml"
   pull_request:
     paths: *paths
