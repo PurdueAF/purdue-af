@@ -7,7 +7,7 @@ platforms = [{ platform = "linux-64", cuda = "12.4" }]
 # A lock written by a newer pixi is not readable by an older one.
 requires-pixi = ">=0.81"
 # The purdue-af release: X.Y.Z at its tag, X.Y.Z+dev on every commit after it (bump-af-version.py).
-version = "0.14.4+dev"
+version = "0.14.5"
 
 [dependencies]
 awkward = "*"

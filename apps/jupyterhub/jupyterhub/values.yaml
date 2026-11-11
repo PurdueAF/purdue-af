@@ -6,17 +6,17 @@ singleuser:
   nodeSelector: { "cms-af-prod": "true" }
   image:
     name: "geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af"
-    tag: "0.14.4"
+    tag: "0.14.5"
   extraLabels:
     username_unescaped: "{username}"
-    docker_image_tag: "0.14.4"
+    docker_image_tag: "0.14.5"
   profileList:
-    - display_name: "Purdue AF 0.14.4"
+    - display_name: "Purdue AF 0.14.5"
       slug: purdue-af
       default: true
       description: 'To use <a href="https://analysis-facility.physics.purdue.edu/guide-ray-train/" target="_blank">Ray</a> for multi-GPU distributed training, start the session with 0 GPUs.'
       kubespawner_override:
-        image: "geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af:0.14.4"
+        image: "geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af:0.14.5"
         cpu_limit: 256
         mem_limit: "256G"
       profile_options:
