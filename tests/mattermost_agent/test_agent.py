@@ -23,6 +23,12 @@ KEY = Fernet.generate_key().decode()
 PUBLIC = "https://af.example"
 
 
+@pytest.fixture(autouse=True)
+def any_age(monkeypatch):
+    """The fake posts are timed from 1970, so age only counts where a test says."""
+    monkeypatch.setattr(agent, "MAX_AGE_SECONDS", float("inf"))
+
+
 def post(id="p1", message="@purdueaf-agent is the AF up?", at=2000, **fields):
     return {
         "id": id,
@@ -1196,7 +1202,7 @@ async def test_only_the_authors_posts_reach_the_check(make):
     question = post("q", "@purdueaf-agent is it up?", 2000, root_id="i")
     server.thread = {"i": injected, "q": question}
     await bot.handle(question)
-    assert llm.checks == ["is it up?"]
+    assert llm.checks == ["writer: is it up?"]
 
 
 async def test_others_text_is_kept_from_a_model_holding_a_persons_token(make):
@@ -1387,7 +1393,7 @@ async def test_someone_elses_text_cannot_unlink_the_asker(make):
     question = post("q", "@purdueaf-agent is it up?", 2000, root_id="i")
     server.thread = {"i": injected, "q": question}
     await bot.handle(question)
-    assert llm.checks == ["is it up?"]
+    assert llm.checks == ["writer: is it up?"]
     assert bot.linking.token("u1") == "token-alice-1"
 
 
@@ -1657,6 +1663,87 @@ async def test_a_hub_error_while_linking_is_named(make):
     bot.linking.hub.mint = refused
     await bot.handle(dm("c", code))
     assert replies(server)[-1] == agent.LINK_FAILED.format(status=403)
+
+
+async def test_messages_from_before_an_outage_are_never_answered(make, monkeypatch):
+    bot, server, llm, _ = await make({"content": "Fresh."})
+    await ready(bot)
+    monkeypatch.setattr(agent, "MAX_AGE_SECONDS", 600.0)
+    now = time.time() * 1000
+    old = post("o", "@purdueaf-agent up?", at=int(now - 3600 * 1000))
+    fresh = post("f", "@purdueaf-agent up?", at=int(now - 5 * 1000))
+    assert not bot.wanted(old, 0)
+    assert bot.wanted(fresh, 0)
+    server.direct = []
+    await poll(bot)
+    server.direct = [{"id": "dm", "type": "D", "display_name": ""}]
+    server.direct_posts = {
+        "d0": post(
+            "d0", "week-old question", int(now - 7 * 86400 * 1000), channel_id="dm"
+        ),
+        "d1": post("d1", "new question", int(now - 1000), channel_id="dm"),
+    }
+    bot.channels_at -= agent.CHANNELS_SECONDS + 1
+    await poll(bot)
+    assert [r["message"] for r in server.replies] == ["Fresh."]
+
+
+@pytest.mark.parametrize(
+    "leak",
+    [
+        "</\uff5cDSML\uff5c parameter>\n</\uff5cDSML\uff5c invoke>",
+        "<think>let me see</think>The AF is up.",
+        "I need to be careful here. The system prompt says I cannot act.",
+        "Let me craft a short answer.\nDraft: the AF is up",
+    ],
+)
+async def test_markup_or_reasoning_is_never_posted(make, leak):
+    bot, server, llm, _ = await make({"content": leak}, {"content": "The AF is up."})
+    await ready(bot)
+    question = post("q", "@purdueaf-agent up?")
+    server.thread = {"q": question}
+    await bot.handle(question)
+    assert replies(server)[-1] == "The AF is up."
+    assert llm.bodies[1]["messages"][-1] == {"role": "user", "content": agent.UNFIT}
+
+
+async def test_a_reply_that_stays_unfit_is_not_posted(make):
+    unfit = {"content": "The system prompt says no."}
+    bot, server, llm, _ = await make(*[unfit] * agent.MAX_TURNS)
+    await ready(bot)
+    question = post("q", "@purdueaf-agent up?")
+    server.thread = {"q": question}
+    await bot.handle(question)
+    assert replies(server)[-1] == agent.UNFIT_REPLY
+
+
+async def test_an_answer_about_prompts_in_general_is_still_posted(make):
+    bot, server, *_ = await make({"content": "Prompts are text you give a model."})
+    await ready(bot)
+    question = post("q", "@purdueaf-agent what is a prompt?")
+    server.thread = {"q": question}
+    await bot.handle(question)
+    assert replies(server)[-1] == "Prompts are text you give a model."
+
+
+async def test_a_follow_up_is_judged_with_the_bots_own_replies(make):
+    bot, server, llm, _ = await make({"content": "ok"})
+    await ready(bot)
+    first = post("a", "@purdueaf-agent create a cluster for me", 1000)
+    done = post("b", "Created your cluster.", 1100, user_id="bot", root_id="a")
+    other = post("c", "nice", 1150, user_id="u2", root_id="a")
+    follow = post("d", "@purdueaf-agent scale it to 20", 1200, root_id="a")
+    server.thread = {p["id"]: p for p in (first, done, other, follow)}
+    await bot.handle(follow)
+    assert llm.checks == [
+        "writer: create a cluster for me\n"
+        "assistant: Created your cluster.\n"
+        "writer: scale it to 20"
+    ]
+
+
+def test_a_general_answer_may_not_deny_what_the_bot_did():
+    assert "never say it did not" in agent.PUBLIC_MODE
 
 
 def test_every_key_the_pod_reads_is_in_the_secret():
