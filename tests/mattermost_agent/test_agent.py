@@ -1746,6 +1746,28 @@ def test_a_general_answer_may_not_deny_what_the_bot_did():
     assert "never say it did not" in agent.PUBLIC_MODE
 
 
+def test_the_bot_reads_prometheus_and_not_the_dashboard():
+    assert {"query_prometheus", "list_prometheus_metrics"} <= agent.FACILITY_TOOLS
+    assert "get_facility_metrics" not in agent.FACILITY_TOOLS | agent.PERSONAL_TOOLS
+
+
+async def test_addresses_in_tool_results_never_reach_the_model(make):
+    bot, *_ = await make()
+
+    class Session:
+        async def call_tool(self, name, args):
+            class Block:
+                text = 'up{instance="10.42.7.19:9100",node="paf-a01",version="1.2.3"} 1'
+
+            class Result:
+                content = [Block()]
+
+            return Result()
+
+    out = await bot.call(Session(), "query_prometheus", "{}", agent.FACILITY_TOOLS)
+    assert out == 'up{instance="<address>",node="paf-a01",version="1.2.3"} 1'
+
+
 def test_every_key_the_pod_reads_is_in_the_secret():
     deployment = load_yaml(APP / "deployment.yaml")
     container = deployment["spec"]["template"]["spec"]["containers"][0]

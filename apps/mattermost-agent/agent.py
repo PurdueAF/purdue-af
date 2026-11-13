@@ -41,10 +41,13 @@ CHANNELS_SECONDS = 60.0
 # Everything else on the MCP server acts on the caller's own session and data.
 FACILITY_TOOLS = {
     "get_facility_health",
-    "get_facility_metrics",
     "list_af_profiles",
     "list_dask_cluster_options",
+    "list_prometheus_metrics",
+    "query_prometheus",
 }
+# Internal addresses in tool results, such as Prometheus instance labels.
+ADDRESS = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b")
 # What a person's own token adds. submit_ray_job stays out: it runs any code as them.
 PERSONAL_TOOLS = {
     "get_session_status",
@@ -992,7 +995,7 @@ class Agent:
                 return f"Error: there is no tool {name!r}."
             result = await session.call_tool(name, args)
             text = "\n".join(getattr(block, "text", "") for block in result.content)
-            return text[:MAX_TOOL_CHARS]
+            return ADDRESS.sub("<address>", text)[:MAX_TOOL_CHARS]
         except Exception as exc:
             log.warning("tool %s failed: %s", name, type(exc).__name__)
             return f"Error: {name} failed."
