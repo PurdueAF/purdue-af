@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import httpx
+from annotations import READS
 from config import (
     CLUSTER_PROMETHEUS_NAME,
     CLUSTER_PROMETHEUS_URL,
@@ -39,7 +40,8 @@ MAX_METRICS = 100
 MAX_CHARS = 30_000
 SCOPE_NOTE = (
     "Series of other people's sessions, Dask clusters, Ray jobs and home "
-    "directories are left out; get_facility_metrics has the facility's totals."
+    "directories are left out; list_af_profiles and get_ray_capacity have the "
+    "free GPUs."
 )
 
 
@@ -156,7 +158,7 @@ async def ask(
 
 
 def register(mcp: MCPServer) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def query_prometheus(
         query: str,
         source: str = "af",
@@ -170,8 +172,10 @@ def register(mcp: MCPServer) -> None:
         belong to someone else: series of another person's session, Dask
         cluster, Ray job or home directory are left out before the query
         runs, so a total over everyone's sessions or workers counts only
-        yours. get_facility_metrics has the facility-wide totals, and
-        list_prometheus_metrics lists the metric names.
+        yours. Free GPUs come from list_af_profiles and get_ray_capacity, not
+        from here. list_prometheus_metrics lists the metric names. The shared
+        volumes are kubelet_volume_stats_* on 'cluster', by
+        persistentvolumeclaim: /work is af-shared-storage.
 
         Args:
             query: PromQL.
@@ -243,7 +247,7 @@ def register(mcp: MCPServer) -> None:
             head = f"**{source}**, at {iso(until)}"
         return clip([head, *render(data), "", SCOPE_NOTE])
 
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def list_prometheus_metrics(search: str = "", source: str = "af") -> str:
         """Metric names query_prometheus can read, with their help text.
 

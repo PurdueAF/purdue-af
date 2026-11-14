@@ -22,9 +22,10 @@ a role of the [LLM proxy](../agentic-analysis/README.md#llm-proxy).
 ## Identity
 
 The bot is the Hub service `mattermost-agent`, with no role, so the MCP server
-sees a caller with no session, storage or clusters. `FACILITY_TOOLS` in
-`agent.py` lists the tools it offers the model. It sends the model the
-conversation's text, never who wrote it, and a reply cannot mention anyone.
+sees a caller with no session, storage or clusters. The model gets the MCP
+server's own guidance and every tool the server annotates as read-only, but those
+in `WITHHELD`. It sends the model the conversation's text, never who wrote it,
+and a reply cannot mention anyone.
 
 ## Linking
 
@@ -40,9 +41,33 @@ Tokens are encrypted in `/state/links.enc` under `link-key`, keyed by Mattermost
 `/metrics`, reachable only inside the cluster, gives how many accounts are linked.
 
 Each question first goes to the model alone with its author's own posts, to decide
-whether they ask to link, to unlink, or about their own things. If so, it runs with the author's token and
-`PERSONAL_TOOLS`, and the model reads only the author's posts and the bot's replies;
-otherwise it runs as above. The bot replies where it was asked.
+whether they ask to link, to unlink, or about their own things, read with the
+bot's replies. If about their own things, it runs with the author's token, the
+tools that change things are offered too, and the model reads only the author's
+posts and the bot's replies; otherwise it runs as above. The bot replies where it
+was asked.
+
+## Evaluating
+
+`evaluate.py` asks the questions in `evaluate.yaml` through the bot's own answer
+path, against the live agentic interface and LLM proxy, and reports which answers
+pass. It runs from a checkout; `--help` lists its options. It needs the LLM proxy
+forwarded and its client token in a file:
+
+```bash
+kubectl -n cms port-forward svc/agentic-analysis-llm-proxy 8080
+```
+
+```bash
+SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt sops --decrypt --extract '["stringData"]["client-token"]' apps/agentic-analysis/secret-llm-proxy.yaml > llm-token
+```
+
+```bash
+uv run --project tests --frozen python apps/mattermost-agent/evaluate.py --llm-token-file llm-token
+```
+
+It calls the agentic interface with the MCP token of `--token-file`, a person's,
+so its public answers may also see that person's own series.
 
 ## Running it
 

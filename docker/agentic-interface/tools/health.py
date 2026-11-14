@@ -25,6 +25,7 @@ from typing import Any, NamedTuple, Optional
 from zoneinfo import ZoneInfo
 
 import httpx
+from annotations import READS
 from config import PROMETHEUS_NAME, PROMETHEUS_URL
 from context import require_user
 from errors import http_error, json_body, malformed_response, unreachable
@@ -274,7 +275,7 @@ def _history_line(settled: list[str], problem: Optional[str], blocking: bool) ->
 
 
 def register(mcp: MCPServer) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def get_facility_health() -> str:
         """Report whether the Purdue Analysis Facility is healthy right now.
 

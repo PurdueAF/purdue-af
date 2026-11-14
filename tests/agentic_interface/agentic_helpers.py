@@ -27,11 +27,13 @@ class ToolRecorder:
 
     def __init__(self):
         self.tools = {}
+        self.annotations = {}
         self.prompts = {}
 
-    def tool(self):
+    def tool(self, annotations=None):
         def decorator(fn):
             self.tools[fn.__name__] = fn
+            self.annotations[fn.__name__] = annotations
             return fn
 
         return decorator
