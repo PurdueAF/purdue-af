@@ -41,6 +41,7 @@ CHANNELS_SECONDS = 60.0
 # Everything else on the MCP server acts on the caller's own session and data.
 FACILITY_TOOLS = {
     "get_facility_health",
+    "get_ray_capacity",
     "list_af_profiles",
     "list_dask_cluster_options",
     "list_prometheus_metrics",

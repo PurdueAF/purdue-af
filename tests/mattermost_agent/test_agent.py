@@ -1746,6 +1746,10 @@ def test_a_general_answer_may_not_deny_what_the_bot_did():
     assert "never say it did not" in agent.PUBLIC_MODE
 
 
+def test_free_gpus_need_no_link():
+    assert {"list_af_profiles", "get_ray_capacity"} <= agent.FACILITY_TOOLS
+
+
 def test_the_bot_reads_prometheus_and_not_the_dashboard():
     assert {"query_prometheus", "list_prometheus_metrics"} <= agent.FACILITY_TOOLS
     assert "get_facility_metrics" not in agent.FACILITY_TOOLS | agent.PERSONAL_TOOLS
