@@ -289,22 +289,26 @@ mcp = InstrumentedMCPServer(
     "purdue-af-agentic-interface",
     version=SKILL_VERSION,
     instructions=(
-        "Tools for the Purdue Analysis Facility. "
-        "Use query_notebook_logs / query_dask_logs for log queries; "
-        "use query_storage_usage for disk quota information; "
-        'use get_facility_health for "is the AF healthy / is something broken"; '
-        'use get_facility_metrics for "how busy is the AF" and other dashboard '
-        "numbers; "
-        "use list_prometheus_metrics / query_prometheus for any other metric, "
-        "PromQL over the facility's monitoring; "
-        "use list_dask_clusters / list_dask_cluster_options / create_dask_cluster / "
-        "get_dask_worker_count / get_dask_cluster_usage / scale_dask_cluster / "
-        "stop_dask_cluster for Dask; "
-        "use get_ray_capacity / submit_ray_job / list_ray_jobs / get_ray_job / "
-        "stop_ray_job / delete_ray_job for Ray jobs on GPUs, and "
-        "get_ray_cluster / start_ray_cluster / stop_ray_cluster for the user's "
-        "own Ray cluster; "
-        "use get_session_status / start_af_session / stop_af_session for pod lifecycle. "
+        "Tools for the Purdue Analysis Facility. Each tool is annotated as "
+        "read-only, or as changing or stopping something of the caller's. "
+        'Facility-wide questions: get_facility_health for "is the AF healthy / '
+        'is something broken"; list_af_profiles for the session profiles and '
+        "how many of each GPU a new session can take now; get_ray_capacity for "
+        "the free Ray workers and GPUs at Purdue and on NRP; "
+        "list_dask_cluster_options for Dask worker choices; "
+        "list_prometheus_metrics then query_prometheus for any other number. "
+        "query_prometheus leaves out other people's sessions, Dask clusters, Ray "
+        "jobs and home directories, so it cannot count what others use: for "
+        "free GPUs use the two tools above. "
+        "The caller's own things: get_session_status / start_af_session / "
+        "stop_af_session / restart_af_session / wait_for_session for the session; "
+        "query_storage_usage for their quota; query_notebook_logs / "
+        "query_dask_logs for logs; list_dask_clusters / create_dask_cluster / "
+        "get_dask_cluster_info / get_dask_worker_count / get_dask_cluster_usage / "
+        "scale_dask_cluster / stop_dask_cluster for Dask; submit_ray_job / "
+        "list_ray_jobs / get_ray_job / stop_ray_job / delete_ray_job for Ray "
+        "jobs, and get_ray_cluster / start_ray_cluster / stop_ray_cluster for "
+        "their Ray cluster. "
         "Each tool result names the next step. "
         f"The current purdue-af-agentic-interface skill is version {SKILL_VERSION}, "
         "this server's MAJOR.MINOR (a patch release never changes the skill). "

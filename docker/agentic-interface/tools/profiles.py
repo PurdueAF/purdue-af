@@ -11,6 +11,7 @@ from typing import Any, Optional
 
 import httpx
 import yaml
+from annotations import READS
 from cachetools import TTLCache
 from config import NAMESPACE, PROMETHEUS_NAME
 from errors import UpstreamError, describe_exception, json_body, response_detail
@@ -250,7 +251,7 @@ def find_profile(profiles: list[dict], name: str) -> Optional[dict]:
 
 
 def register(mcp: MCPServer) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def list_af_profiles() -> str:
         """List available Analysis Facility session profiles and their configurable options.
 

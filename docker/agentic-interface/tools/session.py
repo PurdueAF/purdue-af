@@ -10,6 +10,7 @@ import time
 from typing import Any, NamedTuple, Optional
 
 import httpx
+from annotations import CHANGES, DESTROYS, READS
 from config import HUB_API_URL, PUBLIC_URL, TOKEN_URL
 from context import require_user
 from errors import (
@@ -364,7 +365,7 @@ async def _ask_options(ctx: Context, profile: dict, opts: dict) -> None:
 
 
 def register(mcp: MCPServer) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def get_session_status() -> str:
         """Return the current status of the user's Analysis Facility session (pod).
 
@@ -438,7 +439,7 @@ def register(mcp: MCPServer) -> None:
 
         return "\n".join(lines)
 
-    @mcp.tool()
+    @mcp.tool(annotations=CHANGES)
     async def start_af_session(
         ctx: Context,
         profile_name: Optional[str] = None,
@@ -517,7 +518,7 @@ def register(mcp: MCPServer) -> None:
             )
         return "Session starting. Use get_session_status to check progress." + note
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTROYS)
     async def stop_af_session() -> str:
         """Stop the user's running Analysis Facility session (JupyterHub pod).
 
@@ -536,7 +537,7 @@ def register(mcp: MCPServer) -> None:
             "use start_af_session to launch a new one."
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def wait_for_session(timeout_seconds: int = 180) -> str:
         """Poll until the user's session is fully running or timeout is reached.
 
@@ -629,7 +630,7 @@ def register(mcp: MCPServer) -> None:
         )
         return "\n".join(lines)
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTROYS)
     async def restart_af_session(
         profile_name: Optional[str] = None,
         user_options: Optional[dict] = None,

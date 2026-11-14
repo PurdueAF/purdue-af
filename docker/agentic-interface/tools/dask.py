@@ -15,6 +15,7 @@ import time
 from typing import Any, Optional
 
 import httpx
+from annotations import CHANGES, DESTROYS, READS
 from config import (
     CLUSTER_PROMETHEUS_NAME,
     CLUSTER_PROMETHEUS_URL,
@@ -564,7 +565,7 @@ async def _start_workers(cluster_name: str, n_workers: int) -> list[str]:
 
 
 def register(mcp: MCPServer) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def list_dask_clusters() -> str:
         """List the calling user's running Dask clusters."""
         resp = await _gateway(
@@ -582,7 +583,7 @@ def register(mcp: MCPServer) -> None:
             _fmt_cluster(c) for c in clusters
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def list_dask_cluster_options() -> str:
         """List the create-time options accepted by Dask Gateway.
 
@@ -617,7 +618,7 @@ def register(mcp: MCPServer) -> None:
         ]
         return "\n".join(lines)
 
-    @mcp.tool()
+    @mcp.tool(annotations=CHANGES)
     async def create_dask_cluster(
         ctx: Context,
         env_source: Optional[str] = None,
@@ -729,7 +730,7 @@ def register(mcp: MCPServer) -> None:
 
         return "\n".join(lines + await _start_workers(cluster_name, n_workers))
 
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def get_dask_cluster_info(cluster_name: str) -> str:
         """Get detailed information about a specific Dask cluster.
 
@@ -757,7 +758,7 @@ def register(mcp: MCPServer) -> None:
             sections.append(f"Workers ({len(workers)}):\n" + "\n".join(worker_lines))
         return "\n\n".join(sections)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def get_dask_worker_count(cluster_name: str) -> str:
         """Return the current number of workers for a Dask cluster (by state).
 
@@ -818,7 +819,7 @@ def register(mcp: MCPServer) -> None:
             lines.append("by state: " + ", ".join(state_parts))
         return "\n".join(lines)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def get_dask_cluster_usage(cluster_name: str) -> str:
         """CPU and memory usage across Running workers of a Dask cluster.
 
@@ -904,7 +905,7 @@ def register(mcp: MCPServer) -> None:
 
         return "\n".join(lines)
 
-    @mcp.tool()
+    @mcp.tool(annotations=CHANGES)
     async def scale_dask_cluster(cluster_name: str, n_workers: int) -> str:
         """Scale a Dask cluster to the requested number of workers.
 
@@ -943,7 +944,7 @@ def register(mcp: MCPServer) -> None:
             lines += _WORKERS_PENDING_NEXT
         return "\n".join(lines)
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTROYS)
     async def stop_dask_cluster(cluster_name: str) -> str:
         """Stop and delete a Dask cluster, releasing all its resources.
 

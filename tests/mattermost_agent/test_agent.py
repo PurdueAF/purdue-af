@@ -13,6 +13,7 @@ from common import EXPERIMENTAL, REPO, generator, load_script, load_yaml
 from cryptography.fernet import Fernet
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp.types import ToolAnnotations
 
 APP = REPO / "apps" / "mattermost-agent"
 agent = load_script(APP / "agent.py", "mattermost_agent")
@@ -167,12 +168,14 @@ class FakeSession:
             description = "a tool"
             input_schema = {"type": "object", "properties": {}}
 
-            def __init__(self, name):
+            def __init__(self, name, reads=False):
                 self.name = name
+                self.annotations = ToolAnnotations(readOnlyHint=reads)
 
         class Listed:
             tools = [
-                Tool("get_facility_health"),
+                Tool("get_facility_health", reads=True),
+                Tool("get_facility_metrics", reads=True),
                 Tool("stop_af_session"),
                 Tool("scale_dask_cluster"),
                 Tool("submit_ray_job"),
@@ -196,6 +199,7 @@ class FakeFacility:
     def __init__(self):
         self.mcp = FakeSession()
         self.tokens = []
+        self.instructions = ""
 
     def session(self, token=None):
         self.tokens.append(token)
@@ -732,7 +736,7 @@ async def test_a_session_against_a_real_mcp_server_sends_the_hub_token(tmp_path)
             listed = await session.list_tools()
             assert [t.name for t in listed.tools] == ["get_facility_health"]
             answer = await bot.call(
-                session, "get_facility_health", "", agent.FACILITY_TOOLS
+                session, "get_facility_health", "", {"get_facility_health"}
             )
             assert answer == "**Healthy**"
         async with facility.session("person-token") as session:
@@ -1746,9 +1750,47 @@ def test_a_general_answer_may_not_deny_what_the_bot_did():
     assert "never say it did not" in agent.PUBLIC_MODE
 
 
-def test_the_bot_reads_prometheus_and_not_the_dashboard():
-    assert {"query_prometheus", "list_prometheus_metrics"} <= agent.FACILITY_TOOLS
-    assert "get_facility_metrics" not in agent.FACILITY_TOOLS | agent.PERSONAL_TOOLS
+def tool(name, reads):
+    class Tool:
+        pass
+
+    found = Tool()
+    found.name = name
+    found.annotations = ToolAnnotations(readOnlyHint=reads)
+    return found
+
+
+def test_tools_are_offered_by_what_they_say_they_do():
+    tools = [
+        tool("get_ray_capacity", True),
+        tool("query_prometheus", True),
+        tool("scale_dask_cluster", False),
+        tool("get_facility_metrics", True),
+        tool("submit_ray_job", False),
+    ]
+    unmarked = tool("new_tool", True)
+    unmarked.annotations = None
+    tools.append(unmarked)
+    public = [t.name for t in agent.offered(tools, personal=False)]
+    personal = [t.name for t in agent.offered(tools, personal=True)]
+    assert public == ["get_ray_capacity", "query_prometheus"]
+    assert personal == [
+        "get_ray_capacity",
+        "query_prometheus",
+        "scale_dask_cluster",
+        "new_tool",
+    ]
+
+
+async def test_the_servers_own_guidance_reaches_the_model(make):
+    bot, server, llm, facility = await make({"content": "Up."})
+    await ready(bot)
+    facility.instructions = "Use get_ray_capacity for free GPUs."
+    question = post("q", "@purdueaf-agent free GPUs?")
+    server.thread = {"q": question}
+    await bot.handle(question)
+    system = llm.bodies[0]["messages"][0]["content"]
+    assert "Use get_ray_capacity for free GPUs." in system
 
 
 async def test_addresses_in_tool_results_never_reach_the_model(make):
@@ -1764,7 +1806,7 @@ async def test_addresses_in_tool_results_never_reach_the_model(make):
 
             return Result()
 
-    out = await bot.call(Session(), "query_prometheus", "{}", agent.FACILITY_TOOLS)
+    out = await bot.call(Session(), "query_prometheus", "{}", {"query_prometheus"})
     assert out == 'up{instance="<address>",node="paf-a01",version="1.2.3"} 1'
 
 

@@ -56,7 +56,7 @@ async def test_an_instant_query_runs_scoped(tools, scoped):
     )
     assert form["query"] == "SCOPED%28up%29"
     assert 'up{job="loki"}: 1' in out
-    assert "get_facility_metrics" in out
+    assert "list_af_profiles" in out
     assert scoped[0][0] == "alice"
 
 

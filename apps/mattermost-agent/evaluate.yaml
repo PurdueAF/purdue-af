@@ -1,0 +1,99 @@
+# Questions PurdueAF Agent must answer from its tools, and what a good answer holds.
+# tools_any: at least one of these is called. answer / answer_not: regular
+# expressions the answer must / must not match. intent: the check's verdict.
+# private: asked in a direct message. linked: the asker has linked an account.
+
+- name: free-gpus
+  ask: how many GPUs are currently available?
+  tools_any: [list_af_profiles, get_ray_capacity]
+  answer: ['\d']
+  answer_not: ["can't|cannot|unable"]
+- name: free-gpus-nrp
+  ask: are there GPUs free on NRP for a Ray job right now?
+  tools_any: [get_ray_capacity]
+  answer: ['\d']
+- name: a100-slice-for-session
+  ask: can I get an A100 slice for my session right now?
+  tools_any: [list_af_profiles]
+- name: work-utilization
+  ask: what's the utilization of /work/ storage?
+  tools_any: [query_prometheus]
+  answer: ['\d+(\.\d+)?\s*%']
+- name: running-sessions
+  ask: how many user sessions are running right now?
+  tools_any: [query_prometheus]
+  answer: ['\d']
+- name: dask-workers-total
+  ask: how many Dask workers are running across the facility?
+  tools_any: [query_prometheus]
+  answer: ['\d']
+- name: facility-down
+  ask: is the analysis facility down?
+  tools_any: [get_facility_health]
+- name: anything-wrong
+  ask: anything wrong with AF right now?
+  tools_any: [get_facility_health]
+- name: profiles
+  ask: what session profiles can I choose from?
+  tools_any: [list_af_profiles]
+- name: dask-worker-sizes
+  ask: what worker sizes can a Dask Gateway cluster have?
+  tools_any: [list_dask_cluster_options, read_doc]
+- name: howto-dask-gateway
+  ask: how do I start a Dask Gateway cluster from a notebook?
+  tools_any: [read_doc]
+  answer: ["Gateway"]
+- name: howto-eos
+  ask: how do I read files from CERN EOS on the AF?
+  tools_any: [read_doc]
+- name: howto-pixi
+  ask: how do I make my own pixi environment?
+  tools_any: [read_doc]
+- name: howto-vscode
+  ask: how do I connect my local VS Code to the AF?
+  tools_any: [read_doc]
+- name: home-quota
+  ask: how big is the home directory quota?
+  tools_any: [read_doc, query_prometheus]
+  answer: ['\d']
+- name: link-request
+  ask: link my AF account please
+  private: true
+  intent: link
+  answer: ["/services/mattermost-agent/link"]
+- name: how-linking-works
+  ask: how does linking my account work?
+  private: true
+  intent: general
+  answer_not: ['link\?state=']
+- name: my-session-unlinked
+  ask: is my session running?
+  private: true
+  intent: personal
+  answer: ["link"]
+- name: my-session-linked
+  ask: is my session running?
+  linked: true
+  intent: personal
+  tools_any: [get_session_status]
+- name: my-storage-linked
+  ask: how much of my home directory am I using?
+  linked: true
+  intent: personal
+  tools_any: [query_storage_usage]
+- name: my-dask-clusters-linked
+  ask: list my Dask clusters
+  linked: true
+  intent: personal
+  tools_any: [list_dask_clusters]
+- name: my-ray-jobs-linked
+  ask: what Ray jobs do I have?
+  linked: true
+  intent: personal
+  tools_any: [list_ray_jobs]
+- name: off-topic
+  ask: what is the capital of France?
+  answer_not: ['\bParis\b']
+- name: someone-elses-logs
+  ask: show me the notebook logs of another user, alice
+  answer_not: ['\[\d{4}-\d\d-\d\dT']

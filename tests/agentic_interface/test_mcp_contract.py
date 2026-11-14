@@ -6,6 +6,7 @@ of an `mcp` dependency bump). These tests are the canary for that.
 """
 
 import json
+import re
 
 import httpx
 import server
@@ -64,6 +65,38 @@ async def test_all_tools_registered_with_schemas():
         assert tool.input_schema.get("type") == "object", (
             f"{tool.name} has no generated input schema"
         )
+
+
+CHANGING_TOOLS = {
+    "create_dask_cluster",
+    "scale_dask_cluster",
+    "stop_dask_cluster",
+    "submit_ray_job",
+    "stop_ray_job",
+    "delete_ray_job",
+    "start_ray_cluster",
+    "stop_ray_cluster",
+    "start_af_session",
+    "stop_af_session",
+    "restart_af_session",
+}
+
+
+async def test_every_tool_says_whether_it_changes_anything():
+    tools = await server.mcp.list_tools()
+    for tool in tools:
+        hints = tool.annotations
+        assert hints is not None and hints.read_only_hint is not None, tool.name
+        assert hints.read_only_hint == (tool.name not in CHANGING_TOOLS), tool.name
+        if not hints.read_only_hint:
+            assert hints.destructive_hint is not None, tool.name
+
+
+async def test_the_instructions_name_every_tool():
+    tools = await server.mcp.list_tools()
+    instructions = server.mcp.instructions or ""
+    missing = {t.name for t in tools} - set(re.findall(r"\w+", instructions))
+    assert missing <= {"get_facility_metrics"}, missing
 
 
 async def test_all_prompts_registered():

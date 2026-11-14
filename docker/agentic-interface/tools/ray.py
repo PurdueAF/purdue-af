@@ -14,6 +14,7 @@ import zipfile
 from typing import Any, Literal, Optional
 
 import httpx
+from annotations import CHANGES, DESTROYS, READS
 from config import RAY_GATEWAY_URL
 from context import require_user
 from errors import (
@@ -219,7 +220,7 @@ def _cluster_body(resp: httpx.Response) -> dict[str, Any]:
 
 
 def register(mcp: MCPServer) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def get_ray_capacity(
         min_gpu_memory_gb: Optional[float] = None,
         gpus_per_worker: int = 1,
@@ -250,7 +251,7 @@ def register(mcp: MCPServer) -> None:
         ]
         return "\n".join(lines)
 
-    @mcp.tool()
+    @mcp.tool(annotations=CHANGES)
     async def submit_ray_job(
         entrypoint: str,
         site: Literal["purdue", "nrp"] = "purdue",
@@ -342,7 +343,7 @@ def register(mcp: MCPServer) -> None:
             "status and log."
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def list_ray_jobs() -> str:
         """List the calling user's Ray jobs, at Purdue and on NRP, running or ended."""
         resp = await _gateway("GET", "/api/jobs/", action="list your Ray jobs")
@@ -353,7 +354,7 @@ def register(mcp: MCPServer) -> None:
             return "No Ray jobs."
         return f"# {len(jobs)} Ray job(s)\n" + "\n\n".join(_fmt_job(j) for j in jobs)
 
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def get_ray_job(job_id: str, log_lines: int = 100) -> str:
         """Status of a Ray job, why it is in it, and the end of its log.
 
@@ -378,7 +379,7 @@ def register(mcp: MCPServer) -> None:
             return f"{report}\n\nNext: delete_ray_job when its record is not needed."
         return f"{report}\n\nNext: ask again later, or stop_ray_job to end it."
 
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def get_ray_cluster() -> str:
         """The calling user's own Ray cluster: its workers, and how to reach it."""
         resp = await _gateway("GET", "/af/cluster", action="read your Ray cluster")
@@ -390,7 +391,7 @@ def register(mcp: MCPServer) -> None:
             )
         return _fmt_cluster(cluster)
 
-    @mcp.tool()
+    @mcp.tool(annotations=CHANGES)
     async def start_ray_cluster(
         workers: int = 1,
         exact_workers: bool = False,
@@ -433,7 +434,7 @@ def register(mcp: MCPServer) -> None:
         )
         return f"Started.\n{_fmt_cluster(_cluster_body(resp))}"
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTROYS)
     async def stop_ray_cluster(force: bool = False) -> str:
         """Stop the user's own Ray cluster, which frees its GPUs.
 
@@ -448,7 +449,7 @@ def register(mcp: MCPServer) -> None:
         )
         return "Stopping your Ray cluster. Notebooks connected to it must ray.init() again."
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTROYS)
     async def stop_ray_job(job_id: str) -> str:
         """Stop a running Ray job. It is not resumed: its progress is what it saved.
 
@@ -462,7 +463,7 @@ def register(mcp: MCPServer) -> None:
             "outputs are copied back first."
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=DESTROYS)
     async def delete_ray_job(job_id: str) -> str:
         """Delete an ended Ray job's record and log, which cannot be read again.
 
