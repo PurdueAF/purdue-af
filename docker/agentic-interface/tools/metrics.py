@@ -11,7 +11,7 @@ import json
 import re
 from typing import Any, Optional
 
-from annotations import READS
+from annotations import FACILITY, READS
 from config import CLUSTER_PROMETHEUS_URL, DASHBOARD_PATH, PROMETHEUS_URL
 from errors import Failure, UpstreamError
 from mcp.server.mcpserver import MCPServer
@@ -191,7 +191,7 @@ async def _panel(
 
 
 def register(mcp: MCPServer) -> None:
-    @mcp.tool(annotations=READS)
+    @mcp.tool(annotations=READS, meta=FACILITY)
     async def get_facility_metrics(section: Optional[str] = None) -> str:
         """Current numbers from the public facility dashboard.
 

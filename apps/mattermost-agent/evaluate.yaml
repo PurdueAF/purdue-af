@@ -7,7 +7,7 @@
   ask: how many GPUs are currently available?
   tools_any: [list_af_profiles, get_ray_capacity]
   answer: ['\d']
-  answer_not: ["can't|cannot|unable"]
+  answer_not: ["can't|cannot|unable", '\bskill\b']
 - name: free-gpus-nrp
   ask: are there GPUs free on NRP for a Ray job right now?
   tools_any: [get_ray_capacity]
@@ -19,14 +19,17 @@
   ask: what's the utilization of /work/ storage?
   tools_any: [query_prometheus]
   answer: ['\d+(\.\d+)?\s*%']
+  answer_not: ["can't|cannot|unable"]
 - name: running-sessions
   ask: how many user sessions are running right now?
-  tools_any: [query_prometheus]
+  tools_any: [query_prometheus, get_facility_metrics]
   answer: ['\d']
+  answer_not: ["can't|cannot|unable"]
 - name: dask-workers-total
   ask: how many Dask workers are running across the facility?
-  tools_any: [query_prometheus]
+  tools_any: [get_facility_metrics]
   answer: ['\d']
+  answer_not: ["can't|cannot|unable"]
 - name: facility-down
   ask: is the analysis facility down?
   tools_any: [get_facility_health]

@@ -296,10 +296,12 @@ mcp = InstrumentedMCPServer(
         "how many of each GPU a new session can take now; get_ray_capacity for "
         "the free Ray workers and GPUs at Purdue and on NRP; "
         "list_dask_cluster_options for Dask worker choices; "
+        'get_facility_metrics for "how busy is the AF" and the totals the '
+        "public dashboard shows, such as Dask workers and reserved capacity; "
         "list_prometheus_metrics then query_prometheus for any other number. "
         "query_prometheus leaves out other people's sessions, Dask clusters, Ray "
         "jobs and home directories, so it cannot count what others use: for "
-        "free GPUs use the two tools above. "
+        "free GPUs and facility totals use the tools above. "
         "The caller's own things: get_session_status / start_af_session / "
         "stop_af_session / restart_af_session / wait_for_session for the session; "
         "query_storage_usage for their quota; query_notebook_logs / "

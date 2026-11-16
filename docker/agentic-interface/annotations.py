@@ -1,5 +1,6 @@
-"""What each tool does to the facility, as MCP tool annotations: clients such
-as PurdueAF Agent decide from these which tools a caller may be offered."""
+"""What each tool does to the facility, as MCP tool annotations, and whose things
+it answers about, as tool metadata: clients such as PurdueAF Agent decide from
+these which tools a caller may be offered."""
 
 from mcp.types import ToolAnnotations
 
@@ -15,3 +16,5 @@ CHANGES = ToolAnnotations(
 DESTROYS = ToolAnnotations(
     read_only_hint=False, destructive_hint=True, open_world_hint=False
 )
+# Answers for the facility, whoever calls; a tool without it answers for the caller.
+FACILITY = {"purdue-af/scope": "facility"}

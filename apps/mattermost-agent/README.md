@@ -23,9 +23,9 @@ a role of the [LLM proxy](../agentic-analysis/README.md#llm-proxy).
 
 The bot is the Hub service `mattermost-agent`, with no role, so the MCP server
 sees a caller with no session, storage or clusters. The model gets the MCP
-server's own guidance and every tool the server annotates as read-only, but those
-in `WITHHELD`. It sends the model the conversation's text, never who wrote it,
-and a reply cannot mention anyone.
+server's own guidance and the tools the server marks as both read-only and
+answering for the facility. It sends the model the conversation's text, never who
+wrote it, and a reply cannot mention anyone.
 
 ## Linking
 
@@ -42,8 +42,8 @@ Tokens are encrypted in `/state/links.enc` under `link-key`, keyed by Mattermost
 
 Each question first goes to the model alone with its author's own posts, to decide
 whether they ask to link, to unlink, or about their own things, read with the
-bot's replies. If about their own things, it runs with the author's token, the
-tools that change things are offered too, and the model reads only the author's
+bot's replies. If about their own things, it runs with the author's token, every
+tool but those in `WITHHELD` is offered, and the model reads only the author's
 posts and the bot's replies; otherwise it runs as above. The bot replies where it
 was asked.
 
@@ -52,22 +52,28 @@ was asked.
 `evaluate.py` asks the questions in `evaluate.yaml` through the bot's own answer
 path, against the live agentic interface and LLM proxy, and reports which answers
 pass. It runs from a checkout; `--help` lists its options. It needs the LLM proxy
-forwarded and its client token in a file:
+forwarded, and its client token and the bot's Hub token in files outside the
+checkout:
 
 ```bash
 kubectl -n cms port-forward svc/agentic-analysis-llm-proxy 8080
 ```
 
 ```bash
-SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt sops --decrypt --extract '["stringData"]["client-token"]' apps/agentic-analysis/secret-llm-proxy.yaml > llm-token
+SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt sops --decrypt --extract '["stringData"]["client-token"]' apps/agentic-analysis/secret-llm-proxy.yaml > ~/.config/purdue-af/llm-token
 ```
 
 ```bash
-uv run --project tests --frozen python apps/mattermost-agent/evaluate.py --llm-token-file llm-token
+kubectl -n cms get secret hub -o go-template='{{index .data "hub.services.mattermost-agent.apiToken" | base64decode}}' > ~/.config/purdue-af/bot-token
 ```
 
-It calls the agentic interface with the MCP token of `--token-file`, a person's,
-so its public answers may also see that person's own series.
+```bash
+uv run --project tests --frozen python apps/mattermost-agent/evaluate.py --llm-token-file ~/.config/purdue-af/llm-token --token-file ~/.config/purdue-af/bot-token
+```
+
+General questions call the agentic interface as the bot; the cases marked `linked`
+call it with the person's token of `--person-token-file`. The live server must
+already serve the tool annotations and scopes the bot reads.
 
 ## Running it
 

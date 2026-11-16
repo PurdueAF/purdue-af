@@ -15,7 +15,7 @@ import time
 from typing import Any, Optional
 
 import httpx
-from annotations import CHANGES, DESTROYS, READS
+from annotations import CHANGES, DESTROYS, FACILITY, READS
 from config import (
     CLUSTER_PROMETHEUS_NAME,
     CLUSTER_PROMETHEUS_URL,
@@ -583,7 +583,7 @@ def register(mcp: MCPServer) -> None:
             _fmt_cluster(c) for c in clusters
         )
 
-    @mcp.tool(annotations=READS)
+    @mcp.tool(annotations=READS, meta=FACILITY)
     async def list_dask_cluster_options() -> str:
         """List the create-time options accepted by Dask Gateway.
 

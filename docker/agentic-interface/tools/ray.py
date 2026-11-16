@@ -14,7 +14,7 @@ import zipfile
 from typing import Any, Literal, Optional
 
 import httpx
-from annotations import CHANGES, DESTROYS, READS
+from annotations import CHANGES, DESTROYS, FACILITY, READS
 from config import RAY_GATEWAY_URL
 from context import require_user
 from errors import (
@@ -220,7 +220,7 @@ def _cluster_body(resp: httpx.Response) -> dict[str, Any]:
 
 
 def register(mcp: MCPServer) -> None:
-    @mcp.tool(annotations=READS)
+    @mcp.tool(annotations=READS, meta=FACILITY)
     async def get_ray_capacity(
         min_gpu_memory_gb: Optional[float] = None,
         gpus_per_worker: int = 1,

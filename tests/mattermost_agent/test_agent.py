@@ -168,14 +168,15 @@ class FakeSession:
             description = "a tool"
             input_schema = {"type": "object", "properties": {}}
 
-            def __init__(self, name, reads=False):
+            def __init__(self, name, reads=False, facility=False):
                 self.name = name
                 self.annotations = ToolAnnotations(readOnlyHint=reads)
+                self.meta = {agent.SCOPE: "facility"} if facility else None
 
         class Listed:
             tools = [
-                Tool("get_facility_health", reads=True),
-                Tool("get_facility_metrics", reads=True),
+                Tool("get_facility_health", reads=True, facility=True),
+                Tool("get_session_status", reads=True),
                 Tool("stop_af_session"),
                 Tool("scale_dask_cluster"),
                 Tool("submit_ray_job"),
@@ -1153,7 +1154,7 @@ async def test_a_general_question_never_uses_the_askers_token(make):
     await bot.handle(question)
     assert facility.tokens == [None]
     offered = [t["function"]["name"] for t in llm.bodies[0]["tools"]]
-    assert "stop_af_session" not in offered
+    assert offered == ["read_doc", "get_facility_health"]
     assert server.replies[-1]["channel_id"] == "c1"
 
 
@@ -1750,34 +1751,38 @@ def test_a_general_answer_may_not_deny_what_the_bot_did():
     assert "never say it did not" in agent.PUBLIC_MODE
 
 
-def tool(name, reads):
+def tool(name, reads, facility=False):
     class Tool:
         pass
 
     found = Tool()
     found.name = name
     found.annotations = ToolAnnotations(readOnlyHint=reads)
+    found.meta = {agent.SCOPE: "facility"} if facility else None
     return found
 
 
-def test_tools_are_offered_by_what_they_say_they_do():
+def test_tools_are_offered_by_what_they_say_of_themselves():
+    silent = tool("new_tool", True, facility=True)
+    silent.annotations = None
     tools = [
-        tool("get_ray_capacity", True),
-        tool("query_prometheus", True),
+        tool("get_ray_capacity", True, facility=True),
+        tool("get_facility_metrics", True, facility=True),
+        tool("get_session_status", True),
         tool("scale_dask_cluster", False),
-        tool("get_facility_metrics", True),
+        tool("mislabelled", False, facility=True),
         tool("submit_ray_job", False),
+        silent,
     ]
-    unmarked = tool("new_tool", True)
-    unmarked.annotations = None
-    tools.append(unmarked)
     public = [t.name for t in agent.offered(tools, personal=False)]
     personal = [t.name for t in agent.offered(tools, personal=True)]
-    assert public == ["get_ray_capacity", "query_prometheus"]
+    assert public == ["get_ray_capacity", "get_facility_metrics"]
     assert personal == [
         "get_ray_capacity",
-        "query_prometheus",
+        "get_facility_metrics",
+        "get_session_status",
         "scale_dask_cluster",
+        "mislabelled",
         "new_tool",
     ]
 

@@ -2,14 +2,9 @@
 agentic interface and LLM proxy, and reports which answers pass. Mattermost and the
 Hub are stood in for; the conversation is the question alone.
 
-Run from a checkout, with the LLM proxy forwarded and its client token in a file:
-
-    kubectl -n cms port-forward svc/agentic-analysis-llm-proxy 8080
-    uv run --project tests --frozen python apps/mattermost-agent/evaluate.py \\
-        --llm-token-file <file>
-
-It calls the MCP server with the token in --token-file, a person's, so public
-answers may also see that person's own series; who sees what is the unit tests'.
+General questions call the MCP server with the bot's own token, as the bot does;
+the cases marked linked call it with a person's. The bot's README says how to run
+it.
 """
 
 from __future__ import annotations
@@ -86,7 +81,6 @@ class Linked:
 
 
 async def ask(case: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
-    token = args.token_file.read_text().strip()
     private = bool(case.get("private") or case.get("linked"))
     post: dict[str, Any] = {
         "id": "question",
@@ -115,7 +109,9 @@ async def ask(case: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
         "cms-exp",
         "purdue-analysis-facility",
         None,
-        Linked(token if case.get("linked") else None),
+        Linked(
+            args.person_token_file.read_text().strip() if case.get("linked") else None
+        ),
     )
     bot.me = ME
     bot.mention = re.compile(rf"(?<![\w.-])@{ME['username']}(?![\w-])", re.IGNORECASE)
@@ -171,7 +167,19 @@ async def main() -> int:
         default="https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp",
     )
     parser.add_argument(
-        "--token-file", type=Path, default=Path.home() / ".config/purdue-af/token"
+        "--token-file",
+        type=Path,
+        required=True,
+        help="The bot's own Hub token, for general questions.",
+    )
+    parser.add_argument(
+        "--person-token-file",
+        type=Path,
+        default=Path.home() / ".config/purdue-af/token",
+        help="A person's Hub token, for the cases marked linked.",
+    )
+    parser.add_argument(
+        "--repeat", type=int, default=1, help="Ask each question this many times."
     )
     parser.add_argument("--llm-url", default="http://localhost:8080")
     parser.add_argument("--llm-token-file", type=Path, required=True)
@@ -183,17 +191,22 @@ async def main() -> int:
         cases = [c for c in cases if args.only in c["name"]]
     results = []
     for case in cases:
-        try:
-            seen = await ask(case, args)
-            wrong = judge(case, seen)
-        except Exception as exc:  # a broken case is reported, not fatal
-            seen, wrong = {"tools": [], "answer": ""}, [f"{type(exc).__name__}: {exc}"]
+        runs, wrong = [], []
+        for run in range(args.repeat):
+            try:
+                seen = await ask(case, args)
+                faults = judge(case, seen)
+            except Exception as exc:  # a broken case is reported, not fatal
+                seen = {"tools": [], "answer": ""}
+                faults = [f"{type(exc).__name__}: {exc}"]
+            runs.append(seen)
+            wrong += [f"run {run + 1}: {fault}" for fault in faults]
         mark = "pass" if not wrong else "FAIL"
-        tools = ",".join(seen["tools"]) or "-"
-        print(f"{mark}  {case['name']:<34} tools={tools}", flush=True)
+        tools = ",".join(dict.fromkeys(t for seen in runs for t in seen["tools"]))
+        print(f"{mark}  {case['name']:<34} tools={tools or '-'}", flush=True)
         for line in wrong:
             print(f"      {line}", flush=True)
-        results.append({"case": case, "seen": seen, "wrong": wrong})
+        results.append({"case": case, "runs": runs, "wrong": wrong})
     passed = sum(not r["wrong"] for r in results)
     print(f"\n{passed} of {len(results)} passed")
     if args.out:

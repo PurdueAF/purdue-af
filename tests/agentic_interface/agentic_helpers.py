@@ -28,12 +28,14 @@ class ToolRecorder:
     def __init__(self):
         self.tools = {}
         self.annotations = {}
+        self.meta = {}
         self.prompts = {}
 
-    def tool(self, annotations=None):
+    def tool(self, annotations=None, meta=None):
         def decorator(fn):
             self.tools[fn.__name__] = fn
             self.annotations[fn.__name__] = annotations
+            self.meta[fn.__name__] = meta
             return fn
 
         return decorator
