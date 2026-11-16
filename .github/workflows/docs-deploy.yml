@@ -19,7 +19,7 @@ permissions:
 
 env:
   # renovate: datasource=pypi depName=zensical
-  ZENSICAL_VERSION: 0.0.74
+  ZENSICAL_VERSION: 0.1.1
 
 jobs:
   build:

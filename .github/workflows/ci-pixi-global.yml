@@ -55,7 +55,7 @@ jobs:
           key: ${{ steps.key.outputs.key }}
       - name: Login to ghcr.io
         if: steps.memo.outputs.hit != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4 # Renovate pins to digest
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4 # Renovate pins to digest
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -111,7 +111,7 @@ jobs:
           fi
       - name: Install CVMFS on the runner
         if: steps.memo.outputs.hit != 'true'
-        uses: cvmfs-contrib/github-action-cvmfs@72f2a8d366043978d6aebee154bc9ed321c2f2a8 # v5.6
+        uses: cvmfs-contrib/github-action-cvmfs@d705955b32075b4b0178f3a0160b6fe527483cf8 # v5.7
       # Revision: tests/integration_challenge/upstream.pin (part of the memo key).
       - name: Check out the integration challenge
         if: steps.memo.outputs.hit != 'true'
