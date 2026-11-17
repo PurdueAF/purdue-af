@@ -94,9 +94,105 @@ clusters, storage and logs without leaving the notebook.
 | **Transport** | HTTP (streamable)                                                  |
 | **Auth**      | header `Authorization: Bearer <token>`                             |
 
-1. Obtain a [JupyterHub API token](guide-ssh-access.md#jupyterhub-api-token).
-2. Add the server in your agent's MCP settings. Most agents accept this
-   configuration:
+Two steps, once per machine.
+
+**1. Save a token.** Obtain a
+[JupyterHub API token](guide-ssh-access.md#jupyterhub-api-token) and save it in
+`~/.config/purdue-af/token`, as that page shows. Claude Code reads the file.
+Every other agent reads the token from the `JUPYTERHUB_TOKEN` environment
+variable, so add this line to your shell profile (`~/.zshrc` or `~/.bashrc`)
+and open a new terminal:
+
+```bash
+export JUPYTERHUB_TOKEN="$(cat ~/.config/purdue-af/token)"
+```
+
+**2. Install for your agent.** Each set of commands adds the MCP server and the
+[skill](#installing-the-skill-recommended).
+
+=== "Claude Code"
+
+    ```bash
+    claude plugin marketplace add PurdueAF/purdue-af
+    claude plugin install purdue-af@purdue-af
+    ```
+
+=== "Codex"
+
+    ```bash
+    codex plugin marketplace add PurdueAF/purdue-af
+    codex plugin add purdue-af@purdue-af
+    ```
+
+=== "Copilot CLI"
+
+    ```bash
+    copilot plugin marketplace add PurdueAF/purdue-af
+    copilot plugin install purdue-af@purdue-af
+    ```
+
+    VS Code lists a plugin installed with Copilot CLI on the **Plugins** page
+    of its Agent Customizations editor.
+
+=== "Gemini CLI"
+
+    ```bash
+    gemini mcp add --scope user --transport http \
+      --header 'Authorization: Bearer ${JUPYTERHUB_TOKEN}' \
+      purdue-af-agentic-interface \
+      https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp
+    gemini skills install https://github.com/PurdueAF/purdue-af.git \
+      --path .claude/skills/purdue-af-agentic-interface
+    ```
+
+=== "OpenCode"
+
+    Add the server to `~/.config/opencode/opencode.json`:
+
+    ```json
+    {
+      "$schema": "https://opencode.ai/config.json",
+      "mcp": {
+        "purdue-af-agentic-interface": {
+          "type": "remote",
+          "url": "https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp",
+          "headers": { "Authorization": "Bearer {env:JUPYTERHUB_TOKEN}" }
+        }
+      }
+    }
+    ```
+
+    Then install the skill:
+
+    ```bash
+    npx skills add PurdueAF/purdue-af --global --agent opencode --yes
+    ```
+
+=== "Cursor"
+
+    Add the server to `~/.cursor/mcp.json`:
+
+    ```json
+    {
+      "mcpServers": {
+        "purdue-af-agentic-interface": {
+          "url": "https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp",
+          "headers": { "Authorization": "Bearer ${env:JUPYTERHUB_TOKEN}" }
+        }
+      }
+    }
+    ```
+
+    Then install the skill:
+
+    ```bash
+    npx skills add PurdueAF/purdue-af --global --agent cursor --yes
+    ```
+
+=== "Other agents"
+
+    Most agents accept this configuration — in a config file, a settings
+    panel, or a CLI command:
 
     ```json
     {
@@ -110,14 +206,13 @@ clusters, storage and logs without leaving the notebook.
     }
     ```
 
-    Where this goes depends on your agent — a config file, a settings panel, or a
-    CLI command (`claude mcp add`, `codex mcp add`, …) — but the URL and header are
-    always the same. If your agent expands environment variables in its config,
-    use `Bearer ${JUPYTERHUB_TOKEN}` instead of pasting the token.
+    If your agent expands environment variables in its config, refer to
+    `JUPYTERHUB_TOKEN` there instead of pasting the token. Then install the
+    skill, choosing your agent when asked:
 
-For **Claude Code**, the one-time setup at the end of the
-[skill](#installing-the-skill-recommended) stores the token in a file and
-registers the server at user scope.
+    ```bash
+    npx skills add PurdueAF/purdue-af --global
+    ```
 
 ## Installing the skill (recommended)
 
@@ -132,25 +227,20 @@ workflows (how to launch a session, which tools to call in what order). It lives
 in the Purdue AF repository:
 [`.claude/skills/purdue-af-agentic-interface/SKILL.md`](https://github.com/PurdueAF/purdue-af/blob/main/.claude/skills/purdue-af-agentic-interface/SKILL.md)
 
-For **Claude Code**, install it with:
-
-```bash
-mkdir -p ~/.claude/skills/purdue-af-agentic-interface
-curl -fsSL -o ~/.claude/skills/purdue-af-agentic-interface/SKILL.md \
-  https://raw.githubusercontent.com/PurdueAF/purdue-af/main/.claude/skills/purdue-af-agentic-interface/SKILL.md
-```
-
-The skill then activates automatically whenever you mention your Purdue AF
-session, Dask clusters, or AF logs/storage.
+The commands [above](#connecting-from-your-own-machine) install it together
+with the MCP server. It then activates automatically whenever you mention your
+Purdue AF session, Dask clusters, or AF logs/storage.
 
 The MCP server announces the current skill version, so the agent tells you when
-your copy is out of date; rerun the same command to update it.
+your copy is out of date. Update it with your agent's own command:
 
-For **other agents**, copy the same file's contents into whatever your agent
-uses for persistent instructions — `~/.codex/AGENTS.md` for Codex,
-`~/.config/opencode/AGENTS.md` for opencode, **Customize → Rules** for Cursor.
-It is plain Markdown with no Claude-specific content beyond the front-matter
-header.
+| Agent        | Update                                                                                         |
+| ------------ | ---------------------------------------------------------------------------------------------- |
+| Claude Code  | `claude plugin marketplace update purdue-af`, then `claude plugin update purdue-af@purdue-af` |
+| Codex        | `codex plugin marketplace upgrade purdue-af`                                                   |
+| Copilot CLI  | `copilot plugin update purdue-af`                                                              |
+| Gemini CLI   | the `gemini skills install` command again                                                      |
+| Other agents | `npx skills update --global`                                                                   |
 
 ## What you can do
 

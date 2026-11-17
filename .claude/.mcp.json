@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "purdue-af-agentic-interface": {
+      "type": "http",
+      "url": "https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp",
+      "headers": { "Authorization": "Bearer ${JUPYTERHUB_TOKEN}" },
+      "headersHelper": "printf '{\"Authorization\":\"Bearer %s\"}' \"$(tr -d '[:space:]' < \"$HOME/.config/purdue-af/token\")\"",
+      "bearer_token_env_var": "JUPYTERHUB_TOKEN"
+    }
+  }
+}
