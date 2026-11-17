@@ -3,6 +3,8 @@
 .claude/*
 !.claude/skills/
 !.claude/rules/
+!.claude/.claude-plugin/
+!.claude/.mcp.json
 **/.venv/
 **/.pytest_cache/
 coverage.xml

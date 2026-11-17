@@ -1,0 +1,9 @@
+{
+  "name": "purdue-af",
+  "description": "Manage a Purdue Analysis Facility session, Dask clusters, Ray jobs, storage and logs.",
+  "author": {
+    "name": "Purdue Analysis Facility"
+  },
+  "homepage": "https://analysis-facility.physics.purdue.edu/guide-agentic-interface/",
+  "repository": "https://github.com/PurdueAF/purdue-af"
+}

@@ -1,0 +1,14 @@
+{
+  "name": "purdue-af",
+  "owner": { "name": "Purdue Analysis Facility" },
+  "metadata": {
+    "description": "The Purdue Analysis Facility's MCP server and the skill that drives it."
+  },
+  "plugins": [
+    {
+      "name": "purdue-af",
+      "source": "./.claude",
+      "description": "Manage a Purdue Analysis Facility session, Dask clusters, Ray jobs, storage and logs."
+    }
+  ]
+}
