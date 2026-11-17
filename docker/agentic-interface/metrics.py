@@ -17,7 +17,7 @@ from mcp.shared.exceptions import MCPError, UrlElicitationRequiredError
 from mcp.types import CallToolResult, InputRequiredResult, TextContent
 from prometheus_client import Counter, Histogram
 from pydantic import ValidationError
-from tools.elicitation import NeedsChoices
+from tools.elicitation import InputNeeded, NeedsChoices
 
 logger = logging.getLogger("agentic.tools")
 
@@ -122,7 +122,8 @@ def _needs_input_result(text: str) -> CallToolResult:
 class InstrumentedMCPServer(MCPServer):
     """MCPServer that records metrics and a structured log line per tool call,
     and turns a tool's NeedsChoices into an ordinary result: the help text is
-    an instruction to the agent, not an error."""
+    an instruction to the agent, not an error. A tool's InputNeeded goes back
+    as the question it carries."""
 
     async def call_tool(
         self, name: str, arguments: dict[str, Any], context: Context | None = None
@@ -144,6 +145,9 @@ class InstrumentedMCPServer(MCPServer):
             if isinstance(exc.__cause__, NeedsChoices):
                 self._record(name, "needs_input", username, start)
                 return _needs_input_result(str(exc.__cause__))
+            if isinstance(exc.__cause__, InputNeeded):
+                self._record(name, "needs_input", username, start)
+                return exc.__cause__.result
             failure, outcome = _translate(name, username, exc)
             self._record(name, outcome, username, start)
             if failure is exc:

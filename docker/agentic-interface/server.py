@@ -16,7 +16,7 @@ from collections.abc import Iterable
 import scope_audit
 import uvicorn
 from auth import HubUnavailable, resolve_user
-from config import SERVICE_PREFIX, SKILL_PATH, STATELESS_HTTP, TOKEN_URL
+from config import SERVICE_PREFIX, SKILL_PATH, TOKEN_URL
 from context import current_user
 from metrics import InstrumentedMCPServer, record_request
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -344,7 +344,7 @@ def build_app() -> ASGIApp:
     return _AuthMiddleware(
         mcp.streamable_http_app(
             streamable_http_path=f"{SERVICE_PREFIX}/mcp",
-            stateless_http=STATELESS_HTTP,
+            stateless_http=True,
         )
     )
 

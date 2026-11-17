@@ -142,8 +142,11 @@ purdue-af release gate keeps working. The bump commit changes only the
 Deployment (not an image input), so the next pipeline sees digest == pin and
 no-ops — the cycle terminates after one bump.
 
-Note the deploy is `strategy: Recreate` (stateful in-process MCP sessions),
-so each auto-release drops in-flight MCP sessions for a few seconds.
+The server keeps no MCP sessions, so each auto-release is a rolling update:
+the new pod is ready before the old one stops, and a call in flight has the
+pod's termination grace period to finish. A multiple-choice question asked by
+the old pod and answered to the new one is refused, and the agent calls the
+tool again.
 
 **Rollback**: `git revert` the CODE commit that produced the bad image — not
 the auto-release commit (the digest check would just re-bump onto the same

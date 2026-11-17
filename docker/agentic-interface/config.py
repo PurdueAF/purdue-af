@@ -44,10 +44,3 @@ DASHBOARD_PATH = os.environ.get("DASHBOARD_PATH", "/dashboards/default.json")
 
 # The agent skill, bundled so the server can announce its current version.
 SKILL_PATH = os.environ.get("SKILL_PATH", "/app/SKILL.md")
-
-# Elicitation needs stateful sessions; stateless keeps one-shot POSTs working.
-STATELESS_HTTP = os.environ.get("MCP_STATELESS_HTTP", "true").lower() in (
-    "1",
-    "true",
-    "yes",
-)
