@@ -16,47 +16,33 @@ Log in with a Purdue, CERN, or FNAL account — see
 
 -   **[Get started](getting-started.md)**
 
-    ---
-
     Create your first session and set up GitHub and Grid access, in about 15
-    minutes. Then [learn the interfaces](interface.md), or connect over
-    [SSH](guide-ssh-access.md) or from [your own IDE](guide-ide-connection.md).
+    minutes.
 
 -   **[AI agents](agents.md)**
 
-    ---
-
     Claude Code, Codex and OpenCode run in every session and already know the
-    facility. You can also [connect an agent on your own machine](guide-agentic-interface.md),
-    or [ask PurdueAF Agent on Mattermost](support.md#purdueaf-agent).
-
--   **[Scale out](scaling-out.md)**
-
-    ---
-
-    Run an analysis on hundreds of cores with
-    [Dask Gateway](guide-dask-gateway.md), or submit Slurm and CRAB jobs.
-
--   **[Train on GPUs](gpus.md)**
-
-    ---
-
-    Start a session with an A100 or T4 GPU, or
-    [train on several GPUs with Ray](guide-ray-train.md) from a notebook.
+    facility.
 
 -   **[Software](software.md)**
 
-    ---
-
     Use the shared Pixi environment with `coffea`, `ROOT` and `pytorch`, or
-    [build your own](guide-pixi.md).
+    build your own.
 
 -   **[Storage and data](storage.md)**
 
-    ---
+    Know which volume to use for what, and read CMS datasets over XRootD,
+    XCache and Rucio.
 
-    Know which volume to use for what, and
-    [read CMS datasets](data-access.md) over XRootD, XCache and Rucio.
+-   **[Scale out](scaling-out.md)**
+
+    Run an analysis on hundreds of cores with Dask Gateway, or submit Slurm
+    and CRAB jobs.
+
+-   **[Train on GPUs](gpus.md)**
+
+    Start a session with an A100 or T4 GPU, or train on several GPUs with Ray
+    from a notebook.
 
 </div>
 
