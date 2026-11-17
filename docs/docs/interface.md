@@ -1,4 +1,4 @@
-# How to use Purdue AF
+# Interfaces and analysis tools
 
 ## User interfaces
 
@@ -11,11 +11,9 @@ Purdue AF provides several user interfaces for analysis development:
   right of the JupyterLab interface.
 * [Connection from local VSCode-based IDEs](guide-ide-connection.md) (VSCode, Cursor, etc.)
 * [SSH connection from a local terminal](guide-ssh-access.md)
-* [Agentic interface (MCP server)](guide-agentic-interface.md) — manage your AF
-  session and Dask clusters from any MCP-capable AI agent. Claude Code, Codex and
-  opencode come pre-installed and pre-connected in the session (all in the
-  terminal; Claude Code and Codex also as VS Code extensions), and can be
-  [used as a chat panel inside JupyterLab](guide-agentic-interface.md#ai-in-jupyterlab); agents on your own machine (Cursor, etc.) connect with a token.
+* [AI agents](agents.md) — Claude Code, Codex and OpenCode run in every
+  session, in the terminal, in VS Code and as a chat panel in JupyterLab. An
+  agent on your own machine [connects with a token](guide-agentic-interface.md).
 
 ## Python code development
 
@@ -77,17 +75,9 @@ examples of frameworks which have been shown to perform well at Purdue AF:
   be written in either C++ or Python. Purdue AF supports RDataFrame in any Pixi or
   Conda environment where ROOT is installed.
 
-## Scaling out
+## Beyond a single session
 
-When your analysis outgrows the resources of a single session, several options are
-available — see [Scaling out](scaling-out.md) for a detailed comparison:
-
-* **[Dask](guide-dask.md)** — parallelize any Python code over local cores, or
-  scale out via [Dask Gateway](guide-dask-gateway.md).
-* **Slurm** — batch submission to Purdue computing clusters (Purdue users only).
-* **CRAB** — submission of CMSSW jobs to the Worldwide LHC Computing Grid.
-
-## GPUs
-
-At Purdue AF, you can start a session with a GPU by selecting it at the resource
-selection step — see [GPU access at Purdue AF](gpus.md).
+* [Scaling out](scaling-out.md) compares the ways to run on more cores: Dask
+  Gateway, Slurm and CRAB.
+* [GPU access](gpus.md) covers sessions with a GPU and
+  [training on several GPUs with Ray](guide-ray-train.md).

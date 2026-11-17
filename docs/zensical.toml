@@ -21,68 +21,67 @@ repo_name = "PurdueAF/purdue-af"
 edit_uri = "edit/main/docs/docs/"
 
 
-# Navigation.
+# Navigation: one section per topic, its overview page first.
 # Page titles are derived from each page's first heading.
 nav = [
     { "Home" = "index.md" },
-    { "Getting started" = [
+    { "Get started" = [
         "getting-started.md",
         "login-methods.md",
         "interface.md",
+        "guide-ssh-access.md",
+        "guide-ide-connection.md",
     ] },
-    { "Documentation" = [
-        "storage.md",
-        "software.md",
-        "data-access.md",
-        "scaling-out.md",
-        "gpus.md",
-        "hardware.md",
-    ] },
-    { "Monitoring" = [
-        { "Monitoring dashboard" = "https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard" },
-    ] },
-    { "User guides" = [
-        { "Software environments" = [
-            "guide-pixi.md",
-            "guide-conda.md",
-            "guide-combine.md",
-        ] },
-        { "Scaling out" = [
-            "guide-dask.md",
-            "guide-dask-gateway.md",
-        ] },
-        { "GPUs" = [
-            "guide-ray-train.md",
-            "guide-roofit-cuda.md",
-        ] },
-        { "Remote access" = [
-            "guide-ssh-access.md",
-            "guide-ide-connection.md",
-            "guide-file-transfer.md",
-        ] },
-        { "Data and storage" = [
-            "guide-rucio.md",
-            "guide-cern-eos.md",
-            "guide-eos-write.md",
-        ] },
-        { "Special workflows" = [
-            "guide-mc-gen.md",
-        ] },
-    ] },
-    { "Agentic AI" = [
+    { "AI agents" = [
+        "agents.md",
         "guide-agentic-interface.md",
+    ] },
+    { "Scaling out" = [
+        "scaling-out.md",
+        "guide-dask.md",
+        "guide-dask-gateway.md",
+    ] },
+    { "GPUs" = [
+        "gpus.md",
+        "guide-ray-train.md",
+        "guide-roofit-cuda.md",
+    ] },
+    { "Software" = [
+        "software.md",
+        "guide-pixi.md",
+        "guide-conda.md",
+        "guide-combine.md",
+        "guide-mc-gen.md",
+    ] },
+    { "Data and storage" = [
+        "storage.md",
+        "data-access.md",
+        "guide-rucio.md",
+        "guide-cern-eos.md",
+        "guide-eos-write.md",
+        "guide-file-transfer.md",
     ] },
     { "Help" = [
         "troubleshooting.md",
         "support.md",
+        "hardware.md",
         "contributing.md",
-    ] },
-    { "Useful links" = [
+        { "Monitoring dashboard" = "https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard" },
         { "Purdue Tier-2 website" = "https://www.physics.purdue.edu/Tier2/" },
         { "CMS Common Analysis Tools documentation" = "https://cms-analysis.docs.cern.ch" },
         { "Data Aggregation System (DAS)" = "https://cmsweb.cern.ch/das/" },
     ] },
 ]
+
+# A broken link or anchor fails the build.
+strict = true
+
+# /llms.txt, and each page's Markdown beside its HTML, for agents.
+[project.plugins.llmstxt]
+markdown_description = "User documentation of the Purdue Analysis Facility: JupyterHub sessions for CMS analysis, with Dask, Ray on GPUs, Slurm, Pixi environments and CMS data access. Each page below is also served as Markdown."
+
+[project.plugins.llmstxt.sections]
+"Pages" = ["*.md"]
 
 [project.theme]
 
@@ -90,6 +89,7 @@ language = "en"
 logo = "images/cms_logo.png"
 
 features = [
+    "content.action.copy",
     "content.code.copy",
     "content.code.select",
     "content.tabs.link",
@@ -99,6 +99,7 @@ features = [
     "navigation.instant.prefetch",
     "navigation.path",
     "navigation.sections",
+    "navigation.tabs",
     "navigation.top",
     "navigation.tracking",
     "search.highlight",

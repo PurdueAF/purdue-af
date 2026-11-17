@@ -184,6 +184,7 @@ configMapGenerator:
       annotations:
         kustomize.toolkit.fluxcd.io/substitute: disabled
     files:
+      - ../../docs/docs/agents.md
       - ../../docs/docs/data-access.md
       - ../../docs/docs/getting-started.md
       - ../../docs/docs/gpus.md

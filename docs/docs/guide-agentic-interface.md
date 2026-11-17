@@ -1,110 +1,13 @@
-# Agentic interface (MCP server)
+# Connect your own AI agent (MCP server)
 
-Purdue AF provides a remote [MCP](https://modelcontextprotocol.io) (Model Context
-Protocol) server that lets you manage your Analysis Facility session from **any
-MCP-capable AI agent** — Claude Code, Codex, Cursor, and others. You can control
-the AF in natural language: start and stop your session, check whether the
-facility is healthy, and inspect your Dask clusters, storage usage, and logs.
+Purdue AF runs a remote [MCP](https://modelcontextprotocol.io) (Model Context
+Protocol) server through which an AI agent on your own machine — Claude Code,
+Codex, Cursor and others — manages the facility for you: it starts and stops
+your session, creates Dask clusters, submits Ray jobs, and reads your storage
+use, your logs and this documentation.
 
-Agents inside an AF session are ready to use; agents on your own machine need a
-token and a one-time setup.
-
-## Inside an AF session
-
-Nothing to set up. `claude`, `codex` and `opencode` are on `PATH` in any
-terminal, the Claude Code and Codex extensions are installed in the VS Code
-interface, and all three are already connected to the MCP server as you, with
-no token to handle.
-
-A short **platform context** is installed too: the facility's rules and
-recommendations (storage volumes and quotas, where environments may live,
-scale-out rules) written into the file each agent reads
-automatically at startup. You do not need to invoke anything — an agent in a
-session already knows, for example, that `pixi install` will be refused under
-`/home` and that `/work` is invisible to Slurm jobs. The AF skill comes with
-the session as well.
-
-| Agent       | Platform context                      | MCP server                      |
-| ----------- | ------------------------------------- | ------------------------------- |
-| Claude Code | `/etc/claude-code/CLAUDE.md`          | `claude mcp add`, user scope    |
-| Codex       | `~/.codex/AGENTS.md`                  | `/etc/codex/config.toml`        |
-| opencode    | `$OPENCODE_CONFIG` config layer       | `$OPENCODE_CONFIG` config layer |
-
-The files under `/etc` and the opencode layer belong to the session image, and
-each agent reads them alongside your own settings, so your own instruction
-files, MCP servers and skills keep working. `~/.codex/AGENTS.md` is a file you
-own: only the block between the `PURDUE AF — managed` markers belongs to the
-facility, anything you write outside it is preserved, and the block is
-refreshed on every session start.
-
-The opencode layer reaches opencode even in a project that has its own
-`AGENTS.md` (its own lookup stops at the first match it finds, which a project
-file would win).
-
-Run `claude`, `codex` or `opencode` and ask for what you want. You still sign in
-to the agent with your own Anthropic, OpenAI or other provider account; the AF
-ships no model credentials.
-
-??? info "Why Cursor is not in that table"
-
-    Cursor has no user-scope instruction file. Its rules are project-scoped
-    (`.cursor/rules/`, or an `AGENTS.md` in a project root), and cross-project
-    rules live in the Cursor UI under **Customize → Rules** rather than on
-    disk — so there is nothing the facility can install on your behalf.
-
-    Cursor also runs on your own machine rather than inside a session, so use
-    the setup below, and paste the contents of
-    [`platform-context.md`](https://github.com/PurdueAF/purdue-af/blob/main/docker/purdue-af/agents/platform-context.md)
-    into your User Rules if you want the same guardrails.
-
-!!! note "opencode brings its own model provider"
-
-    The facility wires up the MCP server and the platform context, but opencode
-    is not tied to one provider — run `/connect` once with your own API key.
-    Its facility configuration lives in a separate layer (a file of the
-    session image, referenced by `$OPENCODE_CONFIG`) that is merged over your
-    global `opencode.json` and under a project's. One thing to know: that
-    layer sets `instructions`, so if you set `instructions` in your own global
-    config the facility layer takes precedence over it.
-
-### AI in JupyterLab
-
-The same agents are also available as a chat panel inside JupyterLab, via
-[Jupyter AI](https://jupyter-ai.readthedocs.io) — nothing to enable, just open
-the chat from the left sidebar and `@`-mention **Claude**, **Codex** or
-**OpenCode**. See the
-[Jupyter AI documentation](https://jupyter-ai.readthedocs.io) for how the chat
-itself works.
-
-They are the same agents as in the terminal, using the same login and the same
-platform context and MCP server, so you can ask about your session, Dask
-clusters, storage and logs without leaving the notebook.
-
-!!! note "Notebooks are collaborative"
-
-    Jupyter AI brings JupyterLab's real-time-collaboration engine with it, which
-    is what lets an agent edit the notebook you have open while you watch. It
-    also means notebooks save themselves as you work and keep executing when
-    your browser disconnects. If you see a notebook behave in a way you do not
-    expect, [tell us](support.md).
-
-### An agent acts as you
-
-An agent in your session is a process of yours: it reads and writes the storage
-you can, holds your credentials (grid proxy, Kerberos ticket, session token),
-and reaches Slurm, Dask Gateway and Ray as you do.
-
-* You are responsible for what an agent does in your session, as for any
-  command you run yourself.
-* An agent may run unattended. Your limits are its limits: the CPU and memory
-  of the session, your [storage quotas](storage.md#quotas), and the limits on
-  [Dask Gateway clusters](guide-dask-gateway.md) and [GPUs](gpus.md).
-* An agent sends what it reads to the model provider you signed it in with.
-
-The agents know the facility's storage rules from the platform context. Two of
-them the filesystem does not enforce, so they are worth knowing yourself:
-nothing is ever created at the top level of `/depot/cms/`, and under
-`/work/projects/` an agent stays in the project directory you name.
+Agents inside an AF session are connected already — see
+[AI agents](agents.md). The setup below is for an agent on your own machine.
 
 ## Connecting from your own machine
 
@@ -236,20 +139,11 @@ export JUPYTERHUB_TOKEN="$(cat ~/.config/purdue-af/token)"
 
 ## Installing the skill (recommended)
 
-!!! note
-
-    Not needed inside an AF session — the skill is already installed there.
-    This is for agents running on your own machine.
-
-The MCP server is self-describing, but agents work noticeably better with the
-accompanying **skill** — a Markdown playbook that teaches the agent the AF
-workflows (how to launch a session, which tools to call in what order). It lives
-in the Purdue AF repository:
-[`.claude/skills/purdue-af-agentic-interface/SKILL.md`](https://github.com/PurdueAF/purdue-af/blob/main/.claude/skills/purdue-af-agentic-interface/SKILL.md)
-
-The commands [above](#connecting-from-your-own-machine) install it together
-with the MCP server. It then activates automatically whenever you mention your
-Purdue AF session, Dask clusters, or AF logs/storage.
+The **skill** is a Markdown playbook that teaches an agent the AF workflows:
+which tool to call when, and what to confirm with you first. The commands
+[above](#connecting-from-your-own-machine) install it with the MCP server, and
+it activates when you mention your AF session, Dask clusters, Ray jobs, logs or
+storage.
 
 The MCP server announces the current skill version, so the agent tells you when
 your copy is out of date. Update it with your agent's own command:
@@ -264,51 +158,18 @@ your copy is out of date. Update it with your agent's own command:
 
 ## What you can do
 
-Your username and session are resolved automatically, so you can simply ask in
-plain language, for example:
+Your username and session are resolved automatically, so you ask in plain
+language.
 
-* "Start my AF session" (optionally: "…with 32 CPUs and the VS Code interface")
-* "How much home and work storage am I using?"
-* "List my Dask clusters" / "scale `<name>` to 10 workers"
-* "Create a Dask cluster" — the agent walks you through multiple-choice
-  questions (worker environment, worker size, and worker count) before creating
-  it
-* "How many GPUs are free for 4 workers with T4s?"
-* "Train `train.py` on 4 GPUs on NRP, with `/work/users/<username>/events` as
-  input"
-* "Show the last 30 minutes of error logs from my notebook"
-* "Is the AF healthy?" — what is affecting the facility, if anything, and for
-  how long
-* "How much memory did my Dask workers use over the last day?"
-
-The available tools cover:
-
-* **Facility health** — a summary of anything currently affecting the facility:
-  access, storage, scale-out, and the software environment.
-* **Monitoring** — the facility dashboard's numbers, and any PromQL query over
-  the facility's Prometheus. Series of other people's sessions, Dask clusters,
-  Ray jobs and home directories are left out, so a sum over sessions or workers
-  counts only yours.
-* **Session lifecycle** — check status, list available resource profiles,
-  start / stop / restart the session, and wait until it is ready. When starting,
-  the agent asks you (as multiple-choice questions) which profile and resource
-  options — interface, CPU, memory — to use, unless you ask for the defaults.
-* **Storage** — home and work directory quota usage.
-* **Dask clusters** — list, create, inspect, check worker counts and CPU/memory
-  usage, scale, and shut down your [Dask Gateway](guide-dask-gateway.md)
-  clusters.
-* **Ray** — see how many GPUs are free for a worker shape, at Purdue and on
-  NRP; submit, follow, stop and delete your [Ray jobs](guide-ray-train.md); and
-  start, inspect and stop your own Ray cluster.
-* **Logs** — query your JupyterLab / VS Code server logs and Dask worker and
-  scheduler logs, with time ranges and filters.
-* **Documentation** — the pages of this site, so the agent answers a how-to
-  question from them and links the page.
-
-The server also exposes one invocable **workflow prompt**, `create_cluster`,
-which walks the agent through the cluster questions when its client
-cannot ask them itself. In Claude Code it appears as
-`/mcp__purdue-af-agentic-interface__create_cluster`.
+| Area | Ask, for example |
+| --- | --- |
+| Session | "Start my AF session with 32 CPUs and the VS Code interface" — the agent asks which profile and options you want unless you ask for the defaults. Also stop, restart and status. |
+| Storage | "How much home and work storage am I using?" |
+| Dask clusters | "Create a Dask cluster", "scale it to 10 workers", "how much memory did my workers use over the last day?", "shut it down" — see [Dask Gateway](guide-dask-gateway.md). |
+| Ray on GPUs | "How many GPUs are free for 4 workers with T4s?", "Train `train.py` on 4 GPUs on NRP, with `/work/users/<username>/events` as input" — see [Ray jobs](guide-ray-train.md). |
+| Logs | "Show the last 30 minutes of error logs from my notebook", or from your Dask workers. |
+| Facility | "Is the AF healthy?", "How busy is it?", and any number the facility's monitoring holds. Other people's sessions, clusters and jobs are left out, so a sum over sessions or workers counts only yours. |
+| Documentation | "How do I read a dataset through XCache?" — the agent reads the page of this site and links it. |
 
 ## Troubleshooting
 
