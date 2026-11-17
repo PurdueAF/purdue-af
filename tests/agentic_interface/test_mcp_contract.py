@@ -28,6 +28,8 @@ EXPECTED_TOOLS = {
     # prometheus
     "query_prometheus": "reads facility",
     "list_prometheus_metrics": "reads facility",
+    # docs
+    "read_af_doc": "reads facility",
     # logs
     "query_notebook_logs": "reads",
     "query_dask_logs": "reads",
@@ -92,6 +94,13 @@ def said(tool):
 async def test_every_tool_says_what_it_does_and_for_whom():
     tools = await server.mcp.list_tools()
     assert {t.name: said(t) for t in tools} == EXPECTED_TOOLS
+
+
+def test_instructions_list_the_doc_pages_within_what_clients_keep():
+    """Claude Code cuts a server's instructions at 4,096 characters."""
+    pages = server.docs.index()
+    assert pages and pages in server.mcp.instructions
+    assert len(server.mcp.instructions) <= 4096
 
 
 async def test_all_prompts_registered():

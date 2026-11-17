@@ -23,6 +23,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from tools import (
     dask,
+    docs,
     health,
     logs,
     metrics,
@@ -319,13 +320,17 @@ mcp = InstrumentedMCPServer(
         "reinstall it as in "
         "https://analysis-facility.physics.purdue.edu/guide-agentic-interface/"
         "#installing-the-skill-recommended; inside an AF session it comes with "
-        "the session image and updates when the session restarts on a newer one."
+        "the session image and updates when the session restarts on a newer one. "
+        "For how to do something on the facility, read_af_doc reads the user "
+        "documentation's page on it: read it rather than answer from memory. "
+        f"The pages:\n{docs.index()}"
     ),
 )
 
 logs.register(mcp)
 storage.register(mcp)
 health.register(mcp)
+docs.register(mcp)
 dask.register(mcp)
 ray.register(mcp)
 metrics.register(mcp)

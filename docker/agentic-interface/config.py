@@ -42,5 +42,9 @@ GLOBAL_PIXI_PROJECT = os.environ.get("DASK_GLOBAL_PIXI_PROJECT", "/work/pixi/glo
 # The public dashboard, from the grafana-public-dashboards ConfigMap.
 DASHBOARD_PATH = os.environ.get("DASHBOARD_PATH", "/dashboards/default.json")
 
+# The user docs: the Markdown pages, and where they are published.
+DOCS_DIR = os.environ.get("DOCS_DIR", "/docs")
+DOCS_URL = "https://analysis-facility.physics.purdue.edu"
+
 # The agent skill, bundled so the server can announce its current version.
 SKILL_PATH = os.environ.get("SKILL_PATH", "/app/SKILL.md")

@@ -12,6 +12,8 @@ os.environ.setdefault(
     str(REPO / ".claude" / "skills" / "purdue-af-agentic-interface" / "SKILL.md"),
 )
 
+os.environ.setdefault("DOCS_DIR", str(REPO / "docs" / "docs"))
+
 import auth  # noqa: E402
 import server  # noqa: E402
 from agentic_helpers import USER  # noqa: E402
