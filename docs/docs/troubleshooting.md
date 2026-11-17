@@ -20,9 +20,9 @@ solutions. If your problem is not listed here, please
     3. Move large files (data, Pixi/Conda environments) to `/work/` or `/depot/`
        storage — see [Storage volumes](storage.md).
 
-    If you selected a **full 40 GB A100 GPU**, the session may also fail to start
-    simply because all full GPU instances are taken. Try a 5 GB slice instead, or
-    start a CPU-only session.
+    If you selected a **GPU**, the session is refused while all GPUs of that kind
+    are in use by other sessions; the selection form shows how many are free.
+    Choose another kind of GPU, or start without one.
 
 ??? failure "My session is very slow"
 
@@ -45,8 +45,9 @@ solutions. If your problem is not listed here, please
 ??? failure "I deleted/broke my configuration and want a clean start"
 
     Shut down your session (`File → Hub Control Panel → Stop My Server`), then
-    start a new one. The session image is recreated from scratch every time; only
-    the contents of your storage volumes persist.
+    start a new one. The session's software is recreated from scratch every time,
+    but settings kept in your home directory (such as `~/.jupyter` and
+    `~/.local/share/code-server`) persist: remove or rename the broken ones there.
 
 ## Storage
 
@@ -159,7 +160,7 @@ solutions. If your problem is not listed here, please
 
 ??? failure "\"You have no Ray cluster\""
 
-    A job's status and log are removed some minutes after your last job ends
+    A job's log is removed 15 minutes after it ends, and its status an hour after
     — see [Good to know](guide-ray-train.md#good-to-know).
 
 ??? failure "A training stops with \"Unable to set up cluster storage\""
@@ -177,7 +178,7 @@ solutions. If your problem is not listed here, please
     A GPU of your job sat idle: use more data loaders or larger batches, or
     run it at Purdue — see [More GPUs on NRP](guide-ray-train.md#more-gpus-on-nrp).
 
-??? failure "A job on NRP stops with \"NRP had no room\" or \"did not start in time\""
+??? failure "A job on NRP stops with \"did not start in time\""
 
     NRP was too busy: ask for fewer workers, or try again later.
 

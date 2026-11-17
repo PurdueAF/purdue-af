@@ -9,7 +9,8 @@ Bash terminal opened inside an Analysis Facility session. This command will trig
 Kerberos authentication and create a symlink pointing to your CERNBox directory in
 the file browser.
 
-Example of the `eos-connect` command output:
+Example of the `eos-connect` command output (a session logged in with a CERN
+account is not asked for the username):
 
 ```
 $ eos-connect

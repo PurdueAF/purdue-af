@@ -616,5 +616,5 @@ client = JobSubmissionClient(
   that happens.
 * **Storage.** A job sees `/work`, `/depot/cms`, `/eos/purdue` and `/cvmfs` as
   your session does, and not your home directory.
-* **Logs.** A job's log is removed some minutes after it ends, and its status
-  some days later: have the script write what you keep to `/work`.
+* **Logs.** A job's log is removed 15 minutes after it ends, and its status
+  an hour after: have the script write what you keep to `/work`.

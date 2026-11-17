@@ -6,7 +6,7 @@ to least recommended:
 1. **Pixi environments** — the recommended way to manage analysis software.
 2. **Conda environments** — supported; use Pixi for new projects.
 3. **LCG stacks** distributed via CVMFS — useful for special cases such as
-   CUDA-enabled ROOT.
+   [CUDA-enabled ROOT](guide-roofit-cuda.md).
 4. **Apptainer/Singularity images** via CVMFS — a last resort for software that
    requires a different operating system.
 

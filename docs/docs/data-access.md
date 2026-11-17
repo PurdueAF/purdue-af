@@ -28,24 +28,19 @@
   [Any Data, Anytime, Anywhere (AAA)](https://twiki.cern.ch/twiki/bin/view/CMSPublic/CMSXrootDArchitecture#CMS_XRootD_Architecture_and_AAA)
   service using the **XRootD** protocol.
 
-* There is **no need to have a dataset stored at Purdue** in order to access its
-  files in your analysis. Only when increased data-access performance is desired
-  (e.g. when running over the same dataset many times) should you request a local
-  copy by creating a [Rucio replication rule](guide-rucio.md).
+* There is **no need to have a dataset stored at Purdue** in order to read its
+  files in your analysis. Request a local copy with a
+  [Rucio replication rule](guide-rucio.md) only when you read the same dataset
+  many times and need the speed, or when it exists only on tape.
 
-* Files transferred to Purdue via [Rucio rules](guide-rucio.md) end up in the
-  large **EOS** storage system, **not** in users' directories(!), and become
-  accessible via the same AAA/XRootD methods as all other replicas of those
-  datasets worldwide.
+* Files replicated to Purdue by Rucio rules, and the outputs of your CRAB jobs
+  (in your [Grid directory](storage.md#saving-outputs-of-crab-jobs)), are stored
+  in Purdue **EOS**, not in users' directories. They are read over XRootD like
+  any other replica, and can be browsed read-only under `/eos/purdue/store/`.
 
-* Output files from your CRAB jobs also end up in EOS, in your
-  [Grid directory](storage.md#saving-outputs-of-crab-jobs), and are likewise
-  accessible from anywhere via AAA/XRootD.
-
-* No CMS data file or dataset needs to reside in your `/home/` or `/work/`
-  directories in order to be used in an analysis — except perhaps single, small
-  files used during the development of the analysis. `/home/` directories are for
-  personal files, and work directories are for developing, storing, and sharing code.
+* Analysis code reads data over XRootD, best through XCache, rather than from
+  copies in `/home/` or `/work/`; copy single small files there only while
+  developing.
 
 ## XCache
 
@@ -75,22 +70,9 @@ the local **XCache** server.
   recall is necessary. In that case you have to create a
   [Rucio replication rule](guide-rucio.md).
 
-## A user's perspective
-
-* All CMS data files available at Purdue's EOS storage are accessible (read-only)
-  via a normal POSIX filesystem mount under `/eos/purdue/store/` — this is useful
-  for interactive navigation, searching, and testing of analysis code.
-* Analysis code should be written with the general goal of accessing data files via
-  XRootD, potentially sped up via XCache.
-* Datasets which *absolutely* need to be present at Purdue can be "subscribed"
-  (i.e. temporarily copied) to our storage by creating a [Rucio rule](guide-rucio.md).
-* Individual ROOT files can be copied to/from other sites using the `xrdcp` and
-  `gfal-copy` commands. Files transferred in this way end up in your `/home/` or
-  `/work/` directory, not in EOS.
-
 ## Examples
 
-### Copy a single ROOT file from CERN / Fermilab
+### Copy a file from another site
 
 1. Make sure you have a valid **VOMS proxy** (check with `voms-proxy-info`); if
    not, [create a fresh one](getting-started.md#6-set-up-a-voms-proxy).

@@ -15,6 +15,9 @@ volume (scroll sideways for details).
 | CVMFS | `/cvmfs/` | N/A | Read-only | ✅ | ✅ | ✅ | ❌ |
 | CERNBox (CERN EOS) | `/eos/cern/` | N/A | Read/write | ❌ | ❌ | ❌ | ✅ |
 
+Ray jobs sent to NRP see none of these volumes — see
+[More GPUs on NRP](guide-ray-train.md#more-gpus-on-nrp).
+
 In the JupyterLab file browser, your home directory contains shortcuts to the
 other volumes: `work` (`/work/`), `depot` (group directories under
 `/depot/cms/`), and `eos-purdue` (`/eos/purdue/`).
@@ -29,7 +32,7 @@ other volumes: `work` (`/work/`), `depot` (group directories under
   directory usage with:
 
     ```shell
-    du -sh $HOME
+    df -h $HOME
     ```
 
 * **Work directory** — the **100 GB** quota of `/work/users/<username>/` is not

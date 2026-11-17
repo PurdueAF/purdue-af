@@ -57,8 +57,11 @@ cluster = gateway.new_cluster(
     env=dict(os.environ),  # pass environment as a dictionary
 )
 
-# If working in a Jupyter Notebook, the following will create a widget
-# which can be used to scale the cluster interactively:
+# Scale to a fixed number of workers, or between two numbers as the work needs:
+cluster.scale(10)
+# cluster.adapt(minimum=0, maximum=50)
+
+# In a Jupyter Notebook, this shows a widget that scales the cluster too:
 cluster
 ```
 

@@ -9,7 +9,7 @@ of VSCode.
 
 Purdue AF allows you to connect to your AF session from any VSCode-based IDE and
 take advantage of these features. Please follow the instructions below; you will
-only need to run steps 1–6 once, and afterwards you can connect using step 7 alone,
+only need to run steps 1–5 once, and afterwards you can connect using step 6 alone,
 as long as you have an AF session running.
 
 ## 1. Install the Remote-SSH extension in your IDE
@@ -125,18 +125,7 @@ cat >> ~/.ssh/authorized_keys
 chmod 600 ~/.ssh/authorized_keys
 ```
 
-## 6. Verify home directory permissions on the AF side
-
-SSH keys work only if your home directory is not writable by group or others.
-`chmod 755 ~/` sets permissions that work:
-
-```shell
-$ chmod 755 ~/
-$ ls -ld ~/
-drwxr-xr-x <username> ... ... ... /home/<username>/
-```
-
-## 7. Connect from your IDE
+## 6. Connect from your IDE
 
 1. In your IDE (VSCode, Cursor, etc.), open the command palette
    (usually `Ctrl-Shift-P` or `Cmd-Shift-P`).
@@ -151,7 +140,7 @@ drwxr-xr-x <username> ... ... ... /home/<username>/
    them to generate and debug code — but always be careful not to let them run
    dangerous commands, e.g. deleting important files.
 
-## 8. Install extensions on the AF side (optional)
+## 7. Install extensions on the AF side (optional)
 
 After the connection succeeds, you can install extensions on the remote VSCode
 server that now runs on the AF side. To do that, simply open the Extensions tab in
@@ -168,8 +157,9 @@ the IDE window connected to the AF.
 If the connection fails, you can usually extract useful information from the IDE
 console. Some known caveats:
 
-* SSH keys are ignored when your home directory is writable by group or others;
-  see [step 6](#6-verify-home-directory-permissions-on-the-af-side).
+* SSH keys are ignored when your home directory is writable by group or others.
+  Every session start sets the right permissions, so restart the session if you
+  changed them.
 * If you see errors like `websocat: command not found`, check that the `websocat`
   command is available on your local machine: `which websocat`. If it is not
   available, you need to install websocat; if it is available but you are still

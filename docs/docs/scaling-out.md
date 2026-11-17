@@ -80,7 +80,7 @@ as [Monte Carlo generation](guide-mc-gen.md) or "skimming" AOD / MiniAOD dataset
 
 ## Monitoring your jobs
 
-Slurm and Dask metrics are available in the corresponding sections of the
+Slurm, Dask and Ray metrics are available in the corresponding sections of the
 [Purdue AF monitoring dashboard](https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard){ target="_blank" }.
 Each Dask Gateway cluster additionally gets its own Dask dashboard — see
 [Dask Gateway monitoring](guide-dask-gateway.md#3-monitoring).
