@@ -15,6 +15,7 @@ the Slurm client with Hammer configs, and the coding agents.
 | `jupyter/` | `start.sh`, which runs the hooks and starts the server as the user; server config |
 | `scripts/` | the `before-notebook.d` hooks, `af-as-user.sh`, `managed-block.py` |
 | `agents/platform-context.md` | the facility context every in-session agent reads |
+| `agents/claude-sandbox.json` | Claude Code's managed sandbox settings |
 | `pixi-wrapper` | the `pixi` on a session's PATH |
 | `configs/`, `osg/` | CERN krb5/CA defaults, OSG RPMs |
 | `code-server/` | the interface-controls extension |
@@ -33,6 +34,14 @@ has `managed-block.py` write [`platform-context.md`](agents/platform-context.md)
 into `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`. The skill is
 `.claude/skills/purdue-af-agentic-interface/SKILL.md`, shipped as is. The image ships no model
 credentials; users sign the agents in themselves.
+
+Claude Code's sandbox is off until a user turns it on, and the image holds what
+it needs: `socat`, a link at `/opt/npm-global/bwrap` to the bubblewrap Codex
+vendors (the build fails when Codex ships none), and
+`agents/claude-sandbox.json`, installed as
+`/etc/claude-code/managed-settings.d/sandbox.json`, which names that binary and
+has the sandbox reuse the pod's `/proc`. What each agent's sandbox confines:
+[the user guide](../../docs/docs/guide-agentic-interface.md#sandbox).
 
 ## Build and publication
 

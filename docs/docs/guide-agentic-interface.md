@@ -86,6 +86,86 @@ clusters, storage and logs without leaving the notebook.
     your browser disconnects. If you see a notebook behave in a way you do not
     expect, [tell us](support.md).
 
+### An agent acts as you
+
+An agent in your session is a process of yours: it reads and writes the storage
+you can, holds your credentials (grid proxy, Kerberos ticket, session token),
+and reaches Slurm, Dask Gateway and Ray as you do.
+
+* You are responsible for what an agent does in your session, as for any
+  command you run yourself.
+* An agent may run unattended. Your limits are its limits: the CPU and memory
+  of the session, your [storage quotas](storage.md#quotas), and the limits on
+  [Dask Gateway clusters](guide-dask-gateway.md) and [GPUs](gpus.md).
+* An agent sends what it reads to the model provider you signed it in with.
+
+The agents know the facility's storage rules from the platform context. Two of
+them the filesystem does not enforce, so they are worth knowing yourself:
+nothing is ever created at the top level of `/depot/cms/`, and under
+`/work/projects/` an agent stays in the project directory you name.
+
+### Sandbox
+
+A sandbox limits where an agent's **shell commands** write and what they
+connect to. It does not limit the agent's own file edits, which follow its
+permission prompts, or the facility tools it calls through the MCP server —
+starting a Dask cluster, submitting a Ray job, stopping your session. Your quotas bound those.
+
+| | Claude Code | Codex | OpenCode |
+| --- | --- | --- | --- |
+| Sandbox | off until you turn it on | on by default | none |
+| Writes | the working directory | the working directory and `/tmp` | anywhere you can |
+| Network | web requests only, asking for each new host | none until you allow it, then unrestricted | unrestricted |
+
+What works inside each sandbox:
+
+| | Claude Code | Codex, network allowed |
+| --- | --- | --- |
+| Files in the working directory, plain Python | yes | yes |
+| `pixi install` | yes, with the two paths below | yes, with the two paths below |
+| `squeue`, `sbatch` | no | yes |
+| XRootD (`xrdcp`, `xrdfs`) | no | yes |
+| `/cvmfs` | the first access to a repository not yet mounted fails; the next works | yes |
+| A Dask Gateway cluster | no | yes |
+| A local Dask cluster, anything that uses `psutil` | no | no |
+| A write to `/work/projects/`, `/depot/cms/` or your home | refused | refused |
+
+A command that cannot work inside is run outside, with your full access; the
+agent asks you first, unless you have told it not to.
+
+#### Claude Code
+
+Run `/sandbox` in Claude Code, or add this to `~/.claude/settings.json`. The
+two paths are Pixi's cache and home, which `pixi install` writes:
+
+```json
+{
+  "sandbox": {
+    "enabled": true,
+    "filesystem": {
+      "allowWrite": [
+        "/work/users/<username>/.pixi-cache",
+        "/work/users/<username>/.pixi-home"
+      ]
+    }
+  }
+}
+```
+
+#### Codex
+
+Codex starts sandboxed. To let its commands use the network and Pixi, add this
+to `~/.codex/config.toml`:
+
+```toml
+[sandbox_workspace_write]
+network_access = true
+writable_roots = [
+    "/work/users/<username>/.pixi-cache",
+    "/work/users/<username>/.pixi-home",
+]
+```
+
 ## Connecting from your own machine
 
 |               |                                                                    |
