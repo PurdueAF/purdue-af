@@ -17,8 +17,9 @@ Versioning and rollout: [RELEASING.md](../../RELEASING.md).
 
 ## Calling the endpoint by hand
 
-Call the endpoint from an MCP client: the service keeps stateful sessions, and a
-plain `curl` POST of `tools/call` carries none, so it is refused.
+The service keeps no sessions: every request stands alone, so a `tools/call`
+POST that carries the token and `Accept: application/json, text/event-stream`
+is answered without an `initialize` before it.
 
 Tool names, arguments and limits are not documented here: the server is
 self-describing, and `tools/list` is the source of truth.

@@ -5,10 +5,8 @@ metadata:
   labels:
     app: agentic-interface
 spec:
+  # One replica: a question's answer is only read by the process that asked it.
   replicas: 1
-  # Recreate: MCP sessions are stateful and pinned to the single replica.
-  strategy:
-    type: Recreate
   selector:
     matchLabels:
       app: agentic-interface
@@ -35,9 +33,6 @@ spec:
           ports:
             - containerPort: 8888
           env:
-            # Stateful sessions (single replica), so tools can use MCP elicitation.
-            - name: MCP_STATELESS_HTTP
-              value: "false"
             - name: NAMESPACE
               valueFrom:
                 fieldRef:

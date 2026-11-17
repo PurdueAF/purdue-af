@@ -164,6 +164,23 @@ async def test_needs_choices_returns_the_help_text_as_a_normal_result():
     assert _tool_counter_value("pick", "needs_input") == before + 1
 
 
+async def test_input_needed_returns_the_question_as_the_result():
+    from mcp.types import InputRequiredResult
+    from tools.elicitation import InputNeeded
+
+    mcp = _instrumented()
+    question = InputRequiredResult(request_state="{}")
+
+    @mcp.tool()
+    async def choose() -> str:
+        raise InputNeeded(question)
+
+    before = _tool_counter_value("choose", "needs_input")
+
+    assert await mcp.call_tool("choose", {}) is question
+    assert _tool_counter_value("choose", "needs_input") == before + 1
+
+
 async def test_instrumented_tool_records_exception():
     from mcp.server.mcpserver.exceptions import ToolError
 
