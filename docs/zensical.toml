@@ -50,7 +50,7 @@ nav = [
         { "File transfer" = "guide-file-transfer.md" },
     ] },
     { "Scaling out" = [
-        { "Choosing a method" = "scaling-out.md" },
+        { "Ways to scale out" = "scaling-out.md" },
         { "Dask" = "guide-dask.md" },
         { "Dask Gateway" = "guide-dask-gateway.md" },
     ] },
