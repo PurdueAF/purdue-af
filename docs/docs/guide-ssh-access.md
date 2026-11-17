@@ -1,4 +1,4 @@
-# SSH access to Purdue AF
+# SSH access
 
 Although the web-based JupyterLab interface is the recommended way to access
 Purdue AF, it is also possible to connect to your session from a terminal via SSH.
@@ -8,7 +8,7 @@ Purdue AF, it is also possible to connect to your session from a terminal via SS
     SSH connects you **to your running AF session**, not to a separate login node —
     start the session first, in a web browser or with an
     [AI agent](guide-agentic-interface.md). If you would rather work in
-    a full local IDE, see [Access via VSCode-based IDEs](guide-ide-connection.md).
+    a full local IDE, see [Local IDE access](guide-ide-connection.md).
 
 ## JupyterHub API token
 
@@ -52,7 +52,7 @@ request a new token, save it the same way.
 
     * If you are using a CERN or FNAL account, remember that your username must
       include the `-cern` or `-fnal` suffix, respectively —
-      see [Login methods and usernames](login-methods.md).
+      see [Login methods](login-methods.md).
     * Instead of a password, paste the **token** obtained in the previous step.
 
 4. **(Optional) Set up an alias in `.bashrc`**

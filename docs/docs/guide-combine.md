@@ -1,4 +1,4 @@
-# Using Combine at Purdue AF
+# Running Combine
 
 [Combine](https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit/) is
 a RooStats / RooFit based software framework widely used in LHC experiments for

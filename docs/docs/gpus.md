@@ -42,7 +42,7 @@ the session's CUDA toolkit, which matters only when you compile CUDA code.
   [XGBoost GPU documentation](https://xgboost.readthedocs.io/en/stable/gpu/index.html)
   for details.
 * **RooFit** — fits can run on a GPU; see
-  [Accelerating RooFit with GPUs](guide-roofit-cuda.md).
+  [RooFit on GPUs](guide-roofit-cuda.md).
 
 You can verify that your session sees the GPU with `nvidia-smi`, or from Python:
 

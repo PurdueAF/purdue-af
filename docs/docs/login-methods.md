@@ -1,4 +1,4 @@
-# Login methods and usernames
+# Login methods
 
 User authentication at Purdue AF is implemented using **CILogon**.
 Three login methods are available:

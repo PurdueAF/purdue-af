@@ -1,4 +1,4 @@
-# Connect your own AI agent (MCP server)
+# AI agents on your machine
 
 Purdue AF runs a remote [MCP](https://modelcontextprotocol.io) (Model Context
 Protocol) server through which an AI agent on your own machine — Claude Code,
@@ -7,7 +7,7 @@ your session, creates Dask clusters, submits Ray jobs, and reads your storage
 use, your logs and this documentation.
 
 Agents inside an AF session are connected already — see
-[AI agents](agents.md). The setup below is for an agent on your own machine.
+[AI agents in a session](agents.md). The setup below is for an agent on your own machine.
 
 ## Connecting from your own machine
 
@@ -188,5 +188,5 @@ client's server status.
 
 !!! note "See also"
 
-    * [Access via VSCode-based IDEs](guide-ide-connection.md)
-    * [Dask Gateway at Purdue AF](guide-dask-gateway.md)
+    * [Local IDE access](guide-ide-connection.md)
+    * [Dask Gateway](guide-dask-gateway.md)

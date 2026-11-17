@@ -1,4 +1,4 @@
-# Scale-out and GPUs
+# Scale-out overview
 
 All your work starts in your session. When it outgrows the session, you send it
 elsewhere from the same session — a notebook or a terminal there is all you

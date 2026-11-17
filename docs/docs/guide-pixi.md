@@ -1,4 +1,4 @@
-# Managing environments with Pixi
+# Pixi environments
 
 **Pixi** is the environment manager of the Purdue Analysis Facility. This guide
 covers the basic setup; more advanced Pixi features are described on the
@@ -131,4 +131,4 @@ pixi shell
 
 ## Combine in Pixi environments
 
-See [Using Combine at Purdue AF](guide-combine.md#combine-in-pixi-environments).
+See [Running Combine](guide-combine.md#combine-in-pixi-environments).

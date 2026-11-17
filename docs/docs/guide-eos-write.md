@@ -33,4 +33,4 @@ gfal-copy /tmp/$USER/output.root root://eos.cms.rcac.purdue.edu//store/user/<cer
 
     * [Data access](data-access.md) — copying files from other CMS sites
     * [Storage volumes](storage.md) — where CRAB outputs end up
-    * [Rucio tutorial](guide-rucio.md) — where replicated datasets end up
+    * [Rucio](guide-rucio.md) — where replicated datasets end up

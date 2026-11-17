@@ -1,10 +1,10 @@
-# AI agents
+# AI agents in a session
 
 Every Purdue AF session comes with the coding agents **Claude Code**, **Codex**
 and **OpenCode** installed and already connected to the facility as you. This
 page is about using them inside a session. To drive the facility from an agent
 on your own machine, see
-[Connect your own AI agent](guide-agentic-interface.md); to ask a question
+[AI agents on your machine](guide-agentic-interface.md); to ask a question
 without a session, see [PurdueAF Agent on Mattermost](support.md#purdueaf-agent).
 
 ## Start an agent

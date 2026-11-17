@@ -103,6 +103,6 @@ the local **XCache** server.
 
 !!! note "See also"
 
-    * [Rucio tutorial](guide-rucio.md)
+    * [Rucio](guide-rucio.md)
     * [Writing to EOS](guide-eos-write.md)
     * [Storage volumes](storage.md)

@@ -1,4 +1,4 @@
-# Getting started
+# First steps
 
 These steps take about 15 minutes and leave you with a working session that has
 access to CMS data and analysis software.
@@ -103,7 +103,7 @@ Join the Mattermost channel and the mailing list listed in [Support](support.md)
 
 * Ask an [AI agent](agents.md) in your session: run `claude`, `codex` or
   `opencode` in a terminal.
-* Learn the [interfaces and analysis tools](interface.md).
+* Learn the [interfaces](interface.md) and the [analysis tools](software.md#analysis-tools).
 * Set up a [project-specific Pixi environment](guide-pixi.md).
 * When your analysis outgrows a single session, [scale out with Dask Gateway](guide-dask-gateway.md)
   or [train on GPUs with Ray](guide-ray-train.md).

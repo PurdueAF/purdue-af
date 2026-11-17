@@ -1,4 +1,4 @@
-# Accelerating RooFit with GPUs
+# RooFit on GPUs
 
 Fitting data distributions with analytical models is a common task in CMS analyses.
 Depending on the size of the dataset and the number of free parameters in the model,

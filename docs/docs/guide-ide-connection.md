@@ -1,4 +1,4 @@
-# Access via VSCode-based IDEs
+# Local IDE access
 
 VSCode is the most popular IDE, with a rich set of features and extensions that go
 far beyond what is currently possible in the JupyterLab interface. It also supports

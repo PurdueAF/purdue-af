@@ -1,4 +1,4 @@
-# Private MC generation
+# MC generation
 
 This guide describes private MC production at Purdue AF.
 Comprehensive documentation about central MC production in CMS can be found here:

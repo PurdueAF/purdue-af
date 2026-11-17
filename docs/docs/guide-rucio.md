@@ -1,4 +1,4 @@
-# Rucio tutorial
+# Rucio
 
 [Rucio](https://rucio.cern.ch/) is the system CMS uses to manage its data —
 placement, replication, availability, etc. At Purdue AF, the Rucio client is

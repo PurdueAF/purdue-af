@@ -1,4 +1,4 @@
-# Dask Gateway at Purdue AF
+# Dask Gateway
 
 Dask Gateway is a service that allows users to manage Dask clusters in a
 multi-tenant environment such as the Purdue Analysis Facility. Its workers run

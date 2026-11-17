@@ -1,4 +1,4 @@
-# Scaling out with Dask
+# Local Dask clusters
 
 If your analysis code is written in Python, it is likely that it can be accelerated
 using the [Dask](https://docs.dask.org/en/stable/) library. Dask includes multiple
@@ -75,7 +75,7 @@ Dask Gateway provides a way to scale out to multiple compute nodes, within
 [its limits](guide-dask-gateway.md#limits).
 
 Please refer to the following page for detailed documentation about Dask Gateway
-at the Purdue Analysis Facility: [Dask Gateway at Purdue AF](guide-dask-gateway.md).
+at the Purdue Analysis Facility: [Dask Gateway](guide-dask-gateway.md).
 
 !!! note "See also"
 

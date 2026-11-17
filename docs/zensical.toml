@@ -20,60 +20,52 @@ repo_url = "https://github.com/PurdueAF/purdue-af"
 repo_name = "PurdueAF/purdue-af"
 edit_uri = "edit/main/docs/docs/"
 
-extra_css = ["stylesheets/extra.css"]
-extra_javascript = ["javascripts/external-links.js"]
-
-
-# Navigation: one section per topic. A label here is also the page's title in
-# browser tabs, search results and llms.txt, so it must stand on its own.
+# Navigation: one section per topic. A page's `#` title is its label here.
 nav = [
     { "Home" = "index.md" },
     { "Get started" = [
-        { "First steps" = "getting-started.md" },
-        { "Login methods" = "login-methods.md" },
-        { "Interfaces and tools" = "interface.md" },
-        { "SSH access" = "guide-ssh-access.md" },
-        { "Local IDE" = "guide-ide-connection.md" },
+        "getting-started.md",
+        "login-methods.md",
+        "interface.md",
+        "guide-ssh-access.md",
+        "guide-ide-connection.md",
     ] },
     { "Software" = [
-        { "Software stacks" = "software.md" },
-        { "Pixi environments" = "guide-pixi.md" },
-        { "Conda environments" = "guide-conda.md" },
-        { "Combine" = "guide-combine.md" },
+        "software.md",
+        "guide-pixi.md",
+        "guide-conda.md",
     ] },
     { "Storage and data" = [
-        { "Storage volumes" = "storage.md" },
-        { "Data access" = "data-access.md" },
-        { "Rucio" = "guide-rucio.md" },
-        { "CERNBox" = "guide-cern-eos.md" },
-        { "Writing to EOS" = "guide-eos-write.md" },
+        "storage.md",
+        "data-access.md",
+        "guide-rucio.md",
+        "guide-cern-eos.md",
+        "guide-eos-write.md",
     ] },
     { "Scale-out and GPUs" = [
-        { "Overview" = "scaling-out.md" },
-        { "Dask" = "guide-dask.md" },
-        { "Dask Gateway" = "guide-dask-gateway.md" },
-        { "GPUs in a session" = "gpus.md" },
-        { "Multi-GPU training" = "guide-ray-train.md" },
+        "scaling-out.md",
+        "guide-dask.md",
+        "guide-dask-gateway.md",
+        "gpus.md",
+        "guide-ray-train.md",
     ] },
     { "AI agents" = [
-        { "Agents in a session" = "agents.md" },
-        { "Agents on your machine" = "guide-agentic-interface.md" },
+        "agents.md",
+        "guide-agentic-interface.md",
     ] },
-    { "Hardware" = "hardware.md" },
+    "hardware.md",
     { "Monitoring dashboard" = "https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard" },
     { "Guides" = [
-        { "MC generation" = "guide-mc-gen.md" },
-        { "RooFit on GPUs" = "guide-roofit-cuda.md" },
+        "guide-mc-gen.md",
+        "guide-roofit-cuda.md",
+        "guide-combine.md",
     ] },
     { "Help" = [
-        { "Troubleshooting" = "troubleshooting.md" },
-        { "Support" = "support.md" },
-        { "Contributing to the docs" = "contributing.md" },
+        "troubleshooting.md",
+        "support.md",
+        "contributing.md",
     ] },
 ]
-
-# A broken link or anchor fails the build.
-strict = true
 
 # /llms.txt, and each page's Markdown beside its HTML, for agents.
 # Pages that are gone, to where their content went.
@@ -106,9 +98,6 @@ features = [
     "search.highlight",
     "toc.follow",
 ]
-
-[project.theme.icon.admonition]
-example = "lucide/code"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: light)"

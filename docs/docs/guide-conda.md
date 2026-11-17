@@ -1,4 +1,4 @@
-# Creating Conda environments and Jupyter kernels
+# Conda environments
 
 !!! warning "Use Pixi for new projects"
 

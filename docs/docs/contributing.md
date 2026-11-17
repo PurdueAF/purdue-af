@@ -1,4 +1,4 @@
-# Contributing to documentation
+# Contributing to the docs
 
 This website is rendered from Markdown documentation in the
 [Purdue AF GitHub repository](https://github.com/PurdueAF/purdue-af/tree/main/docs).
@@ -38,8 +38,9 @@ as you edit the files.
 The pages are read by people and by AI agents, which get a page as Markdown
 (`/llms.txt` lists them) and choose it by its name and title.
 
-* One page per topic, with a title that says what the page is for. Never rename
-  a page: its name is its address, on the site and for agents.
+* One page per topic, with a short `#` title that says what the page is for. It
+  is the page's label in the sidebar, so `nav` lists pages without labels.
+  Never rename a page: its name is its address, on the site and for agents.
 * Open with what the page covers and who it applies to — Purdue users, CERN/FNAL
   users, or everyone.
 * State a fact on one page and link to it from the others.

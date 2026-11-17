@@ -1,4 +1,4 @@
-# Training on GPUs with Ray
+# Multi-GPU training
 
 [Ray](https://docs.ray.io/en/latest/) is a Python library that runs your
 PyTorch script on GPUs outside your session, on one of them or on several at

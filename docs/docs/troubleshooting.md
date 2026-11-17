@@ -105,7 +105,7 @@ and [create a fresh proxy](getting-started.md#6-set-up-a-voms-proxy) if needed.
 
 If no CMS site has the files on disk, a tape recall is necessary: create a
 Rucio replication rule to subscribe the dataset to Purdue — see
-[Rucio tutorial](guide-rucio.md).
+[Rucio](guide-rucio.md).
 
 ## Dask Gateway
 

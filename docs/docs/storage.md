@@ -88,7 +88,8 @@ See [Data access](data-access.md) for the full picture.
 * The outputs of CRAB jobs are written to your Grid directory:
   `/eos/purdue/store/user/<cern-username>`.
   *Note: your CERN username is different from your Purdue username!*
-* The Grid directory at Purdue EOS is created by request and only for Purdue-affiliated users. This must be indicated when creating a Purdue Tier-2 account.
+* The Grid directory at Purdue EOS is created by request and only for Purdue-affiliated users. This must be indicated when creating a
+  [Purdue Tier-2](https://www.physics.purdue.edu/Tier2/) account.
 * If you can't see your Grid directory under `/eos/purdue/store/user/`, please
   [contact support](support.md).
 
