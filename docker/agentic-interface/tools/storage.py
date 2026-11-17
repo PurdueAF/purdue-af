@@ -3,6 +3,7 @@
 import asyncio
 from typing import Optional
 
+from annotations import READS
 from config import PROMETHEUS_NAME, PROMETHEUS_URL
 from context import require_user
 from errors import UpstreamError
@@ -27,7 +28,7 @@ def _bar(fraction: float, width: int = 20) -> str:
 
 
 def register(mcp: MCPServer) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def query_storage_usage() -> str:
         """Report storage quota and usage for the authenticated user's home and work directories.
 

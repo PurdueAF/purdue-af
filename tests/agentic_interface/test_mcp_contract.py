@@ -12,44 +12,45 @@ import server
 from agentic_helpers import STABLE_PROFILE, counter, fake_profiles
 from asgi_lifespan import LifespanManager
 
+# What each tool says it does, and "facility" where it answers for no one person.
 EXPECTED_TOOLS = {
     # health
-    "get_facility_health",
-    "get_facility_metrics",
+    "get_facility_health": "reads facility",
+    "get_facility_metrics": "reads facility",
     # prometheus
-    "query_prometheus",
-    "list_prometheus_metrics",
+    "query_prometheus": "reads facility",
+    "list_prometheus_metrics": "reads facility",
     # logs
-    "query_notebook_logs",
-    "query_dask_logs",
+    "query_notebook_logs": "reads",
+    "query_dask_logs": "reads",
     # storage
-    "query_storage_usage",
+    "query_storage_usage": "reads",
     # dask
-    "list_dask_clusters",
-    "list_dask_cluster_options",
-    "create_dask_cluster",
-    "get_dask_cluster_info",
-    "get_dask_worker_count",
-    "get_dask_cluster_usage",
-    "scale_dask_cluster",
-    "stop_dask_cluster",
+    "list_dask_clusters": "reads",
+    "list_dask_cluster_options": "reads facility",
+    "create_dask_cluster": "changes",
+    "get_dask_cluster_info": "reads",
+    "get_dask_worker_count": "reads",
+    "get_dask_cluster_usage": "reads",
+    "scale_dask_cluster": "changes",
+    "stop_dask_cluster": "destroys",
     # ray
-    "get_ray_capacity",
-    "submit_ray_job",
-    "list_ray_jobs",
-    "get_ray_job",
-    "stop_ray_job",
-    "delete_ray_job",
-    "get_ray_cluster",
-    "start_ray_cluster",
-    "stop_ray_cluster",
+    "get_ray_capacity": "reads facility",
+    "submit_ray_job": "changes",
+    "list_ray_jobs": "reads",
+    "get_ray_job": "reads",
+    "stop_ray_job": "destroys",
+    "delete_ray_job": "destroys",
+    "get_ray_cluster": "reads",
+    "start_ray_cluster": "changes",
+    "stop_ray_cluster": "destroys",
     # profiles + session lifecycle
-    "list_af_profiles",
-    "get_session_status",
-    "start_af_session",
-    "stop_af_session",
-    "wait_for_session",
-    "restart_af_session",
+    "list_af_profiles": "reads facility",
+    "get_session_status": "reads",
+    "start_af_session": "changes",
+    "stop_af_session": "destroys",
+    "wait_for_session": "reads",
+    "restart_af_session": "destroys",
 }
 
 EXPECTED_PROMPTS = {"create_cluster"}
@@ -58,12 +59,31 @@ EXPECTED_PROMPTS = {"create_cluster"}
 async def test_all_tools_registered_with_schemas():
     tools = await server.mcp.list_tools()
 
-    assert {t.name for t in tools} == EXPECTED_TOOLS
+    assert {t.name for t in tools} == set(EXPECTED_TOOLS)
     for tool in tools:
         assert tool.description, f"{tool.name} has no description"
         assert tool.input_schema.get("type") == "object", (
             f"{tool.name} has no generated input schema"
         )
+
+
+def said(tool):
+    hints, meta = tool.annotations, tool.meta or {}
+    if hints is None or hints.read_only_hint is None:
+        return "nothing"
+    does = (
+        "reads"
+        if hints.read_only_hint
+        else "destroys"
+        if hints.destructive_hint
+        else "changes"
+    )
+    return f"{does} facility" if meta.get("purdue-af/scope") == "facility" else does
+
+
+async def test_every_tool_says_what_it_does_and_for_whom():
+    tools = await server.mcp.list_tools()
+    assert {t.name: said(t) for t in tools} == EXPECTED_TOOLS
 
 
 async def test_all_prompts_registered():

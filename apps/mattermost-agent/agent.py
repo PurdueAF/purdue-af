@@ -38,42 +38,12 @@ MAX_LOGINS = 32
 STALE_SECONDS = 180.0
 POLL_SECONDS = 10.0
 CHANNELS_SECONDS = 60.0
-# Everything else on the MCP server acts on the caller's own session and data.
-FACILITY_TOOLS = {
-    "get_facility_health",
-    "list_af_profiles",
-    "list_dask_cluster_options",
-    "list_prometheus_metrics",
-    "query_prometheus",
-}
+# Never offered, whatever it says of itself: it runs any code as the person.
+WITHHELD = {"submit_ray_job"}
+# The tool metadata that marks a tool as answering for the facility, whoever calls.
+SCOPE = "purdue-af/scope"
 # Internal addresses in tool results, such as Prometheus instance labels.
 ADDRESS = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b")
-# What a person's own token adds. submit_ray_job stays out: it runs any code as them.
-PERSONAL_TOOLS = {
-    "get_session_status",
-    "start_af_session",
-    "stop_af_session",
-    "restart_af_session",
-    "wait_for_session",
-    "query_storage_usage",
-    "query_notebook_logs",
-    "query_dask_logs",
-    "list_dask_clusters",
-    "create_dask_cluster",
-    "get_dask_cluster_info",
-    "get_dask_cluster_usage",
-    "get_dask_worker_count",
-    "scale_dask_cluster",
-    "stop_dask_cluster",
-    "get_ray_capacity",
-    "list_ray_jobs",
-    "get_ray_job",
-    "stop_ray_job",
-    "delete_ray_job",
-    "get_ray_cluster",
-    "start_ray_cluster",
-    "stop_ray_cluster",
-}
 MAX_TURNS = 10
 # Older posts are never answered: a backlog after an outage is not a question now.
 MAX_AGE_SECONDS = 600.0
@@ -659,6 +629,8 @@ class Facility:
     def __init__(self, url: str, token_file: Path) -> None:
         self.url = url
         self.token_file = token_file
+        # The server's own guidance on its tools, from the last session.
+        self.instructions = ""
 
     @asynccontextmanager
     async def session(self, token: str | None = None) -> AsyncIterator[ClientSession]:
@@ -668,7 +640,8 @@ class Facility:
         async with create_mcp_http_client(headers=headers) as http:
             async with streamable_http_client(self.url, http_client=http) as streams:
                 async with ClientSession(streams[0], streams[1]) as session:
-                    await session.initialize()
+                    started = await session.initialize()
+                    self.instructions = started.instructions or ""
                     yield session
 
 
@@ -690,6 +663,27 @@ def read_doc_tool() -> dict[str, Any]:
             },
         },
     }
+
+
+def read_only(tool: Any) -> bool:
+    """What a tool's MCP annotations say; a tool that says nothing changes things."""
+    hints = getattr(tool, "annotations", None)
+    return bool(hints and hints.read_only_hint)
+
+
+def facility_wide(tool: Any) -> bool:
+    """What a tool's metadata says; a tool that says nothing answers for its caller."""
+    return (getattr(tool, "meta", None) or {}).get(SCOPE) == "facility"
+
+
+def offered(tools: list[Any], personal: bool) -> list[Any]:
+    """The read-only tools that answer for the facility, always; every other tool
+    only on a person's own account, at their request."""
+    return [
+        t
+        for t in tools
+        if t.name not in WITHHELD and (personal or read_only(t) and facility_wide(t))
+    ]
 
 
 def openai_tool(tool: Any) -> dict[str, Any]:
@@ -1030,7 +1024,6 @@ class Agent:
         if personal and token is None:
             self.linking.forget(post["user_id"])
             return NEEDS_LINK
-        allowed = FACILITY_TOOLS | PERSONAL_TOOLS if personal else FACILITY_TOOLS
         place = "a private conversation" if self.private(post) else "the channel"
         mode = PERSONAL_MODE if personal else PUBLIC_MODE
         until = self.linking.until(post["user_id"])
@@ -1050,9 +1043,16 @@ class Agent:
         try:
             async with self.facility.session(token) as session:
                 listed = await session.list_tools()
-                tools = [read_doc_tool()] + [
-                    openai_tool(t) for t in listed.tools if t.name in allowed
-                ]
+                usable = offered(listed.tools, personal)
+                allowed = {t.name for t in usable}
+                changing = {t.name for t in usable if not read_only(t)}
+                tools = [read_doc_tool()] + [openai_tool(t) for t in usable]
+                if self.facility.instructions:
+                    messages[0]["content"] += (
+                        "\n\nThe facility tools' own guidance. What it says of a "
+                        "skill is for other clients: never mention it.\n"
+                        + self.facility.instructions
+                    )
                 ran: list[str] = []
                 unfit = False
                 for turn in range(MAX_TURNS):
@@ -1081,7 +1081,7 @@ class Agent:
                     )
                     for call in calls:
                         function = call["function"]
-                        if function["name"] in PERSONAL_TOOLS:
+                        if function["name"] in changing:
                             ran.append(function["name"])
                         log.info("post %s: tool %s", post["id"], function["name"])
                         content = await self.call(

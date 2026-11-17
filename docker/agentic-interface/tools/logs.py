@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
+from annotations import READS
 from config import LOKI_URL, NAMESPACE
 from context import require_user
 from errors import (
@@ -192,7 +193,7 @@ async def _user_logs(
 
 
 def register(mcp: MCPServer) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def query_notebook_logs(
         start: str = "1h",
         end: Optional[str] = None,
@@ -223,7 +224,7 @@ def register(mcp: MCPServer) -> None:
             'container="notebook"', start, end, limit, direction, filter, dedup
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=READS)
     async def query_dask_logs(
         start: str = "1h",
         end: Optional[str] = None,
