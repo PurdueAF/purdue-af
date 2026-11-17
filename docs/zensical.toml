@@ -48,7 +48,7 @@ nav = [
         { "CERNBox" = "guide-cern-eos.md" },
         { "Writing to EOS" = "guide-eos-write.md" },
     ] },
-    { "Compute" = [
+    { "Scale-out and GPUs" = [
         { "Computing resources" = "scaling-out.md" },
         { "GPUs in a session" = "gpus.md" },
         { "Dask" = "guide-dask.md" },
