@@ -1,0 +1,3 @@
+[mcp_servers.purdue-af-agentic-interface]
+url = "http://agentic-interface:8888/services/agentic-interface/mcp"
+bearer_token_env_var = "JUPYTERHUB_API_TOKEN"

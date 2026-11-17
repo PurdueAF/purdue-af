@@ -1,0 +1,19 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["/opt/purdue-af/agents/platform-context.md"],
+  "skills": ["/opt/purdue-af/skills"],
+  "permission": {
+    "edit": "ask",
+    "bash": "ask"
+  },
+  "mcp": {
+    "purdue-af-agentic-interface": {
+      "type": "remote",
+      "url": "http://agentic-interface:8888/services/agentic-interface/mcp",
+      "enabled": true,
+      "headers": {
+        "Authorization": "Bearer {env:JUPYTERHUB_API_TOKEN}"
+      }
+    }
+  }
+}

@@ -15,6 +15,8 @@ the Slurm client with Hammer configs, and the coding agents.
 | `jupyter/` | `start.sh`, which runs the hooks and starts the server as the user; server config |
 | `scripts/` | the `before-notebook.d` hooks, `af-as-user.sh`, `managed-block.py` |
 | `agents/platform-context.md` | the facility context every in-session agent reads |
+| `agents/codex-config.toml` | Codex's system config, `/etc/codex/config.toml` |
+| `agents/opencode.json` | the config layer `OPENCODE_CONFIG` names |
 | `pixi-wrapper` | the `pixi` on a session's PATH |
 | `configs/`, `osg/` | CERN krb5/CA defaults, OSG RPMs |
 | `code-server/` | the interface-controls extension |
@@ -26,13 +28,21 @@ The `claude`, `codex` and `opencode` CLIs, plus the `claude-agent-acp` and
 `/opt/npm-global` at the versions pinned by the Dockerfile `ARG`s. Their
 code-server extensions are installed at startup by `config-extensions.sh`.
 
-`config-agents.sh` wires them up on every start: it registers the AF MCP
-server as `purdue-af-agentic-interface` (the name `.mcp.json` uses) at its
-in-cluster address, installs the bundled skill into `~/.claude/skills/`, and
-has `managed-block.py` write [`platform-context.md`](agents/platform-context.md)
-into `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`. The skill is
-`.claude/skills/purdue-af-agentic-interface/SKILL.md`, shipped as is. The image ships no model
-credentials; users sign the agents in themselves.
+Each agent gets the AF MCP server (`purdue-af-agentic-interface`, the name
+`.mcp.json` uses, at its in-cluster address), the skill
+(`.claude/skills/purdue-af-agentic-interface/SKILL.md`, shipped as is) and
+[`platform-context.md`](agents/platform-context.md), from image files wherever
+the agent reads a system-level one:
+
+| Agent | MCP server | Skill | Platform context |
+| --- | --- | --- | --- |
+| Claude Code | `~/.claude.json`, by `claude mcp add` | `/etc/claude-code/.claude/skills/` | `/etc/claude-code/CLAUDE.md` |
+| Codex | `/etc/codex/config.toml` | `/etc/codex/skills/` | `~/.codex/AGENTS.md`, by `managed-block.py` |
+| opencode | the `OPENCODE_CONFIG` layer | the layer's `skills` | the layer's `instructions` |
+
+`config-agents.sh` writes the two entries under the home on every start, and
+removes the copies of the others that a home still holds. The image ships no
+model credentials; users sign the agents in themselves.
 
 ## Build and publication
 

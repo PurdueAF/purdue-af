@@ -195,10 +195,23 @@ COPY --chown=root:root --chmod=755 \
     docker/purdue-af/jupyter/start-notebook.sh \
     docker/purdue-af/jupyter/start-singleuser.sh \
     /usr/local/bin/
-COPY --chown=root:root .claude/skills/purdue-af-agentic-interface/SKILL.md \
-    /opt/purdue-af/skills/purdue-af-agentic-interface/SKILL.md
+# The platform context, the AF skill and the AF MCP server, where each agent reads its system-level files.
 COPY --chown=root:root docker/purdue-af/agents/platform-context.md \
     /opt/purdue-af/agents/platform-context.md
+COPY --chown=root:root docker/purdue-af/agents/platform-context.md \
+    /etc/claude-code/CLAUDE.md
+COPY --chown=root:root .claude/skills/purdue-af-agentic-interface/SKILL.md \
+    /etc/claude-code/.claude/skills/purdue-af-agentic-interface/SKILL.md
+COPY --chown=root:root .claude/skills/purdue-af-agentic-interface/SKILL.md \
+    /etc/codex/skills/purdue-af-agentic-interface/SKILL.md
+COPY --chown=root:root docker/purdue-af/agents/codex-config.toml \
+    /etc/codex/config.toml
+COPY --chown=root:root .claude/skills/purdue-af-agentic-interface/SKILL.md \
+    /opt/purdue-af/skills/purdue-af-agentic-interface/SKILL.md
+COPY --chown=root:root docker/purdue-af/agents/opencode.json \
+    /opt/purdue-af/agents/opencode.json
+# A layer opencode merges between a user's global and project configs.
+ENV OPENCODE_CONFIG="/opt/purdue-af/agents/opencode.json"
 COPY --chown=root:root --chmod=755 docker/purdue-af/scripts/managed-block.py \
     /usr/local/bin/managed-block.py
 
@@ -240,6 +253,13 @@ RUN nvcc --version >/dev/null && \
     opencode --version >/dev/null && \
     command -v claude-agent-acp >/dev/null && \
     command -v codex-acp >/dev/null && \
+    test -s /etc/claude-code/CLAUDE.md && \
+    test -s /etc/claude-code/.claude/skills/purdue-af-agentic-interface/SKILL.md && \
+    test -s /etc/codex/skills/purdue-af-agentic-interface/SKILL.md && \
+    codex mcp list >/tmp/codex-mcp && \
+    grep -q purdue-af-agentic-interface /tmp/codex-mcp && \
+    rm /tmp/codex-mcp && \
+    python3 -c "import json, os; json.load(open(os.environ['OPENCODE_CONFIG']))" && \
     python3 -c "import jupyterlab; print('smoke ok:', jupyterlab.__version__)" && \
     python3 -c "import jupyter_ai; print('smoke ok: jupyter-ai present')"
 

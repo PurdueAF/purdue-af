@@ -5,10 +5,12 @@ The AF content lives between markers: everything inside is replaced on every
 run, everything outside is never touched.
 
     managed-block.py <section.md> <target.md>
+    managed-block.py --remove <target.md>
 
 Idempotent — running it twice produces the same file. If the markers are
 absent the block is appended, so an existing hand-written file keeps its
-content and simply gains the AF section at the end.
+content and simply gains the AF section at the end. `--remove` takes the
+section out again, and the file with it when nothing else is in it.
 """
 
 import sys
@@ -40,9 +42,38 @@ def apply_block(existing: str, section: str) -> str:
     return "\n\n".join(parts) + "\n"
 
 
+def remove_block(existing: str) -> str:
+    """`existing` without the managed block; unchanged when it has none."""
+    start = existing.find(BEGIN)
+    end = existing.find(END, start)
+    if start == -1 or end == -1:
+        return existing
+    head = existing[:start].rstrip("\n")
+    tail = existing[end + len(END) :].strip("\n")
+    parts = [p for p in (head, tail) if p]
+    return "\n\n".join(parts) + "\n" if parts else ""
+
+
+def remove(target_path: Path) -> int:
+    if not target_path.is_file():
+        return 0
+    existing = target_path.read_text()
+    updated = remove_block(existing)
+    if updated == existing:
+        return 0
+    if updated:
+        target_path.write_text(updated)
+    else:
+        target_path.unlink()
+    print(f"managed-block: removed the section from {target_path}")
+    return 0
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         raise SystemExit(__doc__)
+    if sys.argv[1] == "--remove":
+        return remove(Path(sys.argv[2]))
     section_path, target_path = Path(sys.argv[1]), Path(sys.argv[2])
     section = section_path.read_text()
     target_path.parent.mkdir(parents=True, exist_ok=True)
