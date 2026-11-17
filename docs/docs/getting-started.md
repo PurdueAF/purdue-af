@@ -17,7 +17,7 @@ guest computing account.
 
 After a successful login, you will be redirected to a page where you can select
 the number of CPU cores, the amount of RAM
-([what the selection means](scaling-out.md#session-resources)), and (optionally)
+([what the selection means](scaling-out.md#your-session)), and (optionally)
 a [GPU](gpus.md) for your session. You can also choose which web interface the
 session starts with: **JupyterLab** (default) or **VS Code (code-server)**.
 
@@ -82,7 +82,7 @@ A VOMS proxy is required to access CMS data via XRootD, submit CRAB jobs, and us
    [CMS TWiki](https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookStartingGrid),
    specifically the section **"Obtaining and installing your Certificate"**.
    To upload the certificate files (`usercert.pem` / `userkey.pem`) to Purdue AF,
-   see [Uploading and downloading files](guide-file-transfer.md).
+   see [Uploading and downloading files](interface.md#uploading-and-downloading-files).
 
 2. (Optional) Specify the path where your VOMS proxy will be stored. Dask
    Gateway workers and Slurm jobs can only read a proxy stored on a volume they
@@ -105,6 +105,5 @@ Join the Mattermost channel and the mailing list listed in [Support](support.md)
   `opencode` in a terminal.
 * Learn the [interfaces and analysis tools](interface.md).
 * Set up a [project-specific Pixi environment](guide-pixi.md).
-* Try the [interactive demos](https://github.com/PurdueAF/purdue-af-demos).
 * When your analysis outgrows a single session, [scale out with Dask Gateway](guide-dask-gateway.md)
   or [train on GPUs with Ray](guide-ray-train.md).

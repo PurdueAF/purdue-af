@@ -57,7 +57,7 @@ In the code above:
 
 A local cluster can be used to parallelize the analysis code over local CPU cores.
 The number of workers that you can create is limited by the
-[resources of your session](scaling-out.md#session-resources).
+[resources of your session](scaling-out.md#your-session).
 
 ??? note "LocalCluster setup"
 
@@ -79,5 +79,4 @@ at the Purdue Analysis Facility: [Dask Gateway at Purdue AF](guide-dask-gateway.
 
 !!! note "See also"
 
-    * [Dask Gateway cluster setup (demo notebook)](https://github.com/PurdueAF/purdue-af-demos/blob/master/gateway-cluster.ipynb)
-    * [Scaling out — overview of all methods](scaling-out.md)
+    * [Computing resources — every way to scale out](scaling-out.md)

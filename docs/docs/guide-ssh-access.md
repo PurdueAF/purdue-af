@@ -79,5 +79,16 @@ request a new token, save it the same way.
 
 !!! warning "No SFTP / scp support"
 
-    `scp` to and from this SSH server does not work — see
-    [Uploading and downloading files](guide-file-transfer.md) for alternatives.
+    `scp` to and from this SSH server does not work. To copy files with `scp`,
+    connect the other way: from an AF terminal into your own computer, once it
+    accepts SSH logins
+    ([macOS](https://support.apple.com/guide/mac-help/allow-a-remote-computer-to-access-your-mac-mchlp1066/mac),
+    [Ubuntu](https://help.ubuntu.com/stable/ubuntu-help/sharing-secure-shell.html.en),
+    [Windows](https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/factoryos/connect-using-ssh?view=windows-11)):
+
+    ```shell
+    scp myfile.root <local-username>@<your-computer-address>:/path/on/local/machine/
+    ```
+
+    For other ways to move files, see
+    [Uploading and downloading files](interface.md#uploading-and-downloading-files).

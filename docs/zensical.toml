@@ -21,6 +21,7 @@ repo_name = "PurdueAF/purdue-af"
 edit_uri = "edit/main/docs/docs/"
 
 extra_css = ["stylesheets/extra.css"]
+extra_javascript = ["javascripts/external-links.js"]
 
 
 # Navigation: one section per topic. A label here is also the page's title in
@@ -39,7 +40,6 @@ nav = [
         { "Pixi environments" = "guide-pixi.md" },
         { "Conda environments" = "guide-conda.md" },
         { "Combine" = "guide-combine.md" },
-        { "MC generation" = "guide-mc-gen.md" },
     ] },
     { "Storage and data" = [
         { "Storage volumes" = "storage.md" },
@@ -47,16 +47,16 @@ nav = [
         { "Rucio" = "guide-rucio.md" },
         { "CERNBox" = "guide-cern-eos.md" },
         { "Writing to EOS" = "guide-eos-write.md" },
-        { "File transfer" = "guide-file-transfer.md" },
     ] },
-    { "Scaling out" = [
-        { "Ways to scale out" = "scaling-out.md" },
+    { "Compute" = [
+        { "Computing resources" = "scaling-out.md" },
+        { "GPUs in a session" = "gpus.md" },
         { "Dask" = "guide-dask.md" },
         { "Dask Gateway" = "guide-dask-gateway.md" },
-    ] },
-    { "GPUs" = [
-        { "GPU access" = "gpus.md" },
         { "Training with Ray" = "guide-ray-train.md" },
+    ] },
+    { "Guides" = [
+        { "MC generation" = "guide-mc-gen.md" },
         { "RooFit on GPUs" = "guide-roofit-cuda.md" },
     ] },
     { "AI agents" = [
@@ -76,6 +76,10 @@ nav = [
 strict = true
 
 # /llms.txt, and each page's Markdown beside its HTML, for agents.
+# Pages that are gone, to where their content went.
+[project.plugins.redirects.redirect_maps]
+"guide-file-transfer.md" = "interface.md"
+
 [project.plugins.llmstxt]
 markdown_description = "User documentation of the Purdue Analysis Facility: JupyterHub sessions for CMS analysis, with Dask, Ray on GPUs, Slurm, Pixi environments and CMS data access. Each page below is also served as Markdown."
 

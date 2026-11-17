@@ -15,6 +15,19 @@ Purdue AF provides several user interfaces for analysis development:
   session, in the terminal, in VS Code and as a chat panel in JupyterLab. An
   agent on your own machine [connects with a token](guide-agentic-interface.md).
 
+## Uploading and downloading files
+
+* Drag a file between your computer's file browser and JupyterLab's, or use the
+  upload button (⬆) at the top of JupyterLab's file browser. Both take one file
+  at a time.
+* To download a directory, right-click it in JupyterLab's file browser and
+  choose **Download as an Archive**. **Download Current Folder as an Archive**
+  packs the folder that is open instead, which can be very large.
+* `scp` works only from the AF to your computer — see
+  [SSH access](guide-ssh-access.md#caveats).
+* CMS data files move between sites with `xrdcp` or `gfal-copy` — see
+  [Data access](data-access.md).
+
 ## Python code development
 
 JupyterLab is especially well suited for developing analysis workflows in Python.
@@ -77,7 +90,6 @@ examples of frameworks which have been shown to perform well at Purdue AF:
 
 ## Beyond a single session
 
-* [Scaling out](scaling-out.md) compares the ways to run on more cores: Dask
-  Gateway, Slurm and CRAB.
-* [GPU access](gpus.md) covers sessions with a GPU and
-  [training on several GPUs with Ray](guide-ray-train.md).
+* [Computing resources](scaling-out.md) compares the ways to run on more cores
+  and GPUs: Dask Gateway, Ray, Slurm and CRAB.
+* [GPUs in a session](gpus.md) covers sessions with a GPU.

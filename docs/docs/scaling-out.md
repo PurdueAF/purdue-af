@@ -1,13 +1,16 @@
-# Scaling out
+# Computing resources
 
-## Session resources
+You work in your session. When an analysis outgrows it, the same session sends
+work to Dask Gateway, Ray, Slurm or CRAB.
+
+## Your session
 
 When you start a session, the number of CPU cores (up to 128) and the amount of
 memory (up to 128 GB) that you select are **reserved** for your session. A
 session can use more — up to 256 cores and 256 GB — while the node it runs on
 has spare capacity, but only the reserved amount is guaranteed. If your work
 needs more memory than you reserved, restart the session with a larger
-selection.
+selection. A session can also hold a GPU — see [GPUs in a session](gpus.md).
 
 ### Idle sessions
 
@@ -18,47 +21,33 @@ new session.
 
 ## Which method should I use?
 
-When your analysis outgrows a single session, several options are available.
-This page gives an overview; detailed instructions are linked from each section.
-
 | Method | Best for | Available to | Scale |
 | --- | --- | --- | --- |
+| Your session | Interactive work, one GPU | All users | the cores, memory and [GPU](gpus.md) you selected |
 | [Dask (local cluster)](guide-dask.md) | Parallelizing Python code within a session | All users | the cores of your session |
 | [Dask Gateway](guide-dask-gateway.md) | Distributed Python / Coffea analyses | All users | [hundreds of cores](guide-dask-gateway.md#limits) |
-| [Ray](guide-ray-train.md) | Training ML models on GPUs | All users, from sessions without a GPU | [shared GPUs](guide-ray-train.md#good-to-know) |
-| Slurm batch jobs | Independent batch workloads, GPU jobs | Purdue users | Hammer cluster (`cms` account) or other Purdue Community Clusters |
-| CRAB | CMSSW (`cmsRun`) jobs, MC generation, skimming | All CMS users | the entire WLCG |
-
-## Dask
-
-[Dask](https://docs.dask.org/en/stable/) is an open-source library for parallel
-computing in Python. It can be used to
-[quickly parallelize any Python code](guide-dask.md), or implicitly as a backend in
-frameworks such as Coffea and RDataFrame.
-
-* A **local Dask cluster** parallelizes your code over the cores of your own
-  session — no extra setup required.
-* **[Dask Gateway](guide-dask-gateway.md)** scales beyond the session, running
-  workers as pods on the Geddes cluster.
-
-## Ray
-
-[Ray](https://docs.ray.io/en/latest/) is an open-source framework for
-distributed machine learning. At Purdue AF, a training job submitted from a
-notebook in a session without a GPU runs on a Ray cluster of its own, with
-GPUs — see [Training on GPUs with Ray](guide-ray-train.md).
+| [Ray](guide-ray-train.md) | Training and inference on several GPUs | All users, from sessions without a GPU | [shared GPUs, at Purdue and on NRP](guide-ray-train.md#good-to-know) |
+| [Slurm](#slurm-purdue-users-only) | Independent batch jobs, with or without GPUs | Purdue users | Hammer cluster (`cms` account) or other Purdue Community Clusters |
+| [CRAB](#crab) | CMSSW (`cmsRun`) jobs, MC generation, skimming | All CMS users | the entire WLCG |
 
 ## Slurm (Purdue users only)
 
 [Slurm](https://slurm.schedmd.com/documentation.html) is a job scheduler and
 workload manager that enables batch submission on Purdue computing clusters.
 At Purdue AF, **users with local Purdue accounts** can submit jobs from the AF
-terminal to the Hammer cluster, using the `cms` Slurm account. Users can also submit Slurm jobs at other Community Clusters after logging into them via `ssh`.
+terminal to the Hammer cluster, using the `cms` Slurm account. Users can also
+submit Slurm jobs at other Community Clusters after logging into them via `ssh`.
 
 * [Instructions for submitting Slurm jobs](https://docs.rcac.purdue.edu/userguides/hammer/run_jobs/)
 * Code and data used by Slurm jobs must be stored on a volume that Slurm jobs
   can see — see [Storage volumes](storage.md).
-* To request a GPU for a Slurm job, see [GPU access](gpus.md#2-slurm-jobs-purdue-users-only).
+* **GPUs**: add `--gpus-per-node=1` to the `sbatch` command. Jobs submitted
+  from the AF run on Hammer, which has **Nvidia T4** GPUs. For more GPUs or
+  other models, submit on the
+  [Gilbreth cluster](https://www.rcac.purdue.edu/compute/gilbreth): run
+  `ssh gilbreth` in an AF terminal and log in with BoilerKey. The only volume
+  shared between Purdue AF and Gilbreth is `/depot/`, so write job outputs
+  there.
 
 ## CRAB
 

@@ -243,5 +243,4 @@ for cluster_info in gateway.list_clusters():
 
 !!! note "See also"
 
-    * [Dask Gateway cluster setup (demo notebook)](https://github.com/PurdueAF/purdue-af-demos/blob/master/gateway-cluster.ipynb)
     * [Troubleshooting](troubleshooting.md#dask-gateway)

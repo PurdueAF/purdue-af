@@ -195,7 +195,6 @@ configMapGenerator:
       - ../../docs/docs/guide-dask-gateway.md
       - ../../docs/docs/guide-dask.md
       - ../../docs/docs/guide-eos-write.md
-      - ../../docs/docs/guide-file-transfer.md
       - ../../docs/docs/guide-ide-connection.md
       - ../../docs/docs/guide-mc-gen.md
       - ../../docs/docs/guide-pixi.md

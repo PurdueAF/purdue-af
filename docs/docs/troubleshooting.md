@@ -30,7 +30,7 @@ Choose another kind of GPU, or start without one.
   filesystem. Try moving them to `/work/` storage.
 * Check whether you are running out of RAM: only the memory you selected at
   session creation is guaranteed — see
-  [Session resources](scaling-out.md#session-resources). Restart the session
+  [Session resources](scaling-out.md#your-session). Restart the session
   with more RAM if needed.
 * Reading many small files from `/depot/` or `/eos/` can be slow — see
   [Data access](data-access.md) for faster access patterns (XCache).

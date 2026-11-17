@@ -1,20 +1,11 @@
-# GPU access
+# GPUs in a session
 
-**Graphics processing units (GPUs)** are specialized processors that can
-dramatically accelerate execution of parallelizable algorithms.
-
-The most common use cases for GPUs in high energy physics are **training** and
-**inference** of machine learning models, however there are other frameworks and
-algorithms optimized to run on GPUs. For example, Purdue AF also allows you to use
-GPUs to [accelerate RooFit fits](guide-roofit-cuda.md).
-
-## How to access GPUs at Purdue AF
-
-### 1. Direct connection
-
-You can start an AF session with interactive access to an **Nvidia A100** or
-**Nvidia T4** GPU by selecting it at the resource selection step (see screenshot
-below). For A100s you can choose either a 5 GB "slice" or a full 40 GB GPU.
+You can start a session with an **Nvidia A100** or **Nvidia T4** GPU by
+selecting it at the resource selection step. For A100s you can choose either a
+5 GB "slice" or a full 40 GB GPU. To train on several GPUs, or on a GPU from a
+session without one, use [Ray](guide-ray-train.md); for GPU batch jobs, use
+[Slurm](scaling-out.md#slurm-purdue-users-only). The GPUs installed at the
+facility are listed in [Hardware](hardware.md).
 
 <figure markdown="span">
   ![](images/gpu-selection.png){ width="500" }
@@ -26,21 +17,7 @@ below). For A100s you can choose either a 5 GB "slice" or a full 40 GB GPU.
 | Full A100 GPU        | 40 GB  | Subject to availability |
 | NVIDIA T4            | 16 GB  | Usually immediate |
 
-The GPUs installed at the facility are listed in [Hardware](hardware.md).
-
-!!! tip
-
-    The resource selection form shows the **current availability** of each GPU
-    configuration next to the corresponding option, so you can see before starting
-    the session whether a GPU of that flavor is free.
-
-!!! note
-
-    Each environment brings its own CUDA and cuDNN libraries, so install ML
-    packages into the environment that uses them. Install CUDA 12 builds: the GPU
-    nodes' driver runs no CUDA 13 (`nvidia-smi` shows its limit). `nvcc --version`
-    shows the session's CUDA toolkit, which matters only when you compile CUDA
-    code.
+The resource selection form shows how many GPUs of each kind are free right now.
 
 !!! important
 
@@ -48,41 +25,24 @@ The GPUs installed at the facility are listed in [Hardware](hardware.md).
     other users. Idle GPU sessions are shut down sooner than regular ones — see
     [Idle sessions](scaling-out.md#idle-sessions).
 
-### 2. Slurm jobs (Purdue users only)
+## CUDA
 
-You can use Slurm to submit multiple GPU jobs to run in parallel. To request a GPU
-for a Slurm job, simply add the `--gpus-per-node=1` argument to the `sbatch` command.
+Each environment brings its own CUDA and cuDNN libraries, so install ML packages
+into the environment that uses them. Install CUDA 12 builds: the GPU nodes'
+driver runs no CUDA 13 (`nvidia-smi` shows its limit). `nvcc --version` shows
+the session's CUDA toolkit, which matters only when you compile CUDA code.
 
-* Slurm jobs submitted directly from the Purdue AF interface are executed on the
-  Hammer cluster, which has **Nvidia T4** GPUs.
-* If you need more GPUs, or different GPU models, consider submitting Slurm jobs
-  on the [Gilbreth cluster](https://www.rcac.purdue.edu/compute/gilbreth).
-  To log in to Gilbreth directly from the Purdue AF interface, simply run
-  `ssh gilbreth` and use BoilerKey two-factor authentication. Once logged in, you
-  can use the Slurm queues on Gilbreth to run GPU jobs.
-
-    !!! important
-
-        The **only** storage volume shared between Purdue AF and the Gilbreth
-        cluster is `/depot/` — save the outputs of your jobs there.
-
-### 3. Ray clusters
-
-From a session started without a GPU, you can train on GPUs all the same: a
-job submitted from a notebook runs on a [Ray](https://docs.ray.io/en/latest/) cluster of its own,
-with one or more A100 slices or T4s, whether or not the notebook stays open —
-see [Training on GPUs with Ray](guide-ray-train.md).
-
-## GPU support in common ML libraries
+## GPU support in common libraries
 
 * **PyTorch** — already GPU-enabled in the [global Pixi environment](software.md).
-  In your own environment, install a CUDA 12 build, as the note above says.
+  In your own environment, install a CUDA 12 build.
   See the [PyTorch CUDA semantics documentation](https://pytorch.org/docs/stable/notes/cuda.html).
-
 * **XGBoost** — enable GPU support by setting the `device` parameter to `cuda`.
   Refer to the
   [XGBoost GPU documentation](https://xgboost.readthedocs.io/en/stable/gpu/index.html)
   for details.
+* **RooFit** — fits can run on a GPU; see
+  [Accelerating RooFit with GPUs](guide-roofit-cuda.md).
 
 You can verify that your session sees the GPU with `nvidia-smi`, or from Python:
 

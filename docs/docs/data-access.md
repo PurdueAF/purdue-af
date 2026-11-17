@@ -106,4 +106,3 @@ the local **XCache** server.
     * [Rucio tutorial](guide-rucio.md)
     * [Writing to EOS](guide-eos-write.md)
     * [Storage volumes](storage.md)
-    * [Demo notebook: accessing files in different storage locations](https://github.com/PurdueAF/purdue-af-demos/blob/master/storage-data-access.ipynb)
