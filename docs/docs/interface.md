@@ -90,6 +90,6 @@ examples of frameworks which have been shown to perform well at Purdue AF:
 
 ## Beyond a single session
 
-* [Computing resources](scaling-out.md) compares the ways to run on more cores
+* [Scale-out and GPUs](scaling-out.md) compares the ways to run on more cores
   and GPUs: Dask Gateway, Ray, Slurm and CRAB.
 * [GPUs in a session](gpus.md) covers sessions with a GPU.

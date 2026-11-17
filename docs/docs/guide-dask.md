@@ -79,4 +79,4 @@ at the Purdue Analysis Facility: [Dask Gateway at Purdue AF](guide-dask-gateway.
 
 !!! note "See also"
 
-    * [Computing resources — every way to scale out](scaling-out.md)
+    * [Scale-out and GPUs — every way to scale out](scaling-out.md)

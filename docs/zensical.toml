@@ -49,7 +49,7 @@ nav = [
         { "Writing to EOS" = "guide-eos-write.md" },
     ] },
     { "Scale-out and GPUs" = [
-        { "Computing resources" = "scaling-out.md" },
+        { "Overview" = "scaling-out.md" },
         { "Dask" = "guide-dask.md" },
         { "Dask Gateway" = "guide-dask-gateway.md" },
         { "GPUs in a session" = "gpus.md" },

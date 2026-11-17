@@ -1,4 +1,4 @@
-# Computing resources
+# Scale-out and GPUs
 
 All your work starts in your session. When it outgrows the session, you send it
 elsewhere from the same session — a notebook or a terminal there is all you
@@ -12,7 +12,7 @@ need.
 | Spread Python code over the cores of your session | [A local Dask cluster](guide-dask.md) | All users |
 | Run a Coffea or Python analysis on [hundreds of cores](guide-dask-gateway.md#limits) | [Dask Gateway](guide-dask-gateway.md) | All users |
 | Work interactively on one GPU | [A session with a GPU](gpus.md) | All users |
-| Train or run inference on [several GPUs](guide-ray-train.md#good-to-know), at Purdue or on NRP | [Multi-GPU training](guide-ray-train.md) | All users, from a session without a GPU |
+| Train or run inference on [several GPUs](guide-ray-train.md#good-to-know), at Purdue or on NRP | [Multi-GPU training with Ray](guide-ray-train.md) | All users, from a session without a GPU |
 | Run independent batch jobs, with or without GPUs | [Slurm](#slurm-purdue-users-only) | Purdue accounts |
 | Run CMSSW (`cmsRun`) jobs, such as MC generation or skimming | [CRAB](#crab) | All CMS users |
 
