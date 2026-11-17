@@ -1,75 +1,67 @@
 # Computing resources
 
-You work in your session. When an analysis outgrows it, the same session sends
-work to Dask Gateway, Ray, Slurm or CRAB.
+All your work starts in your session. When it outgrows the session, you send it
+elsewhere from the same session — a notebook or a terminal there is all you
+need.
+
+## Where to run your work
+
+| You want to | Use | Available to |
+| --- | --- | --- |
+| Work interactively on up to 128 cores | [Your session](#your-session) | All users |
+| Spread Python code over the cores of your session | [A local Dask cluster](guide-dask.md) | All users |
+| Run a Coffea or Python analysis on [hundreds of cores](guide-dask-gateway.md#limits) | [Dask Gateway](guide-dask-gateway.md) | All users |
+| Work interactively on one GPU | [A session with a GPU](gpus.md) | All users |
+| Train or run inference on [several GPUs](guide-ray-train.md#good-to-know), at Purdue or on NRP | [Multi-GPU training](guide-ray-train.md) | All users, from a session without a GPU |
+| Run independent batch jobs, with or without GPUs | [Slurm](#slurm-purdue-users-only) | Purdue accounts |
+| Run CMSSW (`cmsRun`) jobs, such as MC generation or skimming | [CRAB](#crab) | All CMS users |
 
 ## Your session
 
-When you start a session, the number of CPU cores (up to 128) and the amount of
-memory (up to 128 GB) that you select are **reserved** for your session. A
-session can use more — up to 256 cores and 256 GB — while the node it runs on
-has spare capacity, but only the reserved amount is guaranteed. If your work
-needs more memory than you reserved, restart the session with a larger
-selection. A session can also hold a GPU — see [GPUs in a session](gpus.md).
+The CPU cores (up to 128) and the memory (up to 128 GB) you select when you
+start a session are **reserved** for it. The session can use more — up to 256
+cores and 256 GB — while its node has spare capacity, but only the reserved
+amount is guaranteed. If your work needs more memory than you reserved, restart
+the session with a larger selection.
+
+A session can also hold a GPU — see [GPUs in a session](gpus.md).
 
 ### Idle sessions
 
-Sessions that stay **inactive for 14 days** are shut down automatically.
-Sessions holding **any GPU** (A100 slice, full A100, or T4) are shut down after
-**24 hours** of inactivity. Your storage volumes are unaffected — simply start a
-new session.
-
-## Which method should I use?
-
-| Method | Best for | Available to | Scale |
-| --- | --- | --- | --- |
-| Your session | Interactive work, one GPU | All users | the cores, memory and [GPU](gpus.md) you selected |
-| [Dask (local cluster)](guide-dask.md) | Parallelizing Python code within a session | All users | the cores of your session |
-| [Dask Gateway](guide-dask-gateway.md) | Distributed Python / Coffea analyses | All users | [hundreds of cores](guide-dask-gateway.md#limits) |
-| [Ray](guide-ray-train.md) | Training and inference on several GPUs | All users, from sessions without a GPU | [shared GPUs, at Purdue and on NRP](guide-ray-train.md#good-to-know) |
-| [Slurm](#slurm-purdue-users-only) | Independent batch jobs, with or without GPUs | Purdue users | Hammer cluster (`cms` account) or other Purdue Community Clusters |
-| [CRAB](#crab) | CMSSW (`cmsRun`) jobs, MC generation, skimming | All CMS users | the entire WLCG |
+A session that stays **inactive for 14 days** is shut down; one holding **any
+GPU** (A100 slice, full A100, or T4) is shut down after **24 hours** of
+inactivity. Your storage volumes are unaffected — simply start a new session.
 
 ## Slurm (Purdue users only)
 
-[Slurm](https://slurm.schedmd.com/documentation.html) is a job scheduler and
-workload manager that enables batch submission on Purdue computing clusters.
-At Purdue AF, **users with local Purdue accounts** can submit jobs from the AF
-terminal to the Hammer cluster, using the `cms` Slurm account. Users can also
-submit Slurm jobs at other Community Clusters after logging into them via `ssh`.
+With a Purdue account, you submit [Slurm](https://slurm.schedmd.com/documentation.html)
+jobs from an AF terminal to the Hammer cluster, under the `cms` account — see
+[RCAC's instructions](https://docs.rcac.purdue.edu/userguides/hammer/run_jobs/).
+You can also log in to other Purdue Community Clusters with `ssh` and submit
+there.
 
-* [Instructions for submitting Slurm jobs](https://docs.rcac.purdue.edu/userguides/hammer/run_jobs/)
-* Code and data used by Slurm jobs must be stored on a volume that Slurm jobs
-  can see — see [Storage volumes](storage.md).
-* **GPUs**: add `--gpus-per-node=1` to the `sbatch` command. Jobs submitted
-  from the AF run on Hammer, which has **Nvidia T4** GPUs. For more GPUs or
-  other models, submit on the
+* **Storage**: a Slurm job sees only `/depot` and `/cvmfs`, so keep its code,
+  data and outputs there — see [Storage volumes](storage.md).
+* **GPUs**: add `--gpus-per-node=1` to `sbatch`. Hammer has **Nvidia T4**
+  GPUs. For more GPUs or other models, use the
   [Gilbreth cluster](https://www.rcac.purdue.edu/compute/gilbreth): run
-  `ssh gilbreth` in an AF terminal and log in with BoilerKey. The only volume
-  shared between Purdue AF and Gilbreth is `/depot/`, so write job outputs
-  there.
+  `ssh gilbreth` in an AF terminal, log in with BoilerKey, and submit there.
+  Gilbreth shares only `/depot/` with Purdue AF, so write job outputs there.
 
 ## CRAB
 
-[CRAB](https://twiki.cern.ch/twiki/bin/view/CMSPublic/SWGuideCrab)
-(CMS Remote Analysis Builder) is a utility to submit CMSSW jobs to distributed
-computing resources. CRAB allows you to:
-
-* access Data and Monte Carlo datasets stored at any CMS computing site worldwide;
-* exploit the CPU and storage resources of CMS computing sites via the Worldwide
-  LHC Computing Grid (WLCG).
-
-CRAB is suitable for running most CMSSW framework jobs (i.e. jobs launched via the
-`cmsRun` command). It is recommended for computationally intensive workloads such
-as [Monte Carlo generation](guide-mc-gen.md) or "skimming" AOD / MiniAOD datasets.
+[CRAB](https://twiki.cern.ch/twiki/bin/view/CMSPublic/SWGuideCrab) submits
+CMSSW jobs to CMS sites worldwide over the WLCG, and reads any CMS dataset where
+it is stored. Use it for compute-heavy CMSSW work, such as
+[Monte Carlo generation](guide-mc-gen.md) or skimming AOD and MiniAOD datasets.
 
 * [Instructions for submitting CRAB jobs](https://www.physics.purdue.edu/Tier2/user-info/tutorials/crab3.php)
-* CRAB outputs are written to your Grid directory at Purdue EOS — see
+* Outputs land in your Grid directory on Purdue EOS — see
   [Saving outputs of CRAB jobs](storage.md#saving-outputs-of-crab-jobs).
 
 ## Monitoring your jobs
 
-Slurm, Dask and Ray metrics are available in the corresponding sections of the
-[Purdue AF monitoring dashboard](https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard){ target="_blank" }.
-Each Dask Gateway cluster additionally gets its own Dask dashboard — see
+The [Purdue AF monitoring dashboard](https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard){ target="_blank" }
+has sections for Slurm, Dask and Ray. Each Dask Gateway cluster also has a Dask
+dashboard of its own — see
 [Dask Gateway monitoring](guide-dask-gateway.md#3-monitoring).
