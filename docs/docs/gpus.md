@@ -76,8 +76,7 @@ see [Training on GPUs with Ray](guide-ray-train.md).
 ## GPU support in common ML libraries
 
 * **PyTorch** — already GPU-enabled in the [global Pixi environment](software.md).
-  In your own environment, install a CUDA 12 build, which brings its own CUDA
-  runtime and cuDNN.
+  In your own environment, install a CUDA 12 build, as the note above says.
   See the [PyTorch CUDA semantics documentation](https://pytorch.org/docs/stable/notes/cuda.html).
 
 * **XGBoost** — enable GPU support by setting the `device` parameter to `cuda`.

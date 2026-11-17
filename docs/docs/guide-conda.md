@@ -75,14 +75,13 @@ resulting environment — it can be easily rebuilt anywhere from the same YAML f
     ```yaml
     name: my-new-env
     channels:
-      - defaults
       - conda-forge
     dependencies:
       - python=3.12
       - numpy
       - pandas
       - matplotlib
-      - coffea=2024.9.0
+      - coffea
       - pip
       - pip:
         - rucio-clients

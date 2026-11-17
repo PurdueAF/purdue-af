@@ -6,7 +6,8 @@ Purdue AF, it is also possible to connect to your session from a terminal via SS
 !!! note
 
     SSH connects you **to your running AF session**, not to a separate login node —
-    you must start the session in a web browser first. If you would rather work in
+    start the session first, in a web browser or with an
+    [AI agent](guide-agentic-interface.md). If you would rather work in
     a full local IDE, see [Access via VSCode-based IDEs](guide-ide-connection.md).
 
 ## JupyterHub API token

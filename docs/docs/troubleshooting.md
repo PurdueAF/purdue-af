@@ -6,202 +6,203 @@ solutions. If your problem is not listed here, please
 
 ## Sessions
 
-??? failure "My session fails to start"
+### My session fails to start
 
-    Most commonly this happens due to issues and outages of computing infrastructure - please alert facility admins.
+Most commonly this happens due to issues and outages of computing infrastructure - please alert facility admins.
 
-    Another possible cause is an **overfilled home directory**: sessions cannot
-    start while you are over the
-    [home directory quota](storage.md#quotas).
+Another possible cause is an **overfilled home directory**: sessions cannot
+start while you are over the
+[home directory quota](storage.md#quotas).
 
-    1. Start a session with the `Minimal JupyterLab interface` option — it should
-       work even when a normal session does not.
-    2. [Check your home directory usage](storage.md#quotas).
-    3. Move large files (data, Pixi/Conda environments) to `/work/` or `/depot/`
-       storage — see [Storage volumes](storage.md).
+1. Start a session with the `Minimal JupyterLab interface` option — it should
+   work even when a normal session does not.
+2. [Check your home directory usage](storage.md#quotas).
+3. Move large files (data, Pixi/Conda environments) to `/work/` or `/depot/`
+   storage — see [Storage volumes](storage.md).
 
-    If you selected a **full 40 GB A100 GPU**, the session may also fail to start
-    simply because all full GPU instances are taken. Try a 5 GB slice instead, or
-    start a CPU-only session.
+If you selected a **GPU**, the session is refused while all GPUs of that kind
+are in use by other sessions; the selection form shows how many are free.
+Choose another kind of GPU, or start without one.
 
-??? failure "My session is very slow"
+### My session is very slow
 
-    * You might be trying to use custom Pixi or Conda environments on a slow 
-      filesystem. Try moving them to `/work/` storage.
-    * Check whether you are running out of RAM: only the memory you selected at
-      session creation is guaranteed — see
-      [Session resources](scaling-out.md#session-resources). Restart the session
-      with more RAM if needed.
-    * Reading many small files from `/depot/` or `/eos/` can be slow — see
-      [Data access](data-access.md) for faster access patterns (XCache).
+* You might be trying to use custom Pixi or Conda environments on a slow 
+  filesystem. Try moving them to `/work/` storage.
+* Check whether you are running out of RAM: only the memory you selected at
+  session creation is guaranteed — see
+  [Session resources](scaling-out.md#session-resources). Restart the session
+  with more RAM if needed.
+* Reading many small files from `/depot/` or `/eos/` can be slow — see
+  [Data access](data-access.md) for faster access patterns (XCache).
 
-??? failure "My session was shut down on its own"
+### My session was shut down on its own
 
-    Idle sessions are shut down automatically — see
-    [Idle sessions](scaling-out.md#idle-sessions). Sessions may also occasionally
-    get shut down due to unplanned outages, so save your work regularly and keep
-    important code in sync with a Git repository.
+Idle sessions are shut down automatically — see
+[Idle sessions](scaling-out.md#idle-sessions). Sessions may also occasionally
+get shut down due to unplanned outages, so save your work regularly and keep
+important code in sync with a Git repository.
 
-??? failure "I deleted/broke my configuration and want a clean start"
+### I deleted/broke my configuration and want a clean start
 
-    Shut down your session (`File → Hub Control Panel → Stop My Server`), then
-    start a new one. The session image is recreated from scratch every time; only
-    the contents of your storage volumes persist.
+Shut down your session (`File → Hub Control Panel → Stop My Server`), then
+start a new one. The session's software is recreated from scratch every time,
+but settings kept in your home directory (such as `~/.jupyter` and
+`~/.local/share/code-server`) persist: remove or rename the broken ones there.
 
 ## Storage
 
-??? failure "I can't write to /depot/cms/"
+### I can't write to /depot/cms/
 
-    Depot is writable only with a Purdue account — see
-    [Storage volumes](storage.md) for where to write instead.
+Depot is writable only with a Purdue account — see
+[Storage volumes](storage.md) for where to write instead.
 
-    Purdue users can write to their own private directories, as well as into group directories to which they have access. If you don't have access to your group's directory, please contact facility admins.
+Purdue users can write to their own private directories, as well as into group directories to which they have access. If you don't have access to your group's directory, please contact facility admins.
 
-??? failure "I can't write to /eos/purdue/"
+### I can't write to /eos/purdue/
 
-    Purdue EOS is mounted read-only — see [Writing to EOS](guide-eos-write.md).
+Purdue EOS is mounted read-only — see [Writing to EOS](guide-eos-write.md).
 
-??? failure "I don't see my Grid directory under /eos/purdue/store/user/"
+### I don't see my Grid directory under /eos/purdue/store/user/
 
-    See [Saving outputs of CRAB jobs](storage.md#saving-outputs-of-crab-jobs).
+See [Saving outputs of CRAB jobs](storage.md#saving-outputs-of-crab-jobs).
 
-??? failure "The `eos-cern` symlink shows up as a file, not a directory"
+### The `eos-cern` symlink shows up as a file, not a directory
 
-    Restart the session (`File → Hub Control Panel → Stop My Server`), then run
-    the `eos-connect` command again — see [CERNBox access](guide-cern-eos.md).
+Restart the session (`File → Hub Control Panel → Stop My Server`), then run
+the `eos-connect` command again — see [CERNBox access](guide-cern-eos.md).
 
 ## Software and kernels
 
-??? failure "`pixi shell` / `pixi install` fails in my home directory"
+### `pixi shell` / `pixi install` fails in my home directory
 
-    This is intentional — see [Pixi storage locations](guide-pixi.md#storage-locations).
+This is intentional — see [Pixi storage locations](guide-pixi.md#storage-locations).
 
-??? failure "Every cell fails with a Pixi error in the project-aware kernel"
+### Every cell fails with a Pixi error in the project-aware kernel
 
-    The kernel found no Pixi project around the notebook, or cannot use the one
-    it found; the error names the cause. See what the kernel needs in
-    [Pixi kernels](software.md#pixi-kernels). For a notebook outside any Pixi
-    project, choose **Python (pixi global)**.
+The kernel found no Pixi project around the notebook, or cannot use the one
+it found; the error names the cause. See what the kernel needs in
+[Pixi kernels](software.md#pixi-kernels). For a notebook outside any Pixi
+project, choose **Python (pixi global)**.
 
-??? failure "My Conda environment doesn't show up as a Jupyter kernel"
+### My Conda environment doesn't show up as a Jupyter kernel
 
-    See [Conda kernels](software.md#conda-kernels).
+See [Conda kernels](software.md#conda-kernels).
 
-??? failure "A package is missing from the global environment"
+### A package is missing from the global environment
 
-    [Contact support](support.md) — we regularly update the global Pixi environment.
-    Alternatively, create your own [Pixi environment](guide-pixi.md) with the
-    packages you need.
+[Contact support](support.md) — we regularly update the global Pixi environment.
+Alternatively, create your own [Pixi environment](guide-pixi.md) with the
+packages you need.
 
 ## Data access
 
-??? failure "XRootD reads fail with authentication errors"
+### XRootD reads fail with authentication errors
 
-    Your VOMS proxy is probably missing or expired. Check with `voms-proxy-info`,
-    and [create a fresh proxy](getting-started.md#6-set-up-a-voms-proxy) if needed.
+Your VOMS proxy is probably missing or expired. Check with `voms-proxy-info`,
+and [create a fresh proxy](getting-started.md#6-set-up-a-voms-proxy) if needed.
 
-??? failure "A dataset I need is not accessible / only on tape"
+### A dataset I need is not accessible / only on tape
 
-    If no CMS site has the files on disk, a tape recall is necessary: create a
-    Rucio replication rule to subscribe the dataset to Purdue — see
-    [Rucio tutorial](guide-rucio.md).
+If no CMS site has the files on disk, a tape recall is necessary: create a
+Rucio replication rule to subscribe the dataset to Purdue — see
+[Rucio tutorial](guide-rucio.md).
 
 ## Dask Gateway
 
-??? failure "Cluster creation never finishes"
+### Cluster creation never finishes
 
-    `new_cluster()`
-    [has no time limit](guide-dask-gateway.md#6-cluster-lifetime-and-timeouts).
-    If it has waited for more than a few minutes, interrupt it,
-    [stop the pending cluster](guide-dask-gateway.md#5-shutting-down-clusters),
-    and [contact us](support.md) if it happens again.
+`new_cluster()`
+[has no time limit](guide-dask-gateway.md#6-cluster-lifetime-and-timeouts).
+If it has waited for more than a few minutes, interrupt it,
+[stop the pending cluster](guide-dask-gateway.md#5-shutting-down-clusters),
+and [contact us](support.md) if it happens again.
 
-??? failure "I can't create a cluster: \"You may only have 1 active Dask Gateway cluster(s)\""
+### I can't create a cluster: "You may only have 1 active Dask Gateway cluster(s)"
 
-    See the [one-cluster limit](guide-dask-gateway.md#limits): shut down your
-    existing cluster (see
-    [Shutting down clusters](guide-dask-gateway.md#5-shutting-down-clusters)),
-    or wait for it to finish stopping, then try again.
+See the [one-cluster limit](guide-dask-gateway.md#limits): shut down your
+existing cluster (see
+[Shutting down clusters](guide-dask-gateway.md#5-shutting-down-clusters)),
+or wait for it to finish stopping, then try again.
 
-??? failure "I can't create a cluster: \"prometheus_client is not installed\""
+### I can't create a cluster: "prometheus_client is not installed"
 
-    Add `prometheus_client` to the environment the cluster runs — see
-    [Pixi or Conda environments](guide-dask-gateway.md#pixi-or-conda-environments).
+Add `prometheus_client` to the environment the cluster runs — see
+[Pixi or Conda environments](guide-dask-gateway.md#pixi-or-conda-environments).
 
-??? failure "Workers fail to start or crash immediately"
+### Workers fail to start or crash immediately
 
-    * Check that the Pixi/Conda environment passed to `new_cluster()` is
-      [visible to the workers](storage.md#overview).
-    * CERN/FNAL users: see the `NB_UID` / `NB_GID` note in
-      [Environment variables](guide-dask-gateway.md#environment-variables).
+* Check that the Pixi/Conda environment passed to `new_cluster()` is
+  [visible to the workers](storage.md#overview).
+* CERN/FNAL users: see the `NB_UID` / `NB_GID` note in
+  [Environment variables](guide-dask-gateway.md#environment-variables).
 
-??? failure "My cluster disappeared"
+### My cluster disappeared
 
-    Idle clusters are shut down automatically — see
-    [Cluster lifetime and timeouts](guide-dask-gateway.md#6-cluster-lifetime-and-timeouts).
+Idle clusters are shut down automatically — see
+[Cluster lifetime and timeouts](guide-dask-gateway.md#6-cluster-lifetime-and-timeouts).
 
-??? failure "Workers can't read my data via XRootD"
+### Workers can't read my data via XRootD
 
-    See [Reading data via XRootD](guide-dask-gateway.md#environment-variables).
+See [Reading data via XRootD](guide-dask-gateway.md#environment-variables).
 
 ## Ray
 
-??? failure "A submission fails with \"Ray clusters can take N more now\""
+### A submission fails with "Ray clusters can take N more now"
 
-    Fewer GPUs are free than you ask for: try again later, or ask for up to
-    as many with `af-max-workers` — see
-    [Settings](guide-ray-train.md#settings).
+Fewer GPUs are free than you ask for: try again later, or ask for up to
+as many with `af-max-workers` — see
+[Settings](guide-ray-train.md#settings).
 
-??? failure "A submission fails because my cluster \"runs other settings, and tasks or jobs\""
+### A submission fails because my cluster "runs other settings, and tasks or jobs"
 
-    A job of yours is running with other settings: wait for it to end, or
-    stop it — see [Settings](guide-ray-train.md#settings).
+A job of yours is running with other settings: wait for it to end, or
+stop it — see [Settings](guide-ray-train.md#settings).
 
-??? failure "\"You have no Ray cluster\""
+### "You have no Ray cluster"
 
-    A job's status and log are removed some minutes after your last job ends
-    — see [Good to know](guide-ray-train.md#good-to-know).
+A job's log is removed 15 minutes after it ends, and its status an hour after
+— see [Good to know](guide-ray-train.md#good-to-know).
 
-??? failure "A training stops with \"Unable to set up cluster storage\""
+### A training stops with "Unable to set up cluster storage"
 
-    Set `storage_path` to a directory on `/work` — see
-    [Data-parallel training](guide-ray-train.md#data-parallel-training).
+Set `storage_path` to a directory on `/work` — see
+[Data-parallel training](guide-ray-train.md#data-parallel-training).
 
-??? failure "A submission fails with \"Your session holds a GPU\""
+### A submission fails with "Your session holds a GPU"
 
-    Submit from a session started without a GPU — see
-    [Before you start](guide-ray-train.md#before-you-start).
+Submit from a session started without a GPU — see
+[Before you start](guide-ray-train.md#before-you-start).
 
-??? failure "A job on NRP stops with \"NRP asks each GPU for 40%\""
+### A job on NRP stops with "NRP asks each GPU for 40%"
 
-    A GPU of your job sat idle: use more data loaders or larger batches, or
-    run it at Purdue — see [More GPUs on NRP](guide-ray-train.md#more-gpus-on-nrp).
+A GPU of your job sat idle: use more data loaders or larger batches, or
+run it at Purdue — see [More GPUs on NRP](guide-ray-train.md#more-gpus-on-nrp).
 
-??? failure "A job on NRP stops with \"NRP had no room\" or \"did not start in time\""
+### A job on NRP stops with "did not start in time"
 
-    NRP was too busy: ask for fewer workers, or try again later.
+NRP was too busy: ask for fewer workers, or try again later.
 
-??? failure "A job on NRP stops with \"Copying its inputs to NRP failed\""
+### A job on NRP stops with "Copying its inputs to NRP failed"
 
-    Check that `af-inputs` is a directory you can read.
+Check that `af-inputs` is a directory you can read.
 
-??? failure "A submission fails with \"would be made at the top of\""
+### A submission fails with "would be made at the top of"
 
-    `af-inputs` and `af-output` go inside a directory of yours, such as
-    `/work/users/<username>/results`, not directly in `/work` or `/depot/cms`.
+`af-inputs` and `af-output` go inside a directory of yours, such as
+`/work/users/<username>/results`, not directly in `/work` or `/depot/cms`.
 
-??? failure "A submission fails with \"No token\""
+### A submission fails with "No token"
 
-    Your session has no `RAY_AUTH_TOKEN`: restart it.
+Your session has no `RAY_AUTH_TOKEN`: restart it.
 
 ## SSH and IDE connections
 
 
-??? failure "Remote-SSH connection from VSCode/Cursor fails"
+### Remote-SSH connection from VSCode/Cursor fails
 
-    See the [troubleshooting section of the IDE connection guide](guide-ide-connection.md#troubleshooting).
-    The usual suspects: home directory permissions (`chmod 755 ~/`), a missing or
-    not-on-PATH `websocat` binary, or an expired JupyterHub token.
+See the [troubleshooting section of the IDE connection guide](guide-ide-connection.md#troubleshooting).
+The usual suspects: home directory permissions (`chmod 755 ~/`), a missing or
+not-on-PATH `websocat` binary, or an expired JupyterHub token.
 
 
 ## Still stuck?

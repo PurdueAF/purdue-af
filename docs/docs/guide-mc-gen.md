@@ -221,45 +221,47 @@ Step 1 produces a `GEN-SIM` output file.
 
     Reference: <https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get_setup/EGM-RunIISummer20UL18DIGIPremix-00001>
 
-    ```shell
-    source /cvmfs/cms.cern.ch/cmsset_default.sh
-    source /cvmfs/cms.cern.ch/crab3/crab.sh
-    cmssw-el7 --bind /depot:/depot
-    cd /path/to/run2ul_mcgen/
+    ??? example "Commands for this step"
 
-    mkdir DIGI_step
-    cd DIGI_step
+        ```shell
+        source /cvmfs/cms.cern.ch/cmsset_default.sh
+        source /cvmfs/cms.cern.ch/crab3/crab.sh
+        cmssw-el7 --bind /depot:/depot
+        cd /path/to/run2ul_mcgen/
 
-    export SCRAM_ARCH=slc7_amd64_gcc700
-    voms-proxy-init -voms cms
-    cmsrel CMSSW_10_6_17_patch1
-    cd CMSSW_10_6_17_patch1/src
-    cmsenv
-    scram b
-    cd ../../
+        mkdir DIGI_step
+        cd DIGI_step
 
-    cmsDriver.py  \
-        --python_filename TAU-RunIISummer20UL18DIGI-00007_1_cfg.py \
-        --eventcontent PREMIXRAW \
-        --pileup 2018_25ns_UltraLegacy_PoissonOOTPU \
-        --customise Configuration/DataProcessing/Utils.addMonitoring \
-        --datatier GEN-SIM-DIGI \
-        --fileout file:TAU-RunIISummer20UL18DIGI-00007.root \
-        --pileup_input dbs:/Neutrino_E-10_gun/RunIISummer20ULPrePremix-UL18_106X_upgrade2018_realistic_v11_L1v1-v2/PREMIX \
-        --conditions 106X_upgrade2018_realistic_v11_L1v1 \
-        --step DIGI,DATAMIX,L1,DIGI2RAW \
-        --procModifiers premix_stage2 \
-        --geometry DB:Extended \
-        --filein file:TAU-RunIISummer20UL18GS.root \
-        --datamix PreMix \
-        --era Run2_2018 \
-        --runUnscheduled \
-        --no_exec \
-        --mc \
-        -n 10
+        export SCRAM_ARCH=slc7_amd64_gcc700
+        voms-proxy-init -voms cms
+        cmsrel CMSSW_10_6_17_patch1
+        cd CMSSW_10_6_17_patch1/src
+        cmsenv
+        scram b
+        cd ../../
 
-    cmsRun TAU-RunIISummer20UL18DIGI-00007_1_cfg.py
-    ```
+        cmsDriver.py  \
+            --python_filename TAU-RunIISummer20UL18DIGI-00007_1_cfg.py \
+            --eventcontent PREMIXRAW \
+            --pileup 2018_25ns_UltraLegacy_PoissonOOTPU \
+            --customise Configuration/DataProcessing/Utils.addMonitoring \
+            --datatier GEN-SIM-DIGI \
+            --fileout file:TAU-RunIISummer20UL18DIGI-00007.root \
+            --pileup_input dbs:/Neutrino_E-10_gun/RunIISummer20ULPrePremix-UL18_106X_upgrade2018_realistic_v11_L1v1-v2/PREMIX \
+            --conditions 106X_upgrade2018_realistic_v11_L1v1 \
+            --step DIGI,DATAMIX,L1,DIGI2RAW \
+            --procModifiers premix_stage2 \
+            --geometry DB:Extended \
+            --filein file:TAU-RunIISummer20UL18GS.root \
+            --datamix PreMix \
+            --era Run2_2018 \
+            --runUnscheduled \
+            --no_exec \
+            --mc \
+            -n 10
+
+        cmsRun TAU-RunIISummer20UL18DIGI-00007_1_cfg.py
+        ```
 
     Without pile-up:
 
@@ -293,44 +295,46 @@ Step 1 produces a `GEN-SIM` output file.
 
     Create a new directory and set up the `CMSSW_10_2_16_UL` release:
 
-    ```shell
-    source /cvmfs/cms.cern.ch/cmsset_default.sh
-    source /cvmfs/cms.cern.ch/crab3/crab.sh
-    cmssw-el7 --bind /depot:/depot
-    cd /path/to/run2ul_mcgen/
+    ??? example "Commands for this step"
 
-    mkdir HLT_step
-    cd HLT_step/
-    export SCRAM_ARCH=slc7_amd64_gcc700
-    source /cvmfs/cms.cern.ch/cmsset_default.sh
-    voms-proxy-init -voms cms
-    cmsrel CMSSW_10_2_16_UL
-    cd CMSSW_10_2_16_UL/src/
+        ```shell
+        source /cvmfs/cms.cern.ch/cmsset_default.sh
+        source /cvmfs/cms.cern.ch/crab3/crab.sh
+        cmssw-el7 --bind /depot:/depot
+        cd /path/to/run2ul_mcgen/
 
-    cmsenv
-    scram b
+        mkdir HLT_step
+        cd HLT_step/
+        export SCRAM_ARCH=slc7_amd64_gcc700
+        source /cvmfs/cms.cern.ch/cmsset_default.sh
+        voms-proxy-init -voms cms
+        cmsrel CMSSW_10_2_16_UL
+        cd CMSSW_10_2_16_UL/src/
 
-    cd ../..
+        cmsenv
+        scram b
+
+        cd ../..
 
 
-    cmsDriver.py \
-        --python_filename TAU-RunIISummer20UL18HLT-00011_1_cfg.py \
-        --eventcontent RAWSIM \
-        --customise Configuration/DataProcessing/Utils.addMonitoring \
-        --datatier GEN-SIM-RAW \
-        --fileout file:TAU-RunIISummer20UL18HLT-00011.root \
-        --conditions 102X_upgrade2018_realistic_v15 \
-        --customise_commands process.source.bypassVersionCheck = cms.untracked.bool(True)  \
-        --step HLT:2018v32 \
-        --geometry DB:Extended \
-        --filein file:TAU-RunIISummer20UL18DIGI-00007.root \
-        --era Run2_2018 \
-        --no_exec \
-        --mc \
-        -n 10
+        cmsDriver.py \
+            --python_filename TAU-RunIISummer20UL18HLT-00011_1_cfg.py \
+            --eventcontent RAWSIM \
+            --customise Configuration/DataProcessing/Utils.addMonitoring \
+            --datatier GEN-SIM-RAW \
+            --fileout file:TAU-RunIISummer20UL18HLT-00011.root \
+            --conditions 102X_upgrade2018_realistic_v15 \
+            --customise_commands process.source.bypassVersionCheck = cms.untracked.bool(True)  \
+            --step HLT:2018v32 \
+            --geometry DB:Extended \
+            --filein file:TAU-RunIISummer20UL18DIGI-00007.root \
+            --era Run2_2018 \
+            --no_exec \
+            --mc \
+            -n 10
 
-    cmsRun TAU-RunIISummer20UL18HLT-00011_1_cfg.py
-    ```
+        cmsRun TAU-RunIISummer20UL18HLT-00011_1_cfg.py
+        ```
 
     Output: `TAU-RunIISummer20UL18HLT-00011.root`
 
@@ -372,41 +376,43 @@ Step 1 produces a `GEN-SIM` output file.
     previous steps. We will switch to `CMSSW_10_6_17_patch1` and `scram` again to
     load the `CMSSW`-related libraries.
 
-    ```shell
-    source /cvmfs/cms.cern.ch/cmsset_default.sh
-    source /cvmfs/cms.cern.ch/crab3/crab.sh
-    cmssw-el7 --bind /depot:/depot
-    cd /path/to/run2ul_mcgen/
+    ??? example "Commands for this step"
 
-    mkdir RECO_step
-    cd RECO_step
+        ```shell
+        source /cvmfs/cms.cern.ch/cmsset_default.sh
+        source /cvmfs/cms.cern.ch/crab3/crab.sh
+        cmssw-el7 --bind /depot:/depot
+        cd /path/to/run2ul_mcgen/
 
-    export SCRAM_ARCH=slc7_amd64_gcc700
-    voms-proxy-init -voms cms
-    cmsrel CMSSW_10_6_17_patch1
-    cd CMSSW_10_6_17_patch1/src
-    cmsenv
-    scram b
-    cd ../../
+        mkdir RECO_step
+        cd RECO_step
 
-    cmsDriver.py \
-        --python_filename TAU-RunIISummer20UL18RECO-00011_1_cfg.py \
-        --eventcontent AODSIM \
-        --customise Configuration/DataProcessing/Utils.addMonitoring \
-        --datatier AODSIM \
-        --fileout file:TAU-RunIISummer20UL18RECO-00011.root \
-        --conditions 106X_upgrade2018_realistic_v11_L1v1 \
-        --step RAW2DIGI,L1Reco,RECO,RECOSIM,EI \
-        --geometry DB:Extended \
-        --filein file:TAU-RunIISummer20UL18HLT-00011.root \
-        --era Run2_2018 \
-        --runUnscheduled \
-        --no_exec \
-        --mc \
-        -n 10
+        export SCRAM_ARCH=slc7_amd64_gcc700
+        voms-proxy-init -voms cms
+        cmsrel CMSSW_10_6_17_patch1
+        cd CMSSW_10_6_17_patch1/src
+        cmsenv
+        scram b
+        cd ../../
 
-    cmsRun TAU-RunIISummer20UL18RECO-00011_1_cfg.py
-    ```
+        cmsDriver.py \
+            --python_filename TAU-RunIISummer20UL18RECO-00011_1_cfg.py \
+            --eventcontent AODSIM \
+            --customise Configuration/DataProcessing/Utils.addMonitoring \
+            --datatier AODSIM \
+            --fileout file:TAU-RunIISummer20UL18RECO-00011.root \
+            --conditions 106X_upgrade2018_realistic_v11_L1v1 \
+            --step RAW2DIGI,L1Reco,RECO,RECOSIM,EI \
+            --geometry DB:Extended \
+            --filein file:TAU-RunIISummer20UL18HLT-00011.root \
+            --era Run2_2018 \
+            --runUnscheduled \
+            --no_exec \
+            --mc \
+            -n 10
+
+        cmsRun TAU-RunIISummer20UL18RECO-00011_1_cfg.py
+        ```
 
     Output: `TAU-RunIISummer20UL18RECO-00011.root`
 
@@ -442,42 +448,44 @@ Step 1 produces a `GEN-SIM` output file.
 
     This step uses `CMSSW_10_6_20`, the release of the McM request it reproduces.
 
-    ```shell
-    source /cvmfs/cms.cern.ch/cmsset_default.sh
-    source /cvmfs/cms.cern.ch/crab3/crab.sh
-    cmssw-el7 --bind /depot:/depot
-    cd /path/to/run2ul_mcgen/
+    ??? example "Commands for this step"
 
-    mkdir MINI_step
-    cd MINI_step
+        ```shell
+        source /cvmfs/cms.cern.ch/cmsset_default.sh
+        source /cvmfs/cms.cern.ch/crab3/crab.sh
+        cmssw-el7 --bind /depot:/depot
+        cd /path/to/run2ul_mcgen/
 
-    export SCRAM_ARCH=slc7_amd64_gcc700
-    cmsrel CMSSW_10_6_20
-    cd CMSSW_10_6_20/src
-    cmsenv
-    scram b
-    cd ../../
+        mkdir MINI_step
+        cd MINI_step
+
+        export SCRAM_ARCH=slc7_amd64_gcc700
+        cmsrel CMSSW_10_6_20
+        cd CMSSW_10_6_20/src
+        cmsenv
+        scram b
+        cd ../../
 
 
-    cmsDriver.py \
-        --python_filename TAU-RunIISummer20UL18MiniAODv2-00015_1_cfg.py \
-        --eventcontent MINIAODSIM \
-        --customise Configuration/DataProcessing/Utils.addMonitoring \
-        --datatier MINIAODSIM \
-        --fileout file:TAU-RunIISummer20UL18MiniAODv2-00015.root \
-        --conditions 106X_upgrade2018_realistic_v16_L1v1 \
-        --step PAT \
-        --procModifiers run2_miniAOD_UL \
-        --geometry DB:Extended \
-        --filein file:TAU-RunIISummer20UL18RECO-00011.root \
-        --era Run2_2018 \
-        --runUnscheduled \
-        --no_exec \
-        --mc \
-        -n 10
+        cmsDriver.py \
+            --python_filename TAU-RunIISummer20UL18MiniAODv2-00015_1_cfg.py \
+            --eventcontent MINIAODSIM \
+            --customise Configuration/DataProcessing/Utils.addMonitoring \
+            --datatier MINIAODSIM \
+            --fileout file:TAU-RunIISummer20UL18MiniAODv2-00015.root \
+            --conditions 106X_upgrade2018_realistic_v16_L1v1 \
+            --step PAT \
+            --procModifiers run2_miniAOD_UL \
+            --geometry DB:Extended \
+            --filein file:TAU-RunIISummer20UL18RECO-00011.root \
+            --era Run2_2018 \
+            --runUnscheduled \
+            --no_exec \
+            --mc \
+            -n 10
 
-    cmsRun TAU-RunIISummer20UL18MiniAODv2-00015_1_cfg.py
-    ```
+        cmsRun TAU-RunIISummer20UL18MiniAODv2-00015_1_cfg.py
+        ```
 
 === "Run 3"
 
@@ -534,40 +542,42 @@ Step 1 produces a `GEN-SIM` output file.
     For more details:
     <https://gitlab.cern.ch/cms-nanoAOD/nanoaod-doc/-/wikis/Instructions/Private-production>
 
-    ```shell
-    source /cvmfs/cms.cern.ch/cmsset_default.sh
-    source /cvmfs/cms.cern.ch/crab3/crab.sh
-    cmssw-el7 --bind /depot:/depot
-    cd /path/to/run2ul_mcgen/
+    ??? example "Commands for this step"
 
-    mkdir NANO_step
-    cd NANO_step
+        ```shell
+        source /cvmfs/cms.cern.ch/cmsset_default.sh
+        source /cvmfs/cms.cern.ch/crab3/crab.sh
+        cmssw-el7 --bind /depot:/depot
+        cd /path/to/run2ul_mcgen/
 
-    export SCRAM_ARCH=slc7_amd64_gcc700
-    voms-proxy-init -voms cms
-    cmsrel CMSSW_10_6_32_patch1
-    cd CMSSW_10_6_32_patch1/src
-    cmsenv
-    scram b
-    cd ../../
+        mkdir NANO_step
+        cd NANO_step
+
+        export SCRAM_ARCH=slc7_amd64_gcc700
+        voms-proxy-init -voms cms
+        cmsrel CMSSW_10_6_32_patch1
+        cd CMSSW_10_6_32_patch1/src
+        cmsenv
+        scram b
+        cd ../../
 
 
-    cmsDriver.py \
-        --python_filename TAU-RunIISummer20UL18NanoAODv9-00020_1_cfg.py \
-        --eventcontent NANOAODSIM \
-        --customise Configuration/DataProcessing/Utils.addMonitoring \
-        --datatier NANOAODSIM \
-        --fileout file:TAU-RunIISummer20UL18NanoAODv9-00001.root \
-        --conditions 106X_upgrade2018_realistic_v16_L1v1 \
-        --step NANO \
-        --filein file:TAU-RunIISummer20UL18MiniAODv2-00015.root \
-        --era Run2_2018,run2_nanoAOD_106Xv2 \
-        --no_exec \
-        --mc \
-        -n 10
+        cmsDriver.py \
+            --python_filename TAU-RunIISummer20UL18NanoAODv9-00020_1_cfg.py \
+            --eventcontent NANOAODSIM \
+            --customise Configuration/DataProcessing/Utils.addMonitoring \
+            --datatier NANOAODSIM \
+            --fileout file:TAU-RunIISummer20UL18NanoAODv9-00001.root \
+            --conditions 106X_upgrade2018_realistic_v16_L1v1 \
+            --step NANO \
+            --filein file:TAU-RunIISummer20UL18MiniAODv2-00015.root \
+            --era Run2_2018,run2_nanoAOD_106Xv2 \
+            --no_exec \
+            --mc \
+            -n 10
 
-    cmsRun TAU-RunIISummer20UL18NanoAODv9-00020_1_cfg.py
-    ```
+        cmsRun TAU-RunIISummer20UL18NanoAODv9-00020_1_cfg.py
+        ```
 
 === "Run 3"
 
