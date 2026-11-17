@@ -35,6 +35,12 @@ which only such a session can use.
 Restarting or stopping the session kills every process in it — including an
 agent running inside it — while `/home`, `/work` and `/depot` survive untouched.
 
+Codex runs your shell commands in its sandbox, where `psutil` and a local Dask
+cluster fail with `process PID not found` and nothing reaches the network until
+the user allows it. Such a failure is the sandbox's, not the facility's: rerun
+the command outside the sandbox, which asks the user, rather than reporting an
+outage.
+
 ### Storage
 
 Which volumes a worker can see is what most often breaks an otherwise correct

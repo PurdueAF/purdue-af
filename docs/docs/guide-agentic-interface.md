@@ -88,6 +88,24 @@ clusters, storage and logs without leaving the notebook.
     your browser disconnects. If you see a notebook behave in a way you do not
     expect, [tell us](support.md).
 
+### An agent acts as you
+
+An agent in your session is a process of yours: it reads and writes the storage
+you can, holds your credentials (grid proxy, Kerberos ticket, session token),
+and reaches Slurm, Dask Gateway and Ray as you do.
+
+* You are responsible for what an agent does in your session, as for any
+  command you run yourself.
+* An agent may run unattended. Your limits are its limits: the CPU and memory
+  of the session, your [storage quotas](storage.md#quotas), and the limits on
+  [Dask Gateway clusters](guide-dask-gateway.md) and [GPUs](gpus.md).
+* An agent sends what it reads to the model provider you signed it in with.
+
+The agents know the facility's storage rules from the platform context. Two of
+them the filesystem does not enforce, so they are worth knowing yourself:
+nothing is ever created at the top level of `/depot/cms/`, and under
+`/work/projects/` an agent stays in the project directory you name.
+
 ## Connecting from your own machine
 
 |               |                                                                    |
