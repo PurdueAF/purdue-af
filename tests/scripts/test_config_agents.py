@@ -1,10 +1,12 @@
-"""Tests for docker/purdue-af/scripts/config-agents.sh. `claude` and `codex`
-are stubs that record their argv; no config file may ever hold the token."""
+"""Tests for docker/purdue-af/scripts/config-agents.sh and the agent files the
+image ships. `claude` and `codex` are stubs that record their argv; no config
+file may ever hold the token."""
 
 import json
 import re
 import shlex
 import subprocess
+import tomllib
 
 import pytest
 from common import REPO
@@ -18,6 +20,10 @@ CONTEXT = REPO / "docker/purdue-af/agents/platform-context.md"
 MANAGED_BLOCK = REPO / "docker/purdue-af/scripts/managed-block.py"
 SOURCE_HELPER = "source /usr/local/bin/af-as-user.sh"
 HELPER = REPO / "docker/purdue-af/scripts/af-as-user.sh"
+CODEX_CONFIG = REPO / "docker/purdue-af/agents/codex-config.toml"
+OPENCODE_LAYER = REPO / "docker/purdue-af/agents/opencode.json"
+MCP_NAME = "purdue-af-agentic-interface"
+MCP_PATH = "/services/agentic-interface/mcp"
 
 STUB = """#!/bin/bash
 printf '%s\\n' "$*" >> "$AGENT_LOG"
@@ -51,7 +57,6 @@ def run_script(tmp_path, agent_home):
                     'NEW_HOME="/home/${NB_USER}"': (
                         f'NEW_HOME="{agent_home.parent}/${{NB_USER}}"'
                     ),
-                    'SKILL_SRC="/opt/purdue-af/skills"': f'SKILL_SRC="{SKILLS}"',
                     "/usr/local/bin/managed-block.py": str(MANAGED_BLOCK),
                     '"/opt/purdue-af/agents/platform-context.md"': f'"{context}"',
                 },
@@ -84,11 +89,10 @@ def run_script(tmp_path, agent_home):
     return _run
 
 
-def test_registers_with_both_agents(run_script):
+def test_registers_with_claude_code(run_script):
     result, calls = run_script()
     assert result.returncode == 0, result.stderr
     assert any(c.startswith("mcp add --scope user --transport http") for c in calls)
-    assert any(c.startswith("mcp add purdue-af-agentic-interface --url") for c in calls)
 
 
 def test_token_is_never_written_into_a_config(run_script):
@@ -98,16 +102,13 @@ def test_token_is_never_written_into_a_config(run_script):
     joined = "\n".join(calls)
     assert "super-secret-value" not in joined
     assert "Authorization: Bearer ${JUPYTERHUB_API_TOKEN}" in joined
-    # Codex takes the env var by name rather than a header
-    assert "--bearer-token-env-var JUPYTERHUB_API_TOKEN" in joined
 
 
 def test_stale_entry_is_removed_before_adding(run_script):
     """`mcp add` is not idempotent — a re-run must not fail or duplicate."""
     _, calls = run_script()
-    for tool_add in ("mcp add --scope user", "mcp add purdue-af-agentic-interface"):
-        add = next(i for i, c in enumerate(calls) if c.startswith(tool_add))
-        assert any(c.startswith("mcp remove") for c in calls[:add])
+    add = next(i for i, c in enumerate(calls) if c.startswith("mcp add --scope user"))
+    assert any(c.startswith("mcp remove") for c in calls[:add])
 
 
 def _adds(calls):
@@ -116,113 +117,144 @@ def _adds(calls):
 
 def test_url_follows_the_namespace(run_script):
     _, calls = run_script(NAMESPACE="cms-other")
-    adds = _adds(calls)
-    assert len(adds) == 2
-    assert all("agentic-interface.cms-other.svc.cluster.local:8888" in c for c in adds)
+    (add,) = _adds(calls)
+    assert "agentic-interface.cms-other.svc.cluster.local:8888" in add
 
 
 def test_url_defaults_to_the_production_namespace(run_script):
     _, calls = run_script()
-    assert all(
-        "agentic-interface.cms.svc.cluster.local:8888" in c for c in _adds(calls)
-    )
+    (add,) = _adds(calls)
+    assert "agentic-interface.cms.svc.cluster.local:8888" in add
 
 
 def test_mcp_path_matches_the_service_prefix(run_script):
     """The service strips JUPYTERHUB_SERVICE_PREFIX itself, so the path has to
     carry it — /mcp alone 404s."""
     _, calls = run_script()
-    assert all("/services/agentic-interface/mcp" in c for c in _adds(calls))
+    (add,) = _adds(calls)
+    assert MCP_PATH in add
 
 
-# --- opencode: a config layer of our own, never the user's file -----------
+# --- Codex: the server and the skill are image files -----------------------
 
 
-def _opencode_config(agent_home):
-    path = agent_home / ".config" / "opencode" / "purdue-af.json"
-    assert path.is_file(), "the hook wrote no opencode config"
-    return json.loads(path.read_text())
+def _codex_server():
+    ((name, server),) = tomllib.loads(CODEX_CONFIG.read_text())["mcp_servers"].items()
+    assert name == MCP_NAME
+    return server
 
 
-def test_opencode_gets_the_mcp_server_without_a_cli(run_script, agent_home):
-    """opencode has no `mcp add`, so registration is a file — which also means
-    it does not depend on the CLI being installed at the moment the hook runs.
-    A user who installs opencode into their own home later finds it wired."""
-    result, _ = run_script(tools=("claude", "codex"))
-    assert result.returncode == 0
-    server = _opencode_config(agent_home)["mcp"]["purdue-af-agentic-interface"]
+def test_codex_reads_the_mcp_server_from_its_system_config():
+    assert image_file("/etc/codex/config.toml") == CODEX_CONFIG
+    assert _codex_server()["url"].endswith(MCP_PATH)
+
+
+def test_codex_config_names_the_token_variable_not_the_token():
+    """Codex reads the variable at connect time, so the image file fits every
+    session and its rotating token."""
+    server = _codex_server()
+    assert server["bearer_token_env_var"] == "JUPYTERHUB_API_TOKEN"
+    assert set(server) == {"url", "bearer_token_env_var"}
+
+
+def test_a_codex_entry_left_in_the_home_is_removed(run_script, agent_home):
+    """A user-level entry of the same name outranks the system one, so one an
+    earlier image wrote would pin its address."""
+    config = agent_home / ".codex" / "config.toml"
+    config.parent.mkdir()
+    config.write_text(f'[mcp_servers.{MCP_NAME}]\nurl = "http://old"\n')
+    _, calls = run_script()
+    assert f"mcp remove {MCP_NAME}" in calls
+
+
+def test_a_home_without_the_codex_entry_is_left_alone(run_script, agent_home):
+    config = agent_home / ".codex" / "config.toml"
+    config.parent.mkdir()
+    config.write_text('[mcp_servers.mine]\nurl = "http://mine"\n')
+    _, calls = run_script()
+    assert not any(c == f"mcp remove {MCP_NAME}" for c in calls)
+    assert config.read_text() == '[mcp_servers.mine]\nurl = "http://mine"\n'
+
+
+# --- opencode: a config layer of the image, never the user's file ----------
+
+
+def _opencode_layer():
+    return json.loads(OPENCODE_LAYER.read_text())
+
+
+def _env(name):
+    """The value the Dockerfile's ENV gives a variable."""
+    match = re.search(rf'(?m)^ENV {name}="([^"]+)"$', DOCKERFILE.read_text())
+    assert match, f"the Dockerfile sets no {name}"
+    return match.group(1)
+
+
+def test_opencode_layer_is_the_file_the_session_environment_names():
+    """Every process of the session inherits the image's environment, so the
+    layer reaches terminals, the JupyterLab persona and the VS Code extension."""
+    assert image_file(_env("OPENCODE_CONFIG")) == OPENCODE_LAYER
+
+
+def test_opencode_layer_is_not_the_system_config():
+    """opencode's system config in /etc/opencode outranks a user's own files,
+    which would hold everyone to this layer's permissions; a file named by
+    OPENCODE_CONFIG is merged below the user's project config."""
+    assert not _env("OPENCODE_CONFIG").startswith("/etc/opencode")
+
+
+def test_opencode_gets_the_mcp_server():
+    server = _opencode_layer()["mcp"][MCP_NAME]
     assert server["type"] == "remote"
     assert server["enabled"] is True
-    assert "/services/agentic-interface/mcp" in server["url"]
+    assert server["url"].endswith(MCP_PATH)
 
 
-def test_opencode_persona_still_asks_before_editing_or_running(run_script, agent_home):
+def test_opencode_persona_still_asks_before_editing_or_running():
     """jupyter-ai ships its OpenCode persona with edit/bash set to "ask" and
     injects that as OPENCODE_CONFIG — but only when OPENCODE_CONFIG is unset,
-    and the export in this hook means it never is. Restating the two settings
-    is what keeps the JupyterLab chat asking before it edits a file or runs a
-    command; drop them and the approval prompts disappear with no other sign."""
-    run_script(tools=("claude", "codex", "opencode"))
-    assert _opencode_config(agent_home)["permission"] == {
-        "edit": "ask",
-        "bash": "ask",
-    }
+    and the image sets it. Restating the two settings is what keeps the
+    JupyterLab chat asking before it edits a file or runs a command; drop them
+    and the approval prompts disappear with no other sign."""
+    assert _opencode_layer()["permission"] == {"edit": "ask", "bash": "ask"}
 
 
-def test_opencode_config_is_a_separate_layer_not_the_users_file(run_script, agent_home):
-    """OPENCODE_CONFIG is merged between the user's global config and their
-    project config, so the facility never edits a file the user owns. Writing
-    into ~/.config/opencode/opencode.json would risk clobbering their settings
-    — and could not be parsed safely at all if they wrote it as JSONC."""
-    run_script()
-    assert not (agent_home / ".config/opencode/opencode.json").exists()
+def test_opencode_layer_never_stores_the_token():
+    """opencode expands `{env:...}` at connect time."""
+    headers = _opencode_layer()["mcp"][MCP_NAME]["headers"]
+    assert headers == {"Authorization": "Bearer {env:JUPYTERHUB_API_TOKEN}"}
 
 
-def test_opencode_config_is_written_with_privileges_dropped(run_script):
-    """~/.config lives in a persistent home the user controls between sessions,
-    so they can replace it with a symlink before restarting. A root mkdir and
-    redirect would follow that symlink, and a bare `chown` on it dereferences —
-    handing the user ownership of whatever it points at. Everything under
-    ~/.config is therefore written as the session user, and nothing chowns it
-    back."""
-    hook = SCRIPT.read_text()
-    assert "_as_user \"mkdir -p '${NEW_HOME}/.config/opencode'" in hook, (
-        "the opencode config must be written as the user, not as root"
-    )
-    # no chown anywhere in the hook may touch ~/.config
-    for line in hook.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("chown"):
-            continue
-        assert stripped.startswith("chown -R"), (
-            f"non-recursive chown dereferences symlinks: {stripped}"
-        )
-        assert "/.config" not in stripped, (
-            f"nothing under ~/.config may be chowned, it is user-controlled: {stripped}"
-        )
+def test_opencode_layer_carries_the_platform_context():
+    """opencode's rules lookup is first-match-wins: a project AGENTS.md
+    suppresses the global one. `instructions` is what keeps the guardrails
+    present in an analysis repo that has its own AGENTS.md."""
+    (instructions,) = _opencode_layer()["instructions"]
+    assert image_file(instructions) == CONTEXT
 
 
-def test_opencode_context_is_not_also_written_as_a_file(run_script, agent_home):
-    """opencode's `instructions` is documented in its schema as *additional*
-    instruction files — additive to its own AGENTS.md lookup, not a fallback
-    for it. Writing ~/.config/opencode/AGENTS.md as well would put the whole
-    platform context into every turn twice."""
-    run_script()
-    assert not (agent_home / ".config/opencode/AGENTS.md").exists(), (
-        "the context is delivered by `instructions`; a file here duplicates it"
-    )
+def test_opencode_layer_carries_the_skill():
+    (skills,) = _opencode_layer()["skills"]
+    assert image_file(f"{skills}/{SKILL}") == SKILLS / SKILL
 
 
-def test_opencode_instructions_are_omitted_when_the_context_is_missing(
-    run_script, agent_home, tmp_path
-):
-    """Guarded like every other use of the context path: a config naming a file
-    that is not there is worse than one that omits it."""
-    result, _ = run_script(context=tmp_path / "absent.md")
+def test_codex_and_opencode_reach_the_same_address():
+    """A service name without a namespace resolves in the session's own, so
+    one image file fits every deployment."""
+    url = _codex_server()["url"]
+    assert url == _opencode_layer()["mcp"][MCP_NAME]["url"]
+    assert url == f"http://agentic-interface:8888{MCP_PATH}"
+
+
+def test_an_opencode_layer_left_in_the_home_is_removed(run_script, agent_home):
+    config = agent_home / ".config" / "opencode"
+    config.mkdir(parents=True)
+    (config / "purdue-af.json").write_text("{}")
+    (config / "opencode.json").write_text('{"theme": "mine"}')
+    result, _ = run_script()
     assert result.returncode == 0, result.stderr
-    config = _opencode_config(agent_home)
-    assert "instructions" not in config
-    assert "mcp" in config, "the MCP server must still be registered"
+    assert not (config / "purdue-af.json").exists()
+    assert (config / "opencode.json").read_text() == '{"theme": "mine"}'
 
 
 @pytest.fixture(scope="session")
@@ -232,86 +264,65 @@ def managed_block():
     return load_script(MANAGED_BLOCK, "managed_block")
 
 
-def test_opencode_config_is_exported_so_the_session_picks_it_up(run_script):
-    """NAMESPACE is templated per deployment and the path depends on the
-    session user, so this cannot be a Dockerfile ENV. start.sh sources the hook
-    and then execs `sudo --preserve-env`, which carries the export through."""
-    hook = SCRIPT.read_text()
-    assert 'export OPENCODE_CONFIG="${OPENCODE_CFG}"' in hook
-    start = (REPO / "docker/purdue-af/jupyter/start.sh").read_text()
-    assert "--preserve-env" in start
-
-
-def test_opencode_config_carries_the_platform_context(run_script, agent_home):
-    """opencode's rules lookup is first-match-wins: a project AGENTS.md
-    suppresses the global one. `instructions` is what keeps the guardrails
-    present in an analysis repo that has its own AGENTS.md."""
-    run_script()
-    instructions = _opencode_config(agent_home)["instructions"]
-    assert any("platform-context.md" in i for i in instructions)
-
-
-def test_opencode_url_follows_the_namespace(run_script, agent_home):
-    run_script(NAMESPACE="cms-other")
-    url = _opencode_config(agent_home)["mcp"]["purdue-af-agentic-interface"]["url"]
-    assert "agentic-interface.cms-other.svc.cluster.local:8888" in url
-
-
-def test_opencode_config_never_stores_the_token(run_script, agent_home):
-    """Same property as the other two harnesses: opencode expands `{env:...}`
-    at connect time, so the rotating session token stays out of a file that
-    lives in a persistent home directory."""
-    run_script(JUPYTERHUB_API_TOKEN="super-secret-value")
-    raw = (agent_home / ".config/opencode/purdue-af.json").read_text()
-    assert "super-secret-value" not in raw
-    assert "{env:JUPYTERHUB_API_TOKEN}" in raw
-
-
-def test_unwritable_opencode_config_is_not_fatal(run_script, agent_home):
-    """Never break a session start: a home restored read-only, or a stale
-    root-owned ~/.config, must warn rather than take JupyterLab down."""
-    (agent_home / ".config").mkdir()
-    (agent_home / ".config").chmod(0o500)
-    try:
-        result, _ = run_script()
-    finally:
-        (agent_home / ".config").chmod(0o700)
-    assert result.returncode == 0
-    assert "WARNING" in result.stderr
-
-
 # --- the platform context reaches every harness ---------------------------
 
 
-HARNESS_CONTEXT_FILES = (
-    ".claude/CLAUDE.md",  # Claude Code
-    ".codex/AGENTS.md",  # Codex
-    # opencode is served by `instructions` in its config layer, not a file here
-    # — see test_opencode_context_is_not_also_written_as_a_file
-)
+def test_claude_code_reads_the_context_from_its_managed_policy_file():
+    assert image_file("/etc/claude-code/CLAUDE.md") == CONTEXT
 
 
-@pytest.mark.parametrize("relative", HARNESS_CONTEXT_FILES)
-def test_context_is_written_for_every_harness(run_script, agent_home, relative):
-    """The whole point of the feature: an agent started in a session knows the
-    facility's rules without anyone telling it to look them up."""
+def test_context_is_written_for_codex(run_script, agent_home):
+    """Codex reads no system-level instruction file, so the context goes into
+    the user's own."""
     result, _ = run_script()
     assert result.returncode == 0
-    written = (agent_home / relative).read_text()
+    written = (agent_home / ".codex/AGENTS.md").read_text()
     assert CONTEXT.read_text().strip() in written
 
 
-@pytest.mark.parametrize("relative", HARNESS_CONTEXT_FILES)
-def test_a_users_own_instructions_survive(run_script, agent_home, relative):
-    """These files belong to the user; only the block between the markers is
+def test_a_users_own_codex_instructions_survive(run_script, agent_home):
+    """The file belongs to the user; only the block between the markers is
     ours. A session start must never cost them their own notes."""
-    target = agent_home / relative
+    target = agent_home / ".codex/AGENTS.md"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("# My notes\n\nAlways use pytest -x.\n")
     run_script()
     after = target.read_text()
     assert "Always use pytest -x." in after
     assert CONTEXT.read_text().strip() in after
+
+
+def test_the_context_left_in_a_claude_home_is_removed(
+    run_script, agent_home, managed_block
+):
+    """With the block still in ~/.claude/CLAUDE.md, Claude Code would read the
+    context twice."""
+    target = agent_home / ".claude/CLAUDE.md"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        managed_block.apply_block("# My notes\n\nAlways use pytest -x.\n", "old AF\n")
+    )
+    result, _ = run_script()
+    assert result.returncode == 0, result.stderr
+    assert target.read_text() == "# My notes\n\nAlways use pytest -x.\n"
+
+
+def test_a_claude_file_holding_only_the_context_is_removed(
+    run_script, agent_home, managed_block
+):
+    target = agent_home / ".claude/CLAUDE.md"
+    target.parent.mkdir(parents=True)
+    target.write_text(managed_block.apply_block("", "old AF\n"))
+    run_script()
+    assert not target.exists()
+
+
+def test_a_users_own_claude_instructions_are_left_alone(run_script, agent_home):
+    target = agent_home / ".claude/CLAUDE.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("# My notes\n")
+    run_script()
+    assert target.read_text() == "# My notes\n"
 
 
 # --- never break a session start -----------------------------------------
@@ -336,24 +347,52 @@ def test_missing_nb_user_is_not_fatal(run_script):
     assert not calls
 
 
-def test_server_name_matches_the_repo_mcp_json(run_script):
-    import json
+def test_unwritable_home_is_not_fatal(run_script, agent_home):
+    """Never break a session start: a home restored read-only must warn rather
+    than take JupyterLab down."""
+    agent_home.chmod(0o500)
+    try:
+        result, _ = run_script()
+    finally:
+        agent_home.chmod(0o700)
+    assert result.returncode == 0
+    assert "WARNING" in result.stderr
 
-    name = json.loads((REPO / ".mcp.json").read_text())["mcpServers"]
-    (expected,) = name.keys()
+
+def test_server_name_matches_the_repo_mcp_json(run_script):
+    (expected,) = json.loads((REPO / ".mcp.json").read_text())["mcpServers"].keys()
+    assert expected == MCP_NAME
 
     _, calls = run_script()
-    assert all(expected in c for c in calls)
+    assert calls and all(expected in c for c in calls)
 
 
 # --- the bundled skill ----------------------------------------------------
 
 
-def test_skill_is_installed_into_the_claude_directory(run_script, agent_home):
-    result, _ = run_script()
-    assert result.returncode == 0
-    installed = agent_home / ".claude/skills" / SKILL
-    assert installed.read_text() == (SKILLS / SKILL).read_text()
+@pytest.mark.parametrize(
+    "directory",
+    [
+        "/etc/claude-code/.claude/skills",  # Claude Code
+        "/etc/codex/skills",  # Codex
+        "/opt/purdue-af/skills",  # opencode, through its config layer
+    ],
+)
+def test_the_skill_is_where_each_agent_reads_system_skills(directory):
+    assert image_file(f"{directory}/{SKILL}") == SKILLS / SKILL
+
+
+def test_the_skill_copy_left_in_a_claude_home_is_removed(run_script, agent_home):
+    """Claude Code would list the skill twice, and opencode, which reads
+    ~/.claude/skills too, a second copy that no longer follows the image."""
+    skills = agent_home / ".claude/skills"
+    (skills / MCP_NAME).mkdir(parents=True)
+    (skills / SKILL).write_text("old")
+    (skills / "mine").mkdir()
+    (skills / "mine" / "SKILL.md").write_text("mine")
+    run_script()
+    assert not (skills / MCP_NAME).exists()
+    assert (skills / "mine" / "SKILL.md").read_text() == "mine"
 
 
 def test_every_file_the_image_copies_is_an_image_input():
@@ -386,7 +425,6 @@ def test_dockerfile_pins_every_agent_version():
     [
         ("/usr/local/bin/managed-block.py", MANAGED_BLOCK),
         ("/opt/purdue-af/agents/platform-context.md", CONTEXT),
-        (f"/opt/purdue-af/skills/{SKILL}", SKILLS / SKILL),
     ],
 )
 def test_the_image_ships_what_the_hook_reads(path, source):
@@ -450,6 +488,24 @@ def test_stray_end_marker_before_the_block_does_not_duplicate_it(managed_block):
     assert twice.startswith(existing)
 
 
+def test_removing_takes_only_the_managed_section(managed_block):
+    seeded = managed_block.apply_block("# Mine\n\nkeep\n", SECTION)
+    with_tail = seeded + "\n## My own section\n\nmine\n"
+    out = managed_block.remove_block(with_tail)
+    assert out == "# Mine\n\nkeep\n\n## My own section\n\nmine\n"
+    assert managed_block.remove_block(out) == out
+
+
+def test_removing_from_a_file_of_only_the_section_leaves_nothing(managed_block):
+    assert managed_block.remove_block(managed_block.apply_block("", SECTION)) == ""
+
+
+def test_an_unfinished_block_is_not_removed(managed_block):
+    """Without its end marker there is no telling where the user's text resumes."""
+    existing = f"# Mine\n{managed_block.BEGIN}\nhalf\n"
+    assert managed_block.remove_block(existing) == existing
+
+
 def run_managed_block(managed_block, monkeypatch, *argv):
     monkeypatch.setattr("sys.argv", ["managed-block.py", *map(str, argv)])
     return managed_block.main()
@@ -464,6 +520,21 @@ def test_cli_writes_then_reports_current(managed_block, monkeypatch, tmp_path, c
     assert "updated" in capsys.readouterr().out
     run_managed_block(managed_block, monkeypatch, section, target)
     assert "already current" in capsys.readouterr().out
+
+
+def test_cli_removes_the_section_and_an_emptied_file(
+    managed_block, monkeypatch, tmp_path
+):
+    section = tmp_path / "section.md"
+    section.write_text(SECTION)
+    kept, emptied = tmp_path / "kept.md", tmp_path / "emptied.md"
+    kept.write_text("# Mine\n")
+    for target in (kept, emptied):
+        run_managed_block(managed_block, monkeypatch, section, target)
+        assert run_managed_block(managed_block, monkeypatch, "--remove", target) == 0
+    assert kept.read_text() == "# Mine\n"
+    assert not emptied.exists()
+    assert run_managed_block(managed_block, monkeypatch, "--remove", emptied) == 0
 
 
 def test_cli_rejects_bad_arguments(managed_block, monkeypatch):

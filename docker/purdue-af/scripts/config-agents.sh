@@ -1,24 +1,19 @@
 #!/bin/bash
-# Register the AF MCP server with each agent CLI (their code-server extensions
-# read the same configs), install the bundled skill, and write the platform
-# context where each harness reads it. Never fatal; everything lives in a
-# function that returns, since start.sh sources this file.
-#
-# No config stores the token: JUPYTERHUB_API_TOKEN rotates on every spawn and
-# the home is persistent, so each CLI expands the variable at connect time.
+# What the image cannot hold for the agent CLIs: the AF MCP server in Claude
+# Code's user config and the platform context in Codex's instruction file; the
+# home's copies of what the image does hold are removed. Never fatal; everything
+# lives in a function that returns, since start.sh sources this file.
 
 source /usr/local/bin/af-as-user.sh
 
 _config_agents() {
 	# Same name as the repo .mcp.json and jupyter_server_config.py.
-	local MCP_NAME MCP_URL AUTH_HEADER SKILL_SRC AGENT_SECTION PYTHON NEW_HOME
-	local OPENCODE_CFG OPENCODE_INSTRUCTIONS target
+	local MCP_NAME MCP_URL AUTH_HEADER AGENT_SECTION PYTHON NEW_HOME
 	MCP_NAME="purdue-af-agentic-interface"
 	# In-cluster address: JUPYTERHUB_PUBLIC_HUB_URL is empty inside a session.
 	MCP_URL="http://agentic-interface.${NAMESPACE:-cms}.svc.cluster.local:8888/services/agentic-interface/mcp"
-	# Single-quoted: the placeholder reaches the config verbatim.
+	# Single-quoted: the placeholder reaches the config verbatim, since the token rotates on every spawn.
 	AUTH_HEADER='Authorization: Bearer ${JUPYTERHUB_API_TOKEN}'
-	SKILL_SRC="/opt/purdue-af/skills"
 	AGENT_SECTION="/opt/purdue-af/agents/platform-context.md"
 	# Rocky 8's system python3 is 3.6.
 	PYTHON="/opt/pixi/.pixi/envs/base-env/bin/python3"
@@ -36,95 +31,34 @@ _config_agents() {
 
 	af_repair_ownership "${NEW_HOME}/.claude" "${NEW_HOME}/.codex"
 
-	# `mcp add` owns the merge into files that also hold user state
-	# (~/.claude.json, ~/.codex/config.toml) — never rewrite those wholesale.
-	# Adding is not idempotent, so drop any previous entry first.
-	_register() {
-		local tool="$1" remove="$2" add="$3"
-		if ! command -v "${tool}" >/dev/null 2>&1; then
-			echo "config-agents: ${tool} CLI not found, skipping" >&2
-			return 0
-		fi
-		_as_user "${remove}" >/dev/null 2>&1 || true
-		if _as_user "${add}" >/dev/null 2>&1; then
-			echo "config-agents: registered '${MCP_NAME}' with ${tool}"
+	# Claude Code's system-level MCP entries lock out a user's own servers or expand no
+	# variable, so this one goes into ~/.claude.json; `mcp add` is not idempotent.
+	if command -v claude >/dev/null 2>&1; then
+		_as_user "claude mcp remove --scope user '${MCP_NAME}'" >/dev/null 2>&1 || true
+		if _as_user "claude mcp add --scope user --transport http '${MCP_NAME}' '${MCP_URL}' --header '${AUTH_HEADER}'" >/dev/null 2>&1; then
+			echo "config-agents: registered '${MCP_NAME}' with claude"
 		else
-			echo "config-agents: WARNING could not register MCP server with ${tool}" >&2
-		fi
-		return 0
-	}
-
-	_register claude \
-		"claude mcp remove --scope user '${MCP_NAME}'" \
-		"claude mcp add --scope user --transport http '${MCP_NAME}' '${MCP_URL}' --header '${AUTH_HEADER}'"
-
-	_register codex \
-		"codex mcp remove '${MCP_NAME}'" \
-		"codex mcp add '${MCP_NAME}' --url '${MCP_URL}' --bearer-token-env-var JUPYTERHUB_API_TOKEN"
-
-	# opencode: OPENCODE_CONFIG is a layer merged between the user's global and
-	# project configs. `instructions` is its only platform-context channel: a
-	# project AGENTS.md would shadow a global one.
-	OPENCODE_INSTRUCTIONS=""
-	if [[ -f "${AGENT_SECTION}" ]]; then
-		OPENCODE_INSTRUCTIONS="\"instructions\": [\"${AGENT_SECTION}\"],"
-	fi
-	OPENCODE_CFG="${NEW_HOME}/.config/opencode/purdue-af.json"
-	# As the user: ~/.config may be a user-planted symlink.
-	# `permission` restates jupyter-ai's persona defaults, which it only applies
-	# when OPENCODE_CONFIG is unset. Unquoted heredoc: ${MCP_URL} expands, \$schema not.
-	if _as_user "mkdir -p '${NEW_HOME}/.config/opencode' && cat >'${OPENCODE_CFG}'" <<-JSON
-		{
-		  "\$schema": "https://opencode.ai/config.json",
-		  ${OPENCODE_INSTRUCTIONS}
-		  "permission": {
-		    "edit": "ask",
-		    "bash": "ask"
-		  },
-		  "mcp": {
-		    "${MCP_NAME}": {
-		      "type": "remote",
-		      "url": "${MCP_URL}",
-		      "enabled": true,
-		      "headers": {
-		        "Authorization": "Bearer {env:JUPYTERHUB_API_TOKEN}"
-		      }
-		    }
-		  }
-		}
-	JSON
-	then
-		# Reaches the server via start.sh's `sudo --preserve-env`.
-		export OPENCODE_CONFIG="${OPENCODE_CFG}"
-		echo "config-agents: registered '${MCP_NAME}' with opencode"
-	else
-		echo "config-agents: WARNING could not write ${OPENCODE_CFG}" >&2
-	fi
-
-	# Claude Code skills bundled in the image.
-	if [[ -d "${SKILL_SRC}" ]]; then
-		if af_as_user mkdir -p "${NEW_HOME}/.claude/skills" &&
-			af_as_user cp -r "${SKILL_SRC}/." "${NEW_HOME}/.claude/skills/"; then
-			echo "config-agents: installed bundled skills into ${NEW_HOME}/.claude/skills"
-		else
-			echo "config-agents: WARNING could not install bundled skills" >&2
+			echo "config-agents: WARNING could not register MCP server with claude" >&2
 		fi
 	else
-		echo "config-agents: no bundled skills at ${SKILL_SRC}, skipping" >&2
+		echo "config-agents: claude CLI not found, skipping" >&2
 	fi
 
-	# Each harness's user-scope instruction file; opencode uses `instructions`
-	# above. Written even when the CLI is absent.
+	# Codex has no system-level instruction file.
 	if [[ -f "${AGENT_SECTION}" ]]; then
-		for target in "${NEW_HOME}/.claude/CLAUDE.md" "${NEW_HOME}/.codex/AGENTS.md"; do
-			if _as_user "'${PYTHON}' /usr/local/bin/managed-block.py '${AGENT_SECTION}' '${target}'"; then
-				:
-			else
-				echo "config-agents: WARNING could not update ${target}" >&2
-			fi
-		done
+		if ! _as_user "'${PYTHON}' /usr/local/bin/managed-block.py '${AGENT_SECTION}' '${NEW_HOME}/.codex/AGENTS.md'"; then
+			echo "config-agents: WARNING could not update ${NEW_HOME}/.codex/AGENTS.md" >&2
+		fi
 	else
 		echo "config-agents: no bundled agent section, skipping" >&2
+	fi
+
+	# What /etc/claude-code, /etc/codex and OPENCODE_CONFIG hold, where a home still has a copy.
+	_as_user "'${PYTHON}' /usr/local/bin/managed-block.py --remove '${NEW_HOME}/.claude/CLAUDE.md'" || true
+	_as_user "rm -f '${NEW_HOME}/.claude/skills/${MCP_NAME}/SKILL.md' '${NEW_HOME}/.config/opencode/purdue-af.json'" || true
+	_as_user "rmdir '${NEW_HOME}/.claude/skills/${MCP_NAME}'" 2>/dev/null || true
+	if _as_user "grep -qsF '[mcp_servers.${MCP_NAME}]' '${NEW_HOME}/.codex/config.toml'"; then
+		_as_user "codex mcp remove '${MCP_NAME}'" >/dev/null 2>&1 || true
 	fi
 
 	return 0
