@@ -62,6 +62,9 @@ spec:
             - name: dashboards
               mountPath: /dashboards
               readOnly: true
+            - name: docs
+              mountPath: /docs
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir:
@@ -74,6 +77,11 @@ spec:
             items:
               - key: default.json
                 path: default.json
+        # docs/docs, as flux/experimental generates it for PurdueAF Agent; read_af_doc reads it on each call.
+        - name: docs
+          configMap:
+            name: mattermost-agent-docs
+            optional: true
       serviceAccountName: agentic-interface
       nodeSelector:
         cms-af-prod: "true"

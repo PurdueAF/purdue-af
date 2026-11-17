@@ -192,6 +192,8 @@ The available tools cover:
   start, inspect and stop your own Ray cluster.
 * **Logs** — query your JupyterLab / VS Code server logs and Dask worker and
   scheduler logs, with time ranges and filters.
+* **Documentation** — the pages of this site, so the agent answers a how-to
+  question from them and links the page.
 
 The server also exposes one invocable **workflow prompt**, `create_cluster`,
 which walks the agent through the cluster questions when its client

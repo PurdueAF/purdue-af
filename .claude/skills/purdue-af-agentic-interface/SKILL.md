@@ -5,7 +5,7 @@ description: Manage a Purdue Analysis Facility session — start/stop/restart th
 
 # Purdue Analysis Facility — Agentic Interface
 
-Skill version: `0.8`
+Skill version: `0.9`
 
 > **Setup** — this skill drives the `purdue-af-agentic-interface` MCP server.
 > Inside a Purdue AF session it is registered at startup with the session's own
@@ -33,6 +33,9 @@ answer for anything the platform tracks centrally:
 
 ## Before you call
 
+- `read_af_doc` before telling the user how to do something on the facility:
+  it reads a page of the user documentation, and the server's instructions
+  list the pages. Link the page you used.
 - `get_facility_metrics` for how busy the facility is: it returns the public
   dashboard's facility-wide numbers, so there is no need to send someone there.
 - `list_prometheus_metrics`, then `query_prometheus`, for any other number
