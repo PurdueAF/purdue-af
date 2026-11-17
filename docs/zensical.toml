@@ -50,10 +50,10 @@ nav = [
     ] },
     { "Scale-out and GPUs" = [
         { "Computing resources" = "scaling-out.md" },
-        { "GPUs in a session" = "gpus.md" },
         { "Dask" = "guide-dask.md" },
         { "Dask Gateway" = "guide-dask-gateway.md" },
-        { "Training with Ray" = "guide-ray-train.md" },
+        { "GPUs in a session" = "gpus.md" },
+        { "Multi-GPU training with Ray" = "guide-ray-train.md" },
     ] },
     { "Guides" = [
         { "MC generation" = "guide-mc-gen.md" },
