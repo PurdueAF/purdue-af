@@ -53,7 +53,7 @@ nav = [
         { "Dask" = "guide-dask.md" },
         { "Dask Gateway" = "guide-dask-gateway.md" },
         { "GPUs in a session" = "gpus.md" },
-        { "Multi-GPU training with Ray" = "guide-ray-train.md" },
+        { "Multi-GPU training" = "guide-ray-train.md" },
     ] },
     { "AI agents" = [
         { "Agents in a session" = "agents.md" },
