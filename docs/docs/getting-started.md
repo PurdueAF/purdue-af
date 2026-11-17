@@ -3,7 +3,7 @@
 These steps take about 15 minutes and leave you with a working session that has
 access to CMS data and analysis software.
 
-[🚀 Login to Purdue Analysis Facility](https://cms.geddes.rcac.purdue.edu/hub){ target="_blank" }
+[Log in to Purdue Analysis Facility](https://cms.geddes.rcac.purdue.edu/hub){ .md-button .md-button--primary target="_blank" }
 
 ## 1. Choose a login method
 

@@ -6,7 +6,7 @@ You work in a personal JupyterLab or VS Code session, with CMS data, a
 maintained HEP software stack, GPUs, and Dask and Ray clusters within reach.
 
 <div style="text-align: center" markdown>
-[🚀 Login to Purdue Analysis Facility](https://cms.geddes.rcac.purdue.edu/hub){ target="_blank" }
+[Log in to Purdue Analysis Facility](https://cms.geddes.rcac.purdue.edu/hub){ .md-button .md-button--primary target="_blank" }
 </div>
 
 Log in with a Purdue, CERN, or FNAL account — see
@@ -51,7 +51,7 @@ Log in with a Purdue, CERN, or FNAL account — see
     Use the shared Pixi environment with `coffea`, `ROOT` and `pytorch`, or
     [build your own](guide-pixi.md).
 
--   **[Data and storage](storage.md)**
+-   **[Storage and data](storage.md)**
 
     ---
 
