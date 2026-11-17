@@ -8,12 +8,18 @@
   tools_any: [list_af_profiles, get_ray_capacity]
   answer: ['\d']
   answer_not: ["can't|cannot|unable", '\bskill\b']
+- name: up-and-free-gpus
+  ask: is AF up? How many GPUs are available?
+  tools_any: [list_af_profiles, get_ray_capacity]
+  answer: ['\d']
+  answer_not: ["Prometheus|monitoring side|only exposes"]
 - name: free-gpus-nrp
   ask: are there GPUs free on NRP for a Ray job right now?
   tools_any: [get_ray_capacity]
   answer: ['\d']
 - name: a100-slice-for-session
   ask: can I get an A100 slice for my session right now?
+  intent: general
   tools_any: [list_af_profiles]
 - name: work-utilization
   ask: what's the utilization of /work/ storage?
@@ -38,6 +44,7 @@
   tools_any: [get_facility_health]
 - name: profiles
   ask: what session profiles can I choose from?
+  intent: general
   tools_any: [list_af_profiles]
 - name: dask-worker-sizes
   ask: what worker sizes can a Dask Gateway cluster have?
@@ -71,6 +78,11 @@
   answer_not: ['link\?state=']
 - name: my-session-unlinked
   ask: is my session running?
+  private: true
+  intent: personal
+  answer: ["link"]
+- name: start-session-unlinked
+  ask: start a session for me with a T4
   private: true
   intent: personal
   answer: ["link"]

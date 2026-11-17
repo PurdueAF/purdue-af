@@ -64,6 +64,9 @@ def test_an_answer_is_judged_by_its_tools_its_text_and_its_intent():
         r"answer lacks /\d/",
         "answer has /cannot/",
     ]
+    named = {"intent": "general", "tools": ["get_ray_capacity"]}
+    named["answer"] = "4 free (from `get_ray_capacity`)."
+    assert evaluate.judge(case, named) == ["answer names a tool"]
 
 
 async def test_a_general_question_is_asked_as_the_bot(run):
