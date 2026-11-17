@@ -43,7 +43,7 @@ RUN set -euo pipefail \
       boost-devel diffutils ncurses-compat-libs cmake \
       glibc-static libcurl-devel \
       gfal2-util-scripts python3-gfal2 gfal2-plugin-xrootd gfal2-plugin-http \
-      voms-clients-cpp myproxy patch tini socat \
+      voms-clients-cpp myproxy patch tini \
       # absent from the CUDA base: ps, kinit/klist (eos-connect.sh), gcc -latomic
       procps-ng psmisc krb5-workstation xz cpio libatomic \
  && dnf clean all \
@@ -145,11 +145,6 @@ RUN PATH="${BASE_ENV_DIR}/bin:${PATH}" \
         "@agentclientprotocol/codex-acp@${CODEX_ACP_VERSION}" && \
     rm -rf "${HOME}/.npm"
 
-# Claude Code's sandbox runs the bwrap Codex vendors; EL8's 0.4.0 in /usr/bin would replace Codex's own.
-RUN bwrap="$(find "${NPM_GLOBAL}/lib/node_modules/@openai/codex" -path '*/codex-resources/bwrap' -type f -print -quit)" && \
-    test -x "${bwrap}" && \
-    ln -s "${bwrap}" "${NPM_GLOBAL}/bwrap"
-
 COPY --chown=root:root pixi/check-env.py /tmp/check-env.py
 RUN "${BASE_ENV_DIR}/bin/python" /tmp/check-env.py \
         --manifest "${PIXI_HOME}/pixi.toml" --env base-env && \
@@ -206,8 +201,6 @@ COPY --chown=root:root docker/purdue-af/agents/platform-context.md \
     /opt/purdue-af/agents/platform-context.md
 COPY --chown=root:root --chmod=755 docker/purdue-af/scripts/managed-block.py \
     /usr/local/bin/managed-block.py
-COPY --chown=root:root docker/purdue-af/agents/claude-sandbox.json \
-    /etc/claude-code/managed-settings.d/sandbox.json
 
 ENV PATH="/usr/local/bin:/opt/npm-global/bin:/opt/pixi/.pixi/envs/base-env/bin:/opt/pixi/bin:${PATH}"
 
@@ -247,9 +240,6 @@ RUN nvcc --version >/dev/null && \
     opencode --version >/dev/null && \
     command -v claude-agent-acp >/dev/null && \
     command -v codex-acp >/dev/null && \
-    socat -V >/dev/null && \
-    bwrap="$(jq -r .sandbox.bwrapPath /etc/claude-code/managed-settings.d/sandbox.json)" && \
-    "${bwrap}" --version >/dev/null && \
     python3 -c "import jupyterlab; print('smoke ok:', jupyterlab.__version__)" && \
     python3 -c "import jupyter_ai; print('smoke ok: jupyter-ai present')"
 

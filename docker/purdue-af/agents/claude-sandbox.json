@@ -1,6 +1,0 @@
-{
-  "sandbox": {
-    "enableWeakerNestedSandbox": true,
-    "bwrapPath": "/opt/npm-global/bwrap"
-  }
-}

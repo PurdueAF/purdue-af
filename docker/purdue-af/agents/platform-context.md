@@ -35,13 +35,10 @@ which only such a session can use.
 Restarting or stopping the session kills every process in it — including an
 agent running inside it — while `/home`, `/work` and `/depot` survive untouched.
 
-When a sandbox wraps your shell commands (Codex's by default, Claude Code's
-once the user turns it on), some failures come from it and read like facility
-faults: `process PID not found` from psutil or a local Dask cluster in either;
-in Claude Code's also `Unable to contact slurm controller`, XRootD's `Invalid
-address`, a Dask Gateway cluster that times out connecting, and `Too many
-levels of symbolic links` on the first access to a CVMFS repository. Rerun such
-a command outside the sandbox, which asks the user, rather than reporting an
+Codex runs your shell commands in its sandbox, where `psutil` and a local Dask
+cluster fail with `process PID not found` and nothing reaches the network until
+the user allows it. Such a failure is the sandbox's, not the facility's: rerun
+the command outside the sandbox, which asks the user, rather than reporting an
 outage.
 
 ### Storage
