@@ -5,15 +5,16 @@ PurdueAF Agent, a service account on
 application. It
 answers an @mention in one channel, in a thread, later replies in that
 thread that mention nobody else, direct messages, and @mentions in group
-messages, from the user docs and the
-[agentic interface](../agentic-interface/README.md)'s facility-wide tools, with
+messages, from the
+[agentic interface](../agentic-interface/README.md)'s facility-wide tools, the
+user docs among them, with
 a role of the [LLM proxy](../agentic-analysis/README.md#llm-proxy).
 
 | File                 | What it is                                                                    |
 | -------------------- | ----------------------------------------------------------------------------- |
 | `agent.py`           | The bot: polls its channels, answers mentions, caps each user's questions, serves the login |
 | `system-prompt.md`   | What the model is told; read on each question                                 |
-| `deployment.yaml`    | Runs `agent.py` from the `mattermost-agent` ConfigMap, the docs from `mattermost-agent-docs` |
+| `deployment.yaml`    | Runs `agent.py` from the `mattermost-agent` ConfigMap                          |
 | `networkpolicy.yaml` | Ingress from the Hub's proxy; egress to the agentic interface, the LLM proxy and HTTPS outside |
 | `pvc.yaml`           | The volume holding the Mattermost login and the linked people's tokens        |
 | `service.yaml`       | The route the Hub's proxy sends the login to                                  |
@@ -79,12 +80,11 @@ already serve the tool annotations and scopes the bot reads.
 
 `MATTERMOST_TEAM` and `MATTERMOST_CHANNEL` in `deployment.yaml` name the channel,
 by the names in its URL; the log says why when it cannot have it. The bot
-answers anyone who writes to it; personal answers need a linked account. A new `docs/docs/` page is added to
-`mattermost-agent-docs` in [`flux/experimental`](../../flux/experimental/kustomization.yaml).
+answers anyone who writes to it; personal answers need a linked account.
 
 Tuning, all in `agent.py`: `POLL_SECONDS`, `USER_LIMIT` and
-`USER_WINDOW_SECONDS`, `CONCURRENT_ANSWERS`, `MAX_TURNS`. The prompt and the
-docs apply on the next question; a change to `agent.py` applies when its pod is
+`USER_WINDOW_SECONDS`, `CONCURRENT_ANSWERS`, `MAX_TURNS`. The prompt applies
+on the next question; a change to `agent.py` applies when its pod is
 deleted, and a change to the role in `models.toml` when the LLM proxy's is.
 
 People mention the bot by the service account's username.

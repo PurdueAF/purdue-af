@@ -278,15 +278,7 @@ def tool_call(name, arguments="{}", id="call-1"):
 
 
 @pytest.fixture
-def docs(tmp_path):
-    directory = tmp_path / "docs"
-    directory.mkdir()
-    (directory / "storage.md").write_text("# Storage\n\nHome is backed up.\n")
-    return directory
-
-
-@pytest.fixture
-def make(tmp_path, docs):
+def make(tmp_path):
     created = []
 
     async def build(*replies):
@@ -319,7 +311,6 @@ def make(tmp_path, docs):
             agent.Mattermost(clients[0]),
             clients[1],
             facility,
-            agent.Docs(docs),
             prompt,
             "facility-assistant",
             TEAM_URL,
@@ -580,25 +571,22 @@ async def test_a_new_direct_message_is_answered_from_its_first_post(make):
     assert [r["message"] for r in server.replies] == ["Hello."]
 
 
-async def test_tools_are_limited_to_the_facility_ones_and_docs(make):
+async def test_tools_are_limited_to_the_facility_ones(make):
     bot, server, llm, facility = await make(
         tool_call("get_facility_health"),
         tool_call("stop_af_session", id="call-2"),
-        tool_call("read_doc", '{"page": "storage"}', id="call-3"),
-        {"content": "Healthy, and home is backed up."},
+        {"content": "Healthy."},
     )
     server.posts = server.thread = {"p1": post()}
     bot.cursors["c1"] = 1000
     await poll(bot)
     offered = [t["function"]["name"] for t in llm.bodies[0]["tools"]]
-    assert offered == ["read_doc", "get_facility_health"]
+    assert offered == ["get_facility_health"]
     assert facility.mcp.calls == ["get_facility_health"]
     results = [m["content"] for m in llm.bodies[-1]["messages"] if m["role"] == "tool"]
     assert results[0] == "**Healthy**"
     assert "no tool" in results[1]
-    assert "Home is backed up." in results[2]
     system = llm.bodies[0]["messages"][0]["content"]
-    assert "storage: Storage" in system
     assert "This conversation is in the channel." in system
 
 
@@ -730,7 +718,7 @@ async def test_a_session_against_a_real_mcp_server_sends_the_hub_token(tmp_path)
     token.write_text("hub-token\n")
     facility = agent.Facility(f"http://127.0.0.1:{port}/mcp", token)
     bot = agent.Agent(
-        None, None, facility, None, None, "r", TEAM_URL, CHANNEL_URL, None, None
+        None, None, facility, None, "r", TEAM_URL, CHANNEL_URL, None, None
     )
     try:
         async with facility.session() as session:
@@ -1154,7 +1142,7 @@ async def test_a_general_question_never_uses_the_askers_token(make):
     await bot.handle(question)
     assert facility.tokens == [None]
     offered = [t["function"]["name"] for t in llm.bodies[0]["tools"]]
-    assert offered == ["read_doc", "get_facility_health"]
+    assert offered == ["get_facility_health"]
     assert server.replies[-1]["channel_id"] == "c1"
 
 
@@ -1829,7 +1817,7 @@ def test_every_key_the_pod_reads_is_in_the_secret():
 
 
 def test_every_user_doc_is_mounted():
-    files = generator(load_yaml(EXPERIMENTAL), "mattermost-agent-docs")["files"]
+    files = generator(load_yaml(EXPERIMENTAL), "user-docs")["files"]
     pages = {f.rsplit("/", 1)[1] for f in files}
     assert pages == {p.name for p in (REPO / "docs" / "docs").glob("*.md")} - {
         "contributing.md"

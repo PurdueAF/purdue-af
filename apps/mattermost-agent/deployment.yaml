@@ -92,8 +92,6 @@ spec:
                   key: client-token
             - name: LLM_ROLE
               value: facility-assistant
-            - name: DOCS_DIR
-              value: /docs
             - name: PROMPT_FILE
               value: /agent/system-prompt.md
           ports:
@@ -115,9 +113,6 @@ spec:
             - name: code
               mountPath: /agent
               readOnly: true
-            - name: docs
-              mountPath: /docs
-              readOnly: true
             - name: hub-token
               mountPath: /etc/hub-token
               readOnly: true
@@ -129,9 +124,6 @@ spec:
         - name: code
           configMap:
             name: mattermost-agent
-        - name: docs
-          configMap:
-            name: mattermost-agent-docs
         # One key of the z2jh `hub` Secret, updated in place once the Hub registers the service.
         - name: hub-token
           secret:

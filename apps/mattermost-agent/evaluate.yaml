@@ -48,23 +48,23 @@
   tools_any: [list_af_profiles]
 - name: dask-worker-sizes
   ask: what worker sizes can a Dask Gateway cluster have?
-  tools_any: [list_dask_cluster_options, read_doc]
+  tools_any: [list_dask_cluster_options, read_af_doc]
 - name: howto-dask-gateway
   ask: how do I start a Dask Gateway cluster from a notebook?
-  tools_any: [read_doc]
+  tools_any: [read_af_doc]
   answer: ["Gateway"]
 - name: howto-eos
   ask: how do I read files from CERN EOS on the AF?
-  tools_any: [read_doc]
+  tools_any: [read_af_doc]
 - name: howto-pixi
   ask: how do I make my own pixi environment?
-  tools_any: [read_doc]
+  tools_any: [read_af_doc]
 - name: howto-vscode
   ask: how do I connect my local VS Code to the AF?
-  tools_any: [read_doc]
+  tools_any: [read_af_doc]
 - name: home-quota
   ask: how big is the home directory quota?
-  tools_any: [read_doc, query_prometheus]
+  tools_any: [read_af_doc, query_prometheus]
   answer: ['\d']
 - name: link-request
   ask: link my AF account please
