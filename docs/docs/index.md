@@ -19,11 +19,6 @@ Log in with a Purdue, CERN, or FNAL account — see
     Create your first session and set up GitHub and Grid access, in about 15
     minutes.
 
--   **[AI agents](agents.md)**
-
-    Claude Code, Codex and OpenCode run in every session and already know the
-    facility.
-
 -   **[Software](software.md)**
 
     Use the shared Pixi environment with `coffea`, `ROOT` and `pytorch`, or
@@ -43,6 +38,11 @@ Log in with a Purdue, CERN, or FNAL account — see
 
     Start a session with an A100 or T4 GPU, or train on several GPUs with Ray
     from a notebook.
+
+-   **[AI agents](agents.md)**
+
+    Claude Code, Codex and OpenCode run in every session and already know the
+    facility.
 
 </div>
 

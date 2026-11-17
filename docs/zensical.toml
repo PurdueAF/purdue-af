@@ -23,23 +23,21 @@ edit_uri = "edit/main/docs/docs/"
 extra_css = ["stylesheets/extra.css"]
 
 
-# Navigation: one section per topic. A label here is the sidebar's; a page's
-# own title is its first heading.
+# Navigation: one section per topic. A label here is also the page's title in
+# browser tabs, search results and llms.txt, so it must stand on its own.
 nav = [
     { "Home" = "index.md" },
     { "Get started" = [
         { "First steps" = "getting-started.md" },
         { "Login methods" = "login-methods.md" },
         { "Interfaces and tools" = "interface.md" },
-    ] },
-    { "AI agents" = [
-        { "In a session" = "agents.md" },
-        { "From your own machine" = "guide-agentic-interface.md" },
+        { "SSH access" = "guide-ssh-access.md" },
+        { "Local IDE" = "guide-ide-connection.md" },
     ] },
     { "Software" = [
-        { "Overview" = "software.md" },
-        { "Pixi" = "guide-pixi.md" },
-        { "Conda" = "guide-conda.md" },
+        { "Software stacks" = "software.md" },
+        { "Pixi environments" = "guide-pixi.md" },
+        { "Conda environments" = "guide-conda.md" },
         { "Combine" = "guide-combine.md" },
         { "MC generation" = "guide-mc-gen.md" },
     ] },
@@ -52,23 +50,21 @@ nav = [
         { "File transfer" = "guide-file-transfer.md" },
     ] },
     { "Scaling out" = [
-        { "Overview" = "scaling-out.md" },
+        { "Choosing a method" = "scaling-out.md" },
         { "Dask" = "guide-dask.md" },
         { "Dask Gateway" = "guide-dask-gateway.md" },
     ] },
     { "GPUs" = [
-        { "Overview" = "gpus.md" },
+        { "GPU access" = "gpus.md" },
         { "Training with Ray" = "guide-ray-train.md" },
         { "RooFit on GPUs" = "guide-roofit-cuda.md" },
     ] },
-    { "Remote access" = [
-        { "SSH" = "guide-ssh-access.md" },
-        { "Your own IDE" = "guide-ide-connection.md" },
+    { "AI agents" = [
+        { "Agents in a session" = "agents.md" },
+        { "Agents on your machine" = "guide-agentic-interface.md" },
     ] },
-    { "Facility" = [
-        { "Hardware" = "hardware.md" },
-        { "Monitoring dashboard" = "https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard" },
-    ] },
+    { "Hardware" = "hardware.md" },
+    { "Monitoring dashboard" = "https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard" },
     { "Help" = [
         { "Troubleshooting" = "troubleshooting.md" },
         { "Support" = "support.md" },
