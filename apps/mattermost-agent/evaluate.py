@@ -139,6 +139,12 @@ async def ask(case: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
     return seen
 
 
+# A facility tool's name, which an answer never shows.
+TOOL_NAME = re.compile(
+    r"\b(?:get|list|query|submit)_[a-z]+_[a-z_]+|\bquery_prometheus\b"
+)
+
+
 def judge(case: dict[str, Any], seen: dict[str, Any]) -> list[str]:
     """What is wrong with an answer, by the case's expectations."""
     wrong = []
@@ -153,6 +159,8 @@ def judge(case: dict[str, Any], seen: dict[str, Any]) -> list[str]:
     for pattern in case.get("answer_not") or []:
         if re.search(pattern, seen["answer"], re.IGNORECASE | re.DOTALL):
             wrong.append(f"answer has /{pattern}/")
+    if TOOL_NAME.search(seen["answer"]):
+        wrong.append("answer names a tool")
     if agent.LEAK.search(seen["answer"]):
         wrong.append("answer holds markup or reasoning")
     return wrong
