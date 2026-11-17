@@ -103,7 +103,6 @@ async def ask(case: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
         Thread(post),
         llm,
         agent.Facility(args.mcp_url, args.token_file),
-        agent.Docs(REPO / "docs" / "docs"),
         HERE / "system-prompt.md",
         args.role,
         "cms-exp",

@@ -1,6 +1,6 @@
 """PurdueAF Agent: answers @mentions in one Mattermost channel, and direct
-messages from that channel's members, from the user docs and the agentic
-interface's facility-wide tools, as a Hub service that no user stands behind."""
+messages from that channel's members, from the agentic interface's
+facility-wide tools, the user docs among them, as a Hub service that no user stands behind."""
 
 from __future__ import annotations
 
@@ -105,7 +105,6 @@ PERSONAL_MODE = (
 )
 # Refreshed this early, so that a poll never races the expiry.
 EXPIRY_MARGIN_SECONDS = 300.0
-DOC_TITLE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 # Before a name, so a reply can never ping @channel, @all or a person.
 AT_NAME = re.compile(r"(?<![\w.])@(?=[\w.-])")
 # Each way an answer can fail, said as what happened.
@@ -541,27 +540,6 @@ class Linking:
         return hub_user
 
 
-class Docs:
-    """The user docs, read on each use: kubelet updates them in place."""
-
-    def __init__(self, directory: Path) -> None:
-        self.directory = directory
-
-    def pages(self) -> dict[str, Path]:
-        return {path.stem: path for path in sorted(self.directory.glob("*.md"))}
-
-    def index(self) -> str:
-        lines = []
-        for name, path in self.pages().items():
-            title = DOC_TITLE.search(path.read_text())
-            lines.append(f"- {name}: {title.group(1) if title else name}")
-        return "\n".join(lines)
-
-    def read(self, page: str) -> str:
-        path = self.pages().get(page)
-        return path.read_text() if path else f"Error: there is no page {page!r}."
-
-
 class Mattermost:
     def __init__(self, client: httpx.AsyncClient) -> None:
         self.client = client
@@ -654,21 +632,6 @@ def clean(text: str) -> str:
     return AT_NAME.sub("@​", text.strip())[:MAX_POST_CHARS]
 
 
-def read_doc_tool() -> dict[str, Any]:
-    return {
-        "type": "function",
-        "function": {
-            "name": "read_doc",
-            "description": "Read one page of the user documentation.",
-            "parameters": {
-                "type": "object",
-                "properties": {"page": {"type": "string"}},
-                "required": ["page"],
-            },
-        },
-    }
-
-
 def read_only(tool: Any) -> bool:
     """What a tool's MCP annotations say; a tool that says nothing changes things."""
     hints = getattr(tool, "annotations", None)
@@ -707,7 +670,6 @@ class Agent:
         mattermost: Mattermost,
         llm: httpx.AsyncClient,
         facility: Facility,
-        docs: Docs,
         prompt_file: Path,
         role: str,
         team: str,
@@ -718,7 +680,6 @@ class Agent:
         self.mattermost = mattermost
         self.llm = llm
         self.facility = facility
-        self.docs = docs
         self.prompt_file = prompt_file
         self.role = role
         self.team = team
@@ -987,8 +948,6 @@ class Agent:
         """A tool's result, or what went wrong for the model to work with."""
         try:
             args = json.loads(arguments or "{}")
-            if name == "read_doc":
-                return self.docs.read(str(args.get("page")))[:MAX_TOOL_CHARS]
             if name not in allowed:
                 return f"Error: there is no tool {name!r}."
             result = await session.call_tool(name, args)
@@ -1038,7 +997,7 @@ class Agent:
         )
         system = (
             f"{self.prompt_file.read_text()}\n\n{mode} {status}\n\n"
-            f"This conversation is in {place}.\n\nPages:\n{self.docs.index()}"
+            f"This conversation is in {place}."
         )
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system},
@@ -1050,7 +1009,7 @@ class Agent:
                 usable = offered(listed.tools, personal)
                 allowed = {t.name for t in usable}
                 changing = {t.name for t in usable if not read_only(t)}
-                tools = [read_doc_tool()] + [openai_tool(t) for t in usable]
+                tools = [openai_tool(t) for t in usable]
                 if self.facility.instructions:
                     messages[0]["content"] += (
                         "\n\nThe facility tools' own guidance. What it says of a "
@@ -1240,7 +1199,6 @@ def main() -> None:
         Mattermost(mattermost),
         llm,
         Facility(os.environ["MCP_URL"], hub_token_file),
-        Docs(Path(os.environ["DOCS_DIR"])),
         Path(os.environ["PROMPT_FILE"]),
         os.environ["LLM_ROLE"],
         os.environ["MATTERMOST_TEAM"],

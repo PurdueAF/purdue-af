@@ -25,5 +25,8 @@ Tool names, arguments and limits are not documented here: the server is
 self-describing, and `tools/list` is the source of truth.
 
 Inside a session the service is reached at its in-cluster address with the
-session's own token; `config-agents.sh` in the session image registers it
+session's own token, as the session image configures each agent
 ([docker/purdue-af/README.md](../../docker/purdue-af/README.md)).
+
+`read_af_doc` reads the `user-docs` ConfigMap; a new `docs/docs/` page is added to
+it in [`flux/experimental`](../../flux/experimental/kustomization.yaml).
