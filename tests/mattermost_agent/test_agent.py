@@ -3,6 +3,7 @@ server, and its wiring to the app's manifests."""
 
 import asyncio
 import json
+import re
 import threading
 import time
 
@@ -66,7 +67,8 @@ class FakeMattermost:
         path = request.url.path.removeprefix("/api/v4")
         if request.method == "POST":
             self.replies.append(json.loads(request.content))
-            return httpx.Response(201, json={})
+            sent = {"id": f"r{len(self.replies)}", "create_at": 3000}
+            return httpx.Response(201, json=sent)
         if path == "/users/me":
             return httpx.Response(200, json=BOT)
         if path == f"/teams/name/{TEAM_URL}/channels/name/{CHANNEL_URL}":
@@ -133,6 +135,8 @@ class FakeLLM:
         self.checks = []
         self.unhealthy = set()
         self.personal = "general"
+        self.judged = []
+        self.cause = "retrieval"
 
     def __call__(self, request):
         if request.url.path == "/config":
@@ -152,8 +156,14 @@ class FakeLLM:
             return httpx.Response(
                 200, json={"choices": [{"message": {"content": self.personal}}]}
             )
-        self.bodies.append(body)
-        reply = self.replies.pop(0)
+        if body["messages"][0]["content"].startswith(agent.CAUSE_CHECK):
+            self.judged.append(body["messages"])
+            reply = (
+                self.cause if isinstance(self.cause, int) else {"content": self.cause}
+            )
+        else:
+            self.bodies.append(body)
+            reply = self.replies.pop(0)
         if isinstance(reply, int):
             return httpx.Response(reply)
         return httpx.Response(200, json={"choices": [{"message": reply}]})
@@ -1262,7 +1272,7 @@ async def test_a_failed_check_says_why(make):
     llm.unhealthy = set()
 
     async def broken(*args):
-        raise agent.Failure(agent.LLM_UNREACHABLE)
+        raise agent.Failure(agent.LLM_UNREACHABLE, "llm_unreachable")
 
     bot.complete = broken
     question = post("q", "@purdueaf-agent up?")
@@ -1813,6 +1823,144 @@ async def test_addresses_in_tool_results_never_reach_the_model(make):
 
     out = await bot.call(Session(), "query_prometheus", "{}", {"query_prometheus"})
     assert out == 'up{instance="<address>",node="paf-a01",version="1.2.3"} 1'
+
+
+def counted(bot, name, **labels):
+    """One series of the bot's metrics."""
+    series = name + "{" + ",".join(f'{k}="{v}"' for k, v in labels.items()) + "} "
+    lines = [x for x in bot.metrics().splitlines() if x.startswith(series)]
+    return int(lines[0].removeprefix(series))
+
+
+def answer_with(*reactions, id="r1"):
+    """The bot's own reply as Mattermost returns it once someone reacts to it."""
+    marks = [{"user_id": user, "emoji_name": emoji} for user, emoji in reactions]
+    return post(id, "Up.", at=3000, user_id="bot", metadata={"reactions": marks})
+
+
+async def answered(make, *replies):
+    """A bot that has answered one question in the channel, as reply r1."""
+    bot, server, llm, facility = await make(*replies)
+    question = post()
+    server.posts = server.thread = {"p1": question}
+    bot.cursors["c1"] = 1000
+    await poll(bot)
+    return bot, server, llm
+
+
+async def reacted(bot, server, *reactions):
+    server.posts = {"r1": answer_with(*reactions)}
+    server.thread = {"p1": post(), "r1": answer_with()}
+    await poll(bot)
+    await asyncio.gather(*bot.tasks)
+
+
+async def test_answers_are_counted_by_what_was_asked_and_how_it_ended(make):
+    bot, server, *_ = await make({"content": "Up."}, 500)
+    await ready(bot)
+    asks = [post(f"p{n}") for n in range(agent.USER_LIMIT + 1)]
+    server.thread = {"p0": asks[0]}
+    for question in asks[:2]:
+        await bot.handle(question)
+    bot.asked["u1"].extend([time.monotonic()] * agent.USER_LIMIT)
+    await bot.handle(asks[2])
+    await bot.handle(dm("d", "unlink"))
+    count = agent.ANSWERS_METRIC
+    assert counted(bot, count, intent="general", outcome="answered") == 1
+    assert counted(bot, count, intent="general", outcome="llm_failed") == 1
+    assert counted(bot, count, intent="unknown", outcome="limited") == 1
+    assert counted(bot, count, intent="unlink", outcome="answered") == 1
+    assert counted(bot, count, intent="personal", outcome="answered") == 0
+    transport = httpx.ASGITransport(app=agent.web(bot, "http://mm"))
+    page = await httpx.AsyncClient(base_url=PUBLIC, transport=transport).get("/metrics")
+    assert page.text == bot.metrics()
+    assert not re.search(r"\bu1\b|\bp0\b|\bAF\b", page.text)
+
+
+async def test_a_reply_that_could_not_be_posted_is_counted(make):
+    bot, server, *_ = await make({"content": "Up."})
+    await ready(bot)
+    original = server.__call__
+
+    def refuse_posting(request):
+        if request.method == "POST":
+            return httpx.Response(403, json={})
+        return original(request)
+
+    bot.mattermost.client._transport = httpx.MockTransport(refuse_posting)
+    server.thread = {"p1": post()}
+    await bot.handle(post())
+    assert counted(bot, agent.ANSWERS_METRIC, intent="general", outcome="no_reply") == 1
+
+
+async def test_a_thumb_on_an_answer_counts_once_for_each_person(make):
+    bot, server, _ = await answered(make, {"content": "Up."})
+    feedback = agent.FEEDBACK_METRIC
+    await reacted(bot, server, ("u1", "+1"))
+    await reacted(bot, server, ("u1", "+1"))
+    assert counted(bot, feedback, reaction="up") == 1
+    await reacted(bot, server)
+    await reacted(bot, server, ("u1", "+1"), ("u1", "thumbsup_dark_skin_tone"))
+    assert counted(bot, feedback, reaction="up") == 1
+    await reacted(bot, server, ("u1", "+1"), ("u2", "+1_light_skin_tone"), ("u3", "-1"))
+    assert counted(bot, feedback, reaction="up") == 2
+    assert counted(bot, feedback, reaction="down") == 1
+
+
+async def test_a_thumb_on_a_failure_notice_is_not_feedback(make):
+    bot, server, llm = await answered(make, 500)
+    await reacted(bot, server, ("u1", "-1"))
+    assert counted(bot, agent.FEEDBACK_METRIC, reaction="down") == 0
+    assert llm.judged == []
+
+
+async def test_only_thumbs_people_leave_on_an_answer_are_feedback(make):
+    bot, server, llm = await answered(make, {"content": "Up."})
+    thumb = {"user_id": "u2", "emoji_name": "-1"}
+    server.posts = {"p1": post(metadata={"reactions": [thumb]})}
+    await poll(bot)
+    await reacted(bot, server, ("u1", "heart"), ("u2", "+1_tada"), ("bot", "-1"))
+    assert counted(bot, agent.FEEDBACK_METRIC, reaction="up") == 0
+    assert counted(bot, agent.FEEDBACK_METRIC, reaction="down") == 0
+    assert llm.judged == []
+
+
+async def test_the_first_thumbs_down_on_an_answer_is_judged_once(make, caplog):
+    bot, server, llm = await answered(
+        make, tool_call("get_facility_health"), {"content": "Up."}
+    )
+    with caplog.at_level("INFO", logger="mattermost-agent"):
+        await reacted(bot, server, ("u2", "thumbsdown"))
+        await reacted(bot, server, ("u2", "thumbsdown"), ("u3", "-1"))
+    assert counted(bot, agent.FEEDBACK_METRIC, reaction="down") == 2
+    assert counted(bot, agent.CAUSES_METRIC, cause="retrieval") == 1
+    [(system, said)] = llm.judged
+    assert system["content"].endswith("ran these tools: get_facility_health.")
+    assert said["content"] == "user: is the AF up?\nassistant: Up."
+    logged = "\n".join(r.getMessage() for r in caplog.records)
+    assert "post p1: thumbs-down, cause=retrieval" in logged
+    assert not re.search(r"\bu[123]\b|AF up|Up\.", logged)
+
+
+@pytest.mark.parametrize("cause", [500, "I think the person is right."])
+async def test_a_thumbs_down_that_cannot_be_judged_is_still_counted(make, cause):
+    bot, server, llm = await answered(
+        make, {"content": "Up."}, {"content": "Still up."}
+    )
+    llm.cause = cause
+    await reacted(bot, server, ("u2", "-1"))
+    assert counted(bot, agent.CAUSES_METRIC, cause="unknown") == 1
+    server.posts = server.thread = {"p2": post("p2", at=4000)}
+    await poll(bot)
+    assert replies(server)[-1] == "Still up."
+
+
+async def test_only_the_last_answers_are_followed(make, monkeypatch):
+    monkeypatch.setattr(agent, "MAX_FOLLOWED", 1)
+    bot, server, _ = await answered(make, {"content": "Up."}, {"content": "Up."})
+    server.posts = server.thread = {"p2": post("p2", at=4000)}
+    await poll(bot)
+    assert list(bot.followed) == ["r2"]
 
 
 def test_every_key_the_pod_reads_is_in_the_secret():
