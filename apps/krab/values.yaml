@@ -11,7 +11,7 @@ celery:
     # The AF nodes, which mount /eos.
     nodeSelector:
       node/type: null
-      cms-af-prod: "true"
+      ${af_node_label:=cms-af-prod}: ${af_node_label_value:="true"}
     tolerations: &af-tolerations
       - key: hub.jupyter.org/dedicated
         operator: Equal
@@ -62,7 +62,7 @@ postgres:
     requestedSize: 10Gi
     className: ${singlenode_storage_class}
   nodeSelector: &af-nodes
-    cms-af-prod: "true"
+    ${af_node_label:=cms-af-prod}: ${af_node_label_value:="true"}
   tolerations: *af-tolerations
 
 rabbitmq:

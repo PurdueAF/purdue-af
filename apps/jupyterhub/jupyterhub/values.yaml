@@ -3,7 +3,8 @@ singleuser:
   uid: 0
   cmd: "start-singleuser.sh"
   # Also scopes the continuous image puller: z2jh copies it onto prePuller pods.
-  nodeSelector: { "cms-af-prod": "true" }
+  nodeSelector:
+    ${af_node_label:=cms-af-prod}: ${af_node_label_value:="true"}
   image:
     name: "geddes2-registry.rcac.purdue.edu/ghcr-proxy-cache/purdueaf/purdue-af"
     tag: "0.14.5"
@@ -248,7 +249,8 @@ hub:
   image:
     # Tag unset: the chart default follows the chart version in helmrelease.yaml.
     name: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/jupyterhub/k8s-hub-slim
-  nodeSelector: { "cms-af-prod": "true" }
+  nodeSelector:
+    ${af_node_label:=cms-af-prod}: ${af_node_label_value:="true"}
   db:
     type: sqlite-pvc
     pvc:
@@ -404,7 +406,7 @@ ingress:
 proxy:
   chp:
     nodeSelector:
-      cms-af-prod: "true"
+      ${af_node_label:=cms-af-prod}: ${af_node_label_value:="true"}
     tolerations:
       - key: "hub.jupyter.org/dedicated"
         operator: "Equal"
