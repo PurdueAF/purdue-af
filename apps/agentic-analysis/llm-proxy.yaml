@@ -24,7 +24,7 @@ spec:
         runAsUser: 1000
         runAsGroup: 1000
       nodeSelector:
-        cms-af-prod: "true"
+        ${af_node_label:=cms-af-prod}: ${af_node_label_value:="true"}
       tolerations:
         - key: hub.jupyter.org/dedicated
           operator: Equal

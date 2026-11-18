@@ -2,7 +2,7 @@ singleNamespaceInstall: true
 
 # Every AF workload runs on the cms-af-prod nodes (alloy tails only those).
 nodeSelector:
-  cms-af-prod: "true"
+  ${af_node_label:=cms-af-prod}: ${af_node_label_value:="true"}
 tolerations:
   - key: "hub.jupyter.org/dedicated"
     operator: "Equal"

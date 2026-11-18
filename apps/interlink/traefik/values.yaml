@@ -49,7 +49,7 @@ service:
     metallb.universe.tf/loadBalancerIPs: 128.211.160.122
 
 nodeSelector:
-  cms-af-prod: "true"
+  ${af_node_label:=cms-af-prod}: ${af_node_label_value:="true"}
 tolerations:
   - key: hub.jupyter.org/dedicated
     operator: Equal

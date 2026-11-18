@@ -10,7 +10,7 @@ template:
   spec:
     automountServiceAccountToken: false
     nodeSelector:
-      cms-af-prod: "true"
+      ${af_node_label:=cms-af-prod}: ${af_node_label_value:="true"}
     tolerations:
       - key: hub.jupyter.org/dedicated
         operator: Equal
