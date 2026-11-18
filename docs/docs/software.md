@@ -6,7 +6,7 @@ to least recommended:
 1. **Pixi environments** — the recommended way to manage analysis software.
 2. **Conda environments** — supported; use Pixi for new projects.
 3. **LCG stacks** distributed via CVMFS — useful for special cases such as
-   CUDA-enabled ROOT.
+   [CUDA-enabled ROOT](guide-roofit-cuda.md).
 4. **Apptainer/Singularity images** via CVMFS — a last resort for software that
    requires a different operating system.
 
@@ -76,13 +76,28 @@ usable, the project must:
 Conda environments are discovered automatically and appear as kernels if they
 have the `ipykernel` package installed and are stored in a
 [publicly readable directory](storage.md#storing-custom-pixi-or-conda-environments) —
-see [Creating Conda environments and Jupyter kernels](guide-conda.md).
+see [Conda environments](guide-conda.md).
 
-## Combine
+## Analysis tools
 
-[Combine](https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit/) is
-included in the global Pixi environment (package `cms-combine`) — see
-[Using Combine at Purdue AF](guide-combine.md).
+All of these but PocketCoffea are in the global Pixi environment; the
+[CMS Common Analysis Tools documentation](https://cms-analysis.docs.cern.ch)
+covers more.
+
+* [ROOT](https://root.cern) and [PyROOT](https://root.cern/manual/python/) —
+  in a terminal, `pixi shell` in `/work/pixi/global/`, then `root -l`. Canvases
+  and `TBrowser` cannot open, since there is no X11 forwarding; in a notebook,
+  `TCanvas::Draw` displays plots. To run RooFit fits on a GPU, see
+  [RooFit on GPUs](guide-roofit-cuda.md).
+* [Coffea](https://coffea-hep.readthedocs.io/) — columnar analysis in Python.
+* [PocketCoffea](https://pocketcoffea.readthedocs.io/en/stable/) — a declarative
+  framework on top of Coffea, installed in your own environment; its
+  [dask@purdue-af executor](https://pocketcoffea.readthedocs.io/en/stable/running.html#executors-availability)
+  runs on [Dask Gateway](guide-dask-gateway.md).
+* [RDataFrame](https://root.cern.ch/doc/master/group__tutorial__dataframe.html) —
+  in C++ or Python, in any environment that has ROOT.
+* [Combine](https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit/)
+  (package `cms-combine`) — see [Running Combine](guide-combine.md).
 
 ## CMSSW
 

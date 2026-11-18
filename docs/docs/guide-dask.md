@@ -1,4 +1,4 @@
-# Scaling out with Dask
+# Local Dask clusters
 
 If your analysis code is written in Python, it is likely that it can be accelerated
 using the [Dask](https://docs.dask.org/en/stable/) library. Dask includes multiple
@@ -57,7 +57,7 @@ In the code above:
 
 A local cluster can be used to parallelize the analysis code over local CPU cores.
 The number of workers that you can create is limited by the
-[resources of your session](scaling-out.md#session-resources).
+[resources of your session](scaling-out.md#your-session).
 
 ??? note "LocalCluster setup"
 
@@ -75,9 +75,8 @@ Dask Gateway provides a way to scale out to multiple compute nodes, within
 [its limits](guide-dask-gateway.md#limits).
 
 Please refer to the following page for detailed documentation about Dask Gateway
-at the Purdue Analysis Facility: [Dask Gateway at Purdue AF](guide-dask-gateway.md).
+at the Purdue Analysis Facility: [Dask Gateway](guide-dask-gateway.md).
 
 !!! note "See also"
 
-    * [Dask Gateway cluster setup (demo notebook)](https://github.com/PurdueAF/purdue-af-demos/blob/master/gateway-cluster.ipynb)
-    * [Scaling out — overview of all methods](scaling-out.md)
+    * [Scale-out overview](scaling-out.md) — every way to scale out

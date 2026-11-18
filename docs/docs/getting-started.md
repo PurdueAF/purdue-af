@@ -1,12 +1,9 @@
-# Getting started
+# First steps
 
-Welcome to the Purdue Analysis Facility!
+These steps take about 15 minutes and leave you with a working session that has
+access to CMS data and analysis software.
 
-This guide will help you to quickly set up the work environment for your analysis.
-It should take about 15 minutes to go through all the steps; after that, you will
-have a fully functional session with access to CMS data and analysis software.
-
-[🚀 Login to Purdue Analysis Facility](https://cms.geddes.rcac.purdue.edu/hub){ target="_blank" }
+[Log in to Purdue Analysis Facility](https://cms.geddes.rcac.purdue.edu/hub){ .md-button .md-button--primary target="_blank" }
 
 ## 1. Choose a login method
 
@@ -20,7 +17,7 @@ guest computing account.
 
 After a successful login, you will be redirected to a page where you can select
 the number of CPU cores, the amount of RAM
-([what the selection means](scaling-out.md#session-resources)), and (optionally)
+([what the selection means](scaling-out.md#your-session)), and (optionally)
 a [GPU](gpus.md) for your session. You can also choose which web interface the
 session starts with: **JupyterLab** (default) or **VS Code (code-server)**.
 
@@ -85,12 +82,12 @@ A VOMS proxy is required to access CMS data via XRootD, submit CRAB jobs, and us
    [CMS TWiki](https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookStartingGrid),
    specifically the section **"Obtaining and installing your Certificate"**.
    To upload the certificate files (`usercert.pem` / `userkey.pem`) to Purdue AF,
-   see [Uploading and downloading files](guide-file-transfer.md).
+   see [Uploading and downloading files](interface.md#uploading-and-downloading-files).
 
 2. (Optional) Specify the path where your VOMS proxy will be stored. Dask
    Gateway workers and Slurm jobs can only read a proxy stored on a volume they
    [mount](storage.md#overview). For Dask Gateway, see
-   [Reading data via XRootD](guide-dask-gateway.md#environment-variables).
+   [Environment variables](guide-dask-gateway.md#environment-variables).
 
 3. Activate the VOMS proxy:
 
@@ -104,9 +101,9 @@ Join the Mattermost channel and the mailing list listed in [Support](support.md)
 
 ## Next steps
 
-* Learn the [JupyterLab interface and other ways to work at Purdue AF](interface.md)
-* Set up a [project-specific Pixi environment](guide-pixi.md)
-* Try the [interactive demos](https://github.com/PurdueAF/purdue-af-demos)
+* Ask an [AI agent](agents.md) in your session: run `claude`, `codex` or
+  `opencode` in a terminal.
+* Learn the [interfaces](interface.md) and the [analysis tools](software.md#analysis-tools).
+* Set up a [project-specific Pixi environment](guide-pixi.md).
 * When your analysis outgrows a single session, [scale out with Dask Gateway](guide-dask-gateway.md)
-* Run `claude`, `codex` or `opencode` in a terminal — all three come
-  pre-connected to the [agentic interface](guide-agentic-interface.md), or connect your own agent
+  or [train on GPUs with Ray](guide-ray-train.md).

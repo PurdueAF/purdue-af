@@ -1,4 +1,4 @@
-# Dask Gateway at Purdue AF
+# Dask Gateway
 
 Dask Gateway is a service that allows users to manage Dask clusters in a
 multi-tenant environment such as the Purdue Analysis Facility. Its workers run
@@ -57,8 +57,11 @@ cluster = gateway.new_cluster(
     env=dict(os.environ),  # pass environment as a dictionary
 )
 
-# If working in a Jupyter Notebook, the following will create a widget
-# which can be used to scale the cluster interactively:
+# Scale to a fixed number of workers, or between two numbers as the work needs:
+cluster.scale(10)
+# cluster.adapt(minimum=0, maximum=50)
+
+# In a Jupyter Notebook, this shows a widget that scales the cluster too:
 cluster
 ```
 
@@ -240,5 +243,4 @@ for cluster_info in gateway.list_clusters():
 
 !!! note "See also"
 
-    * [Dask Gateway cluster setup (demo notebook)](https://github.com/PurdueAF/purdue-af-demos/blob/master/gateway-cluster.ipynb)
     * [Troubleshooting](troubleshooting.md#dask-gateway)

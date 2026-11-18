@@ -9,7 +9,7 @@ import time
 import httpx
 import pytest
 import uvicorn
-from common import EXPERIMENTAL, REPO, generator, load_script, load_yaml
+from common import REPO, generator, load_script, load_yaml
 from cryptography.fernet import Fernet
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
@@ -1816,8 +1816,17 @@ def test_every_key_the_pod_reads_is_in_the_secret():
     assert keys == set(secret["stringData"])
 
 
-def test_every_user_doc_is_mounted():
-    files = generator(load_yaml(EXPERIMENTAL), "user-docs")["files"]
+@pytest.mark.parametrize(
+    "root",
+    [
+        p
+        for p in sorted((REPO / "flux").glob("*/kustomization.yaml"))
+        if "name: user-docs" in p.read_text()
+    ],
+    ids=lambda p: p.parent.name,
+)
+def test_every_user_doc_is_mounted(root):
+    files = generator(load_yaml(root), "user-docs")["files"]
     pages = {f.rsplit("/", 1)[1] for f in files}
     assert pages == {p.name for p in (REPO / "docs" / "docs").glob("*.md")} - {
         "contributing.md"

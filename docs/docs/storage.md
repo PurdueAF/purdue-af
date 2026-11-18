@@ -2,18 +2,30 @@
 
 ## Overview
 
-The following table summarizes size, access modes, and accessibility of each storage
-volume (scroll sideways for details).
+| Storage volume | Path | Size per user | Access |
+| --- | --- | --- | --- |
+| AF home storage | `/home/<username>/` | 25 GB | Read/write |
+| Purdue Depot storage | `/depot/cms/` | up to 1 TB | Read/write for Purdue users, read-only for others |
+| AF work storage | `/work/users/<username>/` | 100 GB | Read/write |
+| AF shared project storage | `/work/projects/` | up to 1 TB | Read/write |
+| Purdue EOS | `/eos/purdue/` | up to 100 TB | Read-only (writable via `gfal`/`xrdcp`) |
+| CVMFS | `/cvmfs/` | N/A | Read-only |
+| CERNBox (CERN EOS) | `/eos/cern/` | N/A | Read/write |
 
-| Storage volume | Path | Size per user | Access mode | Mounted in Slurm jobs | Mounted in Dask Gateway workers | Mounted in Ray clusters | Writable by users w/o Purdue account |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| AF home storage | `/home/<username>/` | 25 GB | Read/write | ❌ | ❌ | ❌ | ✅ |
-| Purdue Depot storage | `/depot/cms/` | up to 1 TB | Read/write for Purdue users, read-only for others | ✅ | ✅ | ✅ | ❌ |
-| AF work storage | `/work/users/<username>/` | 100 GB | Read/write | ❌ | ✅ | ✅ | ✅ |
-| AF shared project storage | `/work/projects/` | up to 1 TB | Read/write | ❌ | ✅ | ✅ | ✅ |
-| Purdue EOS | `/eos/purdue/` | up to 100 TB | Read-only (writable via `gfal`/`xrdcp`) | ❌ | ✅ | ✅ | ❌ |
-| CVMFS | `/cvmfs/` | N/A | Read-only | ✅ | ✅ | ✅ | ❌ |
-| CERNBox (CERN EOS) | `/eos/cern/` | N/A | Read/write | ❌ | ❌ | ❌ | ✅ |
+A path that works in your session may not exist where your job runs:
+
+| Path | Slurm jobs | Dask Gateway workers | Ray clusters | Writable without a Purdue account |
+| --- | --- | --- | --- | --- |
+| `/home/<username>/` | ❌ | ❌ | ❌ | ✅ |
+| `/depot/cms/` | ✅ | ✅ | ✅ | ❌ |
+| `/work/users/<username>/` | ❌ | ✅ | ✅ | ✅ |
+| `/work/projects/` | ❌ | ✅ | ✅ | ✅ |
+| `/eos/purdue/` | ❌ | ✅ | ✅ | ❌ |
+| `/cvmfs/` | ✅ | ✅ | ✅ | ❌ |
+| `/eos/cern/` | ❌ | ❌ | ❌ | ✅ |
+
+Ray jobs sent to NRP see none of these volumes — see
+[More GPUs on NRP](guide-ray-train.md#more-gpus-on-nrp).
 
 In the JupyterLab file browser, your home directory contains shortcuts to the
 other volumes: `work` (`/work/`), `depot` (group directories under
@@ -29,7 +41,7 @@ other volumes: `work` (`/work/`), `depot` (group directories under
   directory usage with:
 
     ```shell
-    du -sh $HOME
+    df -h $HOME
     ```
 
 * **Work directory** — the **100 GB** quota of `/work/users/<username>/` is not
@@ -76,7 +88,8 @@ See [Data access](data-access.md) for the full picture.
 * The outputs of CRAB jobs are written to your Grid directory:
   `/eos/purdue/store/user/<cern-username>`.
   *Note: your CERN username is different from your Purdue username!*
-* The Grid directory at Purdue EOS is created by request and only for Purdue-affiliated users. This must be indicated when creating a Purdue Tier-2 account.
+* The Grid directory at Purdue EOS is created by request and only for Purdue-affiliated users. This must be indicated when creating a
+  [Purdue Tier-2](https://www.physics.purdue.edu/Tier2/) account.
 * If you can't see your Grid directory under `/eos/purdue/store/user/`, please
   [contact support](support.md).
 

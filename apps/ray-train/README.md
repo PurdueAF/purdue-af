@@ -7,7 +7,7 @@ Client, `ray.init("ray://ray-train-gateway:10001")`, or the Jobs API's client,
 session's JupyterHub token either way; the gateway asks the Hub whose token it
 is, relays the calls unread, and refuses a session that holds a GPU. How users
 send their training to it:
-[Training on GPUs with Ray](../../docs/docs/guide-ray-train.md); a workload
+[Multi-GPU training](../../docs/docs/guide-ray-train.md); a workload
 account signs in as [its README](../dask-gateway/README.md#workload-accounts)
 says.
 

@@ -1,4 +1,4 @@
-# Training on GPUs with Ray
+# Multi-GPU training
 
 [Ray](https://docs.ray.io/en/latest/) is a Python library that runs your
 PyTorch script on GPUs outside your session, on one of them or on several at
@@ -87,85 +87,87 @@ epoch, and the copies stay in step, as with PyTorch's
 sets this up. The numbered comments mark what changes in the script of
 [One GPU](#one-gpu):
 
-```python
-# train.py
-import os
-import tempfile
+??? example "train.py"
 
-import ray.train
-import ray.train.torch
-import torch
-from ray.train import Checkpoint, FailureConfig, RunConfig, ScalingConfig
-from ray.train.torch import TorchTrainer
-from torch import nn
-from torch.utils.data import DataLoader, TensorDataset
+    ```python
+    # train.py
+    import os
+    import tempfile
 
-
-# 1. The training goes into a function.
-def train_func():
-    X = torch.randn(100_000, 20)
-    y = (X.sum(dim=1, keepdim=True) > 0).float()
-    loader = DataLoader(TensorDataset(X, y), batch_size=512, shuffle=True)
-    net = nn.Sequential(nn.Linear(20, 64), nn.ReLU(), nn.Linear(64, 1))
-
-    # 2. Ray Train puts the model and the batches on the GPU, in place of
-    #    .to("cuda"), and gives each GPU its share of the data.
-    model = ray.train.torch.prepare_model(net)
-    loader = ray.train.torch.prepare_data_loader(loader)
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    loss_fn = nn.BCEWithLogitsLoss()
-
-    # 3. The training starts from its last checkpoint, if it has one.
-    first_epoch = 0
-    checkpoint = ray.train.get_checkpoint()
-    if checkpoint:
-        with checkpoint.as_directory() as path:
-            state = torch.load(f"{path}/state.pt")
-        net.load_state_dict(state["model"])
-        optimizer.load_state_dict(state["optimizer"])
-        first_epoch = state["epoch"] + 1
-
-    for epoch in range(first_epoch, 5):
-        for X_batch, y_batch in loader:
-            loss = loss_fn(model(X_batch), y_batch)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-        # 4. Every GPU reports the epoch, in place of print, and the first
-        #    one saves a checkpoint with it.
-        with tempfile.TemporaryDirectory() as tmp:
-            checkpoint = None
-            if ray.train.get_context().get_world_rank() == 0:
-                state = {
-                    "model": net.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                    "epoch": epoch,
-                }
-                torch.save(state, f"{tmp}/state.pt")
-                checkpoint = Checkpoint.from_directory(tmp)
-            ray.train.report({"loss": loss.item()}, checkpoint=checkpoint)
+    import ray.train
+    import ray.train.torch
+    import torch
+    from ray.train import Checkpoint, FailureConfig, RunConfig, ScalingConfig
+    from ray.train.torch import TorchTrainer
+    from torch import nn
+    from torch.utils.data import DataLoader, TensorDataset
 
 
-# 5. Ray Train runs the function on the GPUs.
-trainer = TorchTrainer(
-    train_func,
-    scaling_config=ScalingConfig(
-        # From one GPU to as many as you ask for when you submit.
-        num_workers=(1, int(os.environ["AF_MAX_WORKERS"])),
-        use_gpu=True,
-    ),
-    run_config=RunConfig(
-        # Where the checkpoints go: a directory of yours on /work.
-        storage_path="/work/users/<username>/ray_results",
-        # Lets the training go on when it loses a GPU.
-        failure_config=FailureConfig(max_failures=10),
-    ),
-)
-result = trainer.fit()
-print(result.checkpoint.path)
-```
+    # 1. The training goes into a function.
+    def train_func():
+        X = torch.randn(100_000, 20)
+        y = (X.sum(dim=1, keepdim=True) > 0).float()
+        loader = DataLoader(TensorDataset(X, y), batch_size=512, shuffle=True)
+        net = nn.Sequential(nn.Linear(20, 64), nn.ReLU(), nn.Linear(64, 1))
+
+        # 2. Ray Train puts the model and the batches on the GPU, in place of
+        #    .to("cuda"), and gives each GPU its share of the data.
+        model = ray.train.torch.prepare_model(net)
+        loader = ray.train.torch.prepare_data_loader(loader)
+
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+        loss_fn = nn.BCEWithLogitsLoss()
+
+        # 3. The training starts from its last checkpoint, if it has one.
+        first_epoch = 0
+        checkpoint = ray.train.get_checkpoint()
+        if checkpoint:
+            with checkpoint.as_directory() as path:
+                state = torch.load(f"{path}/state.pt")
+            net.load_state_dict(state["model"])
+            optimizer.load_state_dict(state["optimizer"])
+            first_epoch = state["epoch"] + 1
+
+        for epoch in range(first_epoch, 5):
+            for X_batch, y_batch in loader:
+                loss = loss_fn(model(X_batch), y_batch)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+            # 4. Every GPU reports the epoch, in place of print, and the first
+            #    one saves a checkpoint with it.
+            with tempfile.TemporaryDirectory() as tmp:
+                checkpoint = None
+                if ray.train.get_context().get_world_rank() == 0:
+                    state = {
+                        "model": net.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "epoch": epoch,
+                    }
+                    torch.save(state, f"{tmp}/state.pt")
+                    checkpoint = Checkpoint.from_directory(tmp)
+                ray.train.report({"loss": loss.item()}, checkpoint=checkpoint)
+
+
+    # 5. Ray Train runs the function on the GPUs.
+    trainer = TorchTrainer(
+        train_func,
+        scaling_config=ScalingConfig(
+            # From one GPU to as many as you ask for when you submit.
+            num_workers=(1, int(os.environ["AF_MAX_WORKERS"])),
+            use_gpu=True,
+        ),
+        run_config=RunConfig(
+            # Where the checkpoints go: a directory of yours on /work.
+            storage_path="/work/users/<username>/ray_results",
+            # Lets the training go on when it loses a GPU.
+            failure_config=FailureConfig(max_failures=10),
+        ),
+    )
+    result = trainer.fit()
+    print(result.checkpoint.path)
+    ```
 
 Submit it with the number of GPUs to train on, and without
 `entrypoint_num_gpus`:
@@ -213,55 +215,57 @@ Every GPU trains the model with a different set of hyperparameters.
 stops the trainings that fall behind and returns the best one. The numbered
 comments mark what changes in the script of [One GPU](#one-gpu):
 
-```python
-# search.py
-import torch
-from ray import tune
-from ray.tune.schedulers import ASHAScheduler
-from torch import nn
-from torch.utils.data import DataLoader, TensorDataset
+??? example "search.py"
+
+    ```python
+    # search.py
+    import torch
+    from ray import tune
+    from ray.tune.schedulers import ASHAScheduler
+    from torch import nn
+    from torch.utils.data import DataLoader, TensorDataset
 
 
-# 1. The training goes into a function of its hyperparameters.
-def train(config):
-    X = torch.randn(100_000, 20)
-    y = (X.sum(dim=1, keepdim=True) > 0).float()
-    loader = DataLoader(TensorDataset(X, y), batch_size=512, shuffle=True)
+    # 1. The training goes into a function of its hyperparameters.
+    def train(config):
+        X = torch.randn(100_000, 20)
+        y = (X.sum(dim=1, keepdim=True) > 0).float()
+        loader = DataLoader(TensorDataset(X, y), batch_size=512, shuffle=True)
 
-    model = nn.Sequential(nn.Linear(20, 64), nn.ReLU(), nn.Linear(64, 1)).to("cuda")
-    optimizer = torch.optim.Adam(model.parameters(), lr=config["lr"])
-    loss_fn = nn.BCEWithLogitsLoss()
+        model = nn.Sequential(nn.Linear(20, 64), nn.ReLU(), nn.Linear(64, 1)).to("cuda")
+        optimizer = torch.optim.Adam(model.parameters(), lr=config["lr"])
+        loss_fn = nn.BCEWithLogitsLoss()
 
-    for epoch in range(5):
-        for X_batch, y_batch in loader:
-            loss = loss_fn(model(X_batch.to("cuda")), y_batch.to("cuda"))
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-        # 2. It reports each epoch, in place of print.
-        tune.report({"loss": loss.item()})
+        for epoch in range(5):
+            for X_batch, y_batch in loader:
+                loss = loss_fn(model(X_batch.to("cuda")), y_batch.to("cuda"))
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+            # 2. It reports each epoch, in place of print.
+            tune.report({"loss": loss.item()})
 
 
-# 3. Ray Tune runs the function once per set of hyperparameters, each on a GPU.
-tuner = tune.Tuner(
-    tune.with_resources(train, {"gpu": 1}),
-    param_space={"lr": tune.loguniform(1e-4, 1e-1)},
-    tune_config=tune.TuneConfig(
-        metric="loss",
-        mode="min",
-        num_samples=20,
-        # Stops the trainings that fall behind.
-        scheduler=ASHAScheduler(),
-    ),
-    run_config=tune.RunConfig(
-        storage_path="/work/users/<username>/ray_results",
-        # Lets a training start again when it loses its GPU.
-        failure_config=tune.FailureConfig(max_failures=10),
-    ),
-)
-best = tuner.fit().get_best_result()
-print(best.config, best.metrics["loss"])
-```
+    # 3. Ray Tune runs the function once per set of hyperparameters, each on a GPU.
+    tuner = tune.Tuner(
+        tune.with_resources(train, {"gpu": 1}),
+        param_space={"lr": tune.loguniform(1e-4, 1e-1)},
+        tune_config=tune.TuneConfig(
+            metric="loss",
+            mode="min",
+            num_samples=20,
+            # Stops the trainings that fall behind.
+            scheduler=ASHAScheduler(),
+        ),
+        run_config=tune.RunConfig(
+            storage_path="/work/users/<username>/ray_results",
+            # Lets a training start again when it loses its GPU.
+            failure_config=tune.FailureConfig(max_failures=10),
+        ),
+    )
+    best = tuner.fit().get_best_result()
+    print(best.config, best.metrics["loss"])
+    ```
 
 Submit it as for [data-parallel training](#data-parallel-training):
 `af-max-workers` is the number of trainings to run at once.
@@ -430,46 +434,48 @@ Every GPU holds a copy of a trained model, here the one that
 [Ray Data](https://docs.ray.io/en/latest/data/batch_inference.html) reads the
 files, hands the rows to the GPUs in batches and writes the results:
 
-```python
-# score.py
-import os
+??? example "score.py"
 
-import numpy as np
-import ray
-import torch
-from torch import nn
+    ```python
+    # score.py
+    import os
 
-FEATURES = [f"f{i}" for i in range(20)]
+    import numpy as np
+    import ray
+    import torch
+    from torch import nn
 
-
-class Score:
-    # 1. Each GPU loads the model once.
-    def __init__(self):
-        self.model = nn.Sequential(nn.Linear(20, 64), nn.ReLU(), nn.Linear(64, 1))
-        self.model.load_state_dict(torch.load("/work/users/<username>/model.pt"))
-        self.model.to("cuda")
-
-    # 2. It gets the rows in batches, an array per column, and adds the scores.
-    def __call__(self, batch):
-        x = torch.as_tensor(np.stack([batch[name] for name in FEATURES], axis=1))
-        with torch.inference_mode():
-            batch["score"] = self.model(x.to("cuda")).squeeze(1).cpu().numpy()
-        return batch
+    FEATURES = [f"f{i}" for i in range(20)]
 
 
-# 3. Ray Data reads the files, runs the model on the GPUs and writes the results.
-events = ray.data.read_parquet("/work/users/<username>/events")
-events.map_batches(
-    Score,
-    num_gpus=1,
-    batch_size=4096,
-    compute=ray.data.ActorPoolStrategy(
-        # From one GPU to as many as you ask for when you submit.
-        min_size=1,
-        max_size=int(os.environ["AF_MAX_WORKERS"]),
-    ),
-).write_parquet("/work/users/<username>/scores")
-```
+    class Score:
+        # 1. Each GPU loads the model once.
+        def __init__(self):
+            self.model = nn.Sequential(nn.Linear(20, 64), nn.ReLU(), nn.Linear(64, 1))
+            self.model.load_state_dict(torch.load("/work/users/<username>/model.pt"))
+            self.model.to("cuda")
+
+        # 2. It gets the rows in batches, an array per column, and adds the scores.
+        def __call__(self, batch):
+            x = torch.as_tensor(np.stack([batch[name] for name in FEATURES], axis=1))
+            with torch.inference_mode():
+                batch["score"] = self.model(x.to("cuda")).squeeze(1).cpu().numpy()
+            return batch
+
+
+    # 3. Ray Data reads the files, runs the model on the GPUs and writes the results.
+    events = ray.data.read_parquet("/work/users/<username>/events")
+    events.map_batches(
+        Score,
+        num_gpus=1,
+        batch_size=4096,
+        compute=ray.data.ActorPoolStrategy(
+            # From one GPU to as many as you ask for when you submit.
+            min_size=1,
+            max_size=int(os.environ["AF_MAX_WORKERS"]),
+        ),
+    ).write_parquet("/work/users/<username>/scores")
+    ```
 
 Submit it as for [data-parallel training](#data-parallel-training):
 `af-max-workers` is the number of GPUs to score on.
@@ -616,5 +622,5 @@ client = JobSubmissionClient(
   that happens.
 * **Storage.** A job sees `/work`, `/depot/cms`, `/eos/purdue` and `/cvmfs` as
   your session does, and not your home directory.
-* **Logs.** A job's log is removed some minutes after it ends, and its status
-  some days later: have the script write what you keep to `/work`.
+* **Logs.** A job's log is removed 15 minutes after it ends, and its status
+  an hour after: have the script write what you keep to `/work`.

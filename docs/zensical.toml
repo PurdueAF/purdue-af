@@ -13,76 +13,70 @@ site_author = "Dmitry Kondratyev, Stefan Piperov"
 # site_url must match it, since it is what canonical links and sitemap.xml use.
 site_url = "https://analysis-facility.physics.purdue.edu/"
 
-copyright = "Copyright &copy; 2023, Purdue University"
+copyright = "Copyright &copy; Purdue University"
 
 # Source repository (adds a link in the header).
 repo_url = "https://github.com/PurdueAF/purdue-af"
 repo_name = "PurdueAF/purdue-af"
 edit_uri = "edit/main/docs/docs/"
 
-
-# Navigation.
-# Page titles are derived from each page's first heading.
+# Navigation: one section per topic. A page's `#` title is its label here.
 nav = [
     { "Home" = "index.md" },
-    { "Getting started" = [
+    { "Get started" = [
         "getting-started.md",
         "login-methods.md",
         "interface.md",
+        "guide-ssh-access.md",
+        "guide-ide-connection.md",
     ] },
-    { "Documentation" = [
-        "storage.md",
+    { "Software" = [
         "software.md",
+        "guide-pixi.md",
+        "guide-conda.md",
+    ] },
+    { "Storage and data" = [
+        "storage.md",
         "data-access.md",
+        "guide-rucio.md",
+        "guide-cern-eos.md",
+        "guide-eos-write.md",
+    ] },
+    { "Scale-out and GPUs" = [
         "scaling-out.md",
+        "guide-dask.md",
+        "guide-dask-gateway.md",
         "gpus.md",
-        "hardware.md",
+        "guide-ray-train.md",
     ] },
-    { "Monitoring" = [
-        { "Monitoring dashboard" = "https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard" },
-    ] },
-    { "User guides" = [
-        { "Software environments" = [
-            "guide-pixi.md",
-            "guide-conda.md",
-            "guide-combine.md",
-        ] },
-        { "Scaling out" = [
-            "guide-dask.md",
-            "guide-dask-gateway.md",
-        ] },
-        { "GPUs" = [
-            "guide-ray-train.md",
-            "guide-roofit-cuda.md",
-        ] },
-        { "Remote access" = [
-            "guide-ssh-access.md",
-            "guide-ide-connection.md",
-            "guide-file-transfer.md",
-        ] },
-        { "Data and storage" = [
-            "guide-rucio.md",
-            "guide-cern-eos.md",
-            "guide-eos-write.md",
-        ] },
-        { "Special workflows" = [
-            "guide-mc-gen.md",
-        ] },
-    ] },
-    { "Agentic AI" = [
+    { "AI agents" = [
+        "agents.md",
         "guide-agentic-interface.md",
+    ] },
+    "hardware.md",
+    { "Monitoring dashboard" = "https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard" },
+    { "Guides" = [
+        "guide-mc-gen.md",
+        "guide-roofit-cuda.md",
+        "guide-combine.md",
     ] },
     { "Help" = [
         "troubleshooting.md",
         "support.md",
         "contributing.md",
     ] },
-    { "Useful links" = [
-        { "Purdue Tier-2 website" = "https://www.physics.purdue.edu/Tier2/" },
-        { "CMS Common Analysis Tools documentation" = "https://cms-analysis.docs.cern.ch" },
-        { "Data Aggregation System (DAS)" = "https://cmsweb.cern.ch/das/" },
-    ] },
 ]
+
+# /llms.txt, and each page's Markdown beside its HTML, for agents.
+# Pages that are gone, to where their content went.
+[project.plugins.redirects.redirect_maps]
+"guide-file-transfer.md" = "interface.md"
+
+[project.plugins.llmstxt]
+markdown_description = "User documentation of the Purdue Analysis Facility: JupyterHub sessions for CMS analysis, with Dask, Ray on GPUs, Slurm, Pixi environments and CMS data access. Each page below is also served as Markdown."
+
+[project.plugins.llmstxt.sections]
+"Pages" = ["*.md"]
 
 [project.theme]
 
@@ -90,6 +84,7 @@ language = "en"
 logo = "images/cms_logo.png"
 
 features = [
+    "content.action.copy",
     "content.code.copy",
     "content.code.select",
     "content.tabs.link",
@@ -98,7 +93,6 @@ features = [
     "navigation.instant",
     "navigation.instant.prefetch",
     "navigation.path",
-    "navigation.sections",
     "navigation.top",
     "navigation.tracking",
     "search.highlight",
@@ -106,11 +100,13 @@ features = [
 ]
 
 [[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
 scheme = "default"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to dark mode"
 
 [[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
 scheme = "slate"
 toggle.icon = "lucide/moon"
 toggle.name = "Switch to light mode"

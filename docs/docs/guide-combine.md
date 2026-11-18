@@ -1,4 +1,4 @@
-# Using Combine at Purdue AF
+# Running Combine
 
 [Combine](https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit/) is
 a RooStats / RooFit based software framework widely used in LHC experiments for
@@ -47,38 +47,40 @@ version of Combine.
 All you need to do is copy the following code block into the `[tasks]` section of
 the `pixi.toml` file:
 
-```toml
-[tasks]
-install_combine = """
-sh -c '
-set -e
+??? example "The `[tasks]` block"
 
-# Delete existing Combine installation, if present
-rm -rf HiggsAnalysis/CombinedLimit
+    ```toml
+    [tasks]
+    install_combine = """
+    sh -c '
+    set -e
 
-# Clone latest Combine version from GitHub
-git clone https://github.com/cms-analysis/HiggsAnalysis-CombinedLimit.git HiggsAnalysis/CombinedLimit
-cd HiggsAnalysis/CombinedLimit
+    # Delete existing Combine installation, if present
+    rm -rf HiggsAnalysis/CombinedLimit
 
-# Get the Python major.minor version from the active pixi env
-PY_VER=$(python - << \"PY\"
-import sys
-print(f\"{sys.version_info.major}.{sys.version_info.minor}\")
-PY
-)
+    # Clone latest Combine version from GitHub
+    git clone https://github.com/cms-analysis/HiggsAnalysis-CombinedLimit.git HiggsAnalysis/CombinedLimit
+    cd HiggsAnalysis/CombinedLimit
 
-# Install Combine into the environment
-cmake -S . -B build \
--DCMAKE_INSTALL_PREFIX=\"$CONDA_PREFIX\" \
--DCMAKE_INSTALL_PYTHONDIR=\"lib/python${PY_VER}/site-packages\" \
--DUSE_VDT=OFF
-cmake --build build -j\"$(nproc --ignore=2)\"
-cmake --install build
+    # Get the Python major.minor version from the active pixi env
+    PY_VER=$(python - << \"PY\"
+    import sys
+    print(f\"{sys.version_info.major}.{sys.version_info.minor}\")
+    PY
+    )
 
-cd -
-'
-"""
-```
+    # Install Combine into the environment
+    cmake -S . -B build \
+    -DCMAKE_INSTALL_PREFIX=\"$CONDA_PREFIX\" \
+    -DCMAKE_INSTALL_PYTHONDIR=\"lib/python${PY_VER}/site-packages\" \
+    -DUSE_VDT=OFF
+    cmake --build build -j\"$(nproc --ignore=2)\"
+    cmake --install build
+
+    cd -
+    '
+    """
+    ```
 
 Then, once your environment is built, you can install Combine by running:
 

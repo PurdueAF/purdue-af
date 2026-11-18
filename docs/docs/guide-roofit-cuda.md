@@ -1,4 +1,4 @@
-# Accelerating RooFit with GPUs
+# RooFit on GPUs
 
 Fitting data distributions with analytical models is a common task in CMS analyses.
 Depending on the size of the dataset and the number of free parameters in the model,
@@ -40,67 +40,69 @@ To enable the CUDA backend in RooFit, the only thing you need to do is pass the
 Below is an example of code that uses the CUDA backend for fitting a Z-boson mass
 spectrum:
 
-```python
-import ROOT as rt
+??? example "The fit script"
 
-inputfile = "workspace_ggh_All_Zfit_no_e_cut_UL_calib_cat5.root"
+    ```python
+    import ROOT as rt
 
-rt.EnableImplicitMT()
+    inputfile = "workspace_ggh_All_Zfit_no_e_cut_UL_calib_cat5.root"
 
-file = rt.TFile.Open(inputfile)
+    rt.EnableImplicitMT()
 
-canvas = rt.TCanvas()
-canvas.cd()
+    file = rt.TFile.Open(inputfile)
 
-mass = rt.RooRealVar("mh_ggh", "mass (GeV)", 100, 85, 99)
-frame = mass.frame()
+    canvas = rt.TCanvas()
+    canvas.cd()
 
-# Breit Wigner
-bwWidth = rt.RooRealVar("bwz_Width", "widthZ", 2.5, 0, 30)
-bwmZ = rt.RooRealVar("bwz_mZ", "mZ", 91.2, 90, 92)
-bwWidth.setConstant(True)
-model1_1 = rt.RooBreitWigner("bwz", "BWZ", mass, bwmZ, bwWidth)
+    mass = rt.RooRealVar("mh_ggh", "mass (GeV)", 100, 85, 99)
+    frame = mass.frame()
 
-# Double Sided Crystal Ball
-mean = rt.RooRealVar("mean", "mean", 0, -10, 10)  # mean is mean relative to BW
-sigma = rt.RooRealVar("sigma", "sigma", 2, 0.2, 4.0)
-alpha1 = rt.RooRealVar("alpha1", "alpha1", 2, 0.01, 45)
-n1 = rt.RooRealVar("n1", "n1", 10, 0.01, 185)
-alpha2 = rt.RooRealVar("alpha2", "alpha2", 2.0, 0.01, 65)
-n2 = rt.RooRealVar("n2", "n2", 25, 0.01, 385)
-model1_2 = rt.RooCrystalBall("dcb", "dcb", mass, mean, sigma, alpha1, n1, alpha2, n2)
+    # Breit Wigner
+    bwWidth = rt.RooRealVar("bwz_Width", "widthZ", 2.5, 0, 30)
+    bwmZ = rt.RooRealVar("bwz_mZ", "mZ", 91.2, 90, 92)
+    bwWidth.setConstant(True)
+    model1_1 = rt.RooBreitWigner("bwz", "BWZ", mass, bwmZ, bwWidth)
 
-mass.setBins(10000, "cache")  # cache is repre of the variable only used in FFT
-mass.setBins(
-    200
-)  # bin to 200 bins otherwise, fitting with FFT conv is gonna take forever
-mass.setMin("cache", 50.5)
-mass.setMax("cache", 130.5)
-model1 = rt.RooFFTConvPdf("BWxDCB", "BWxDCB", mass, model1_1, model1_2)
+    # Double Sided Crystal Ball
+    mean = rt.RooRealVar("mean", "mean", 0, -10, 10)  # mean is mean relative to BW
+    sigma = rt.RooRealVar("sigma", "sigma", 2, 0.2, 4.0)
+    alpha1 = rt.RooRealVar("alpha1", "alpha1", 2, 0.01, 45)
+    n1 = rt.RooRealVar("n1", "n1", 10, 0.01, 185)
+    alpha2 = rt.RooRealVar("alpha2", "alpha2", 2.0, 0.01, 65)
+    n2 = rt.RooRealVar("n2", "n2", 25, 0.01, 385)
+    model1_2 = rt.RooCrystalBall("dcb", "dcb", mass, mean, sigma, alpha1, n1, alpha2, n2)
 
-# Exponential background
-coeff = rt.RooRealVar("coeff", "coeff", 0.001, 0.000001, 1.0)
-shift = rt.RooRealVar("shift", "Offset", 91, 75, 105)
-shifted_mass = rt.RooFormulaVar("shifted_mass", "@0-@1", rt.RooArgList(mass, shift))
-model2 = rt.RooExponential("bkg", "bkg", shifted_mass, coeff)
+    mass.setBins(10000, "cache")  # cache is repre of the variable only used in FFT
+    mass.setBins(
+        200
+    )  # bin to 200 bins otherwise, fitting with FFT conv is gonna take forever
+    mass.setMin("cache", 50.5)
+    mass.setMax("cache", 130.5)
+    model1 = rt.RooFFTConvPdf("BWxDCB", "BWxDCB", mass, model1_1, model1_2)
 
-sigfrac = rt.RooRealVar("sigfrac", "sigfrac", 0.99, 0, 1.0)
-model = rt.RooAddPdf("model3", "model3", [model1, model2], sigfrac)
+    # Exponential background
+    coeff = rt.RooRealVar("coeff", "coeff", 0.001, 0.000001, 1.0)
+    shift = rt.RooRealVar("shift", "Offset", 91, 75, 105)
+    shifted_mass = rt.RooFormulaVar("shifted_mass", "@0-@1", rt.RooArgList(mass, shift))
+    model2 = rt.RooExponential("bkg", "bkg", shifted_mass, coeff)
 
-data = file.w.data("data_Zfit_no_e_cut_UL_calib_cat5")
+    sigfrac = rt.RooRealVar("sigfrac", "sigfrac", 0.99, 0, 1.0)
+    model = rt.RooAddPdf("model3", "model3", [model1, model2], sigfrac)
 
-model.fitTo(data, rt.RooFit.Save(), rt.RooFit.EvalBackend.Cuda())  # GPU
+    data = file.w.data("data_Zfit_no_e_cut_UL_calib_cat5")
 
-data.plotOn(frame)
-model.plotOn(frame, rt.RooFit.LineColor(rt.kRed))
-model.plotOn(frame, rt.RooFit.Components("BWxDCB"), rt.RooFit.LineColor(rt.kBlue))
-model.plotOn(frame, rt.RooFit.Components("bkg"), rt.RooFit.LineColor(rt.kGreen))
+    model.fitTo(data, rt.RooFit.Save(), rt.RooFit.EvalBackend.Cuda())  # GPU
+
+    data.plotOn(frame)
+    model.plotOn(frame, rt.RooFit.LineColor(rt.kRed))
+    model.plotOn(frame, rt.RooFit.Components("BWxDCB"), rt.RooFit.LineColor(rt.kBlue))
+    model.plotOn(frame, rt.RooFit.Components("bkg"), rt.RooFit.LineColor(rt.kGreen))
 
 
-frame.Draw()
-canvas.Update()
-canvas.Draw()
-```
+    frame.Draw()
+    canvas.Update()
+    canvas.Draw()
+    ```
 
 To run this code, you can download the input file
 `workspace_ggh_All_Zfit_no_e_cut_UL_calib_cat5.root` from

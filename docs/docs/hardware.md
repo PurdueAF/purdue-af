@@ -19,6 +19,6 @@ cluster.
 
 !!! note "See also"
 
-    * [GPU access at Purdue AF](gpus.md)
+    * [GPUs in a session](gpus.md)
     * [Storage volumes](storage.md)
     * Live utilization metrics: [monitoring dashboard](https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-dashboard/purdue-analysis-facility-dashboard){ target="_blank" }

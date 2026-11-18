@@ -12,6 +12,22 @@ Join the
 (CERN login required). This is the fastest way to reach both the admins and other
 users.
 
+## PurdueAF Agent
+
+In that channel an AI assistant, **PurdueAF Agent**, answers questions about
+the facility. Mention it in the channel, or write to it in a direct message. It
+answers from this documentation and the facility's live monitoring: whether the
+AF is healthy, how many GPUs are free, how to do something.
+
+To let it answer about your own session, storage, logs, Dask clusters and Ray
+jobs, and act on them, link your AF account: ask it to link in a direct
+message, open the link it sends (it works once, within 24 hours), log in, and
+send back the code the page shows. A link lasts 30 days, and you can ask it to
+unlink at any time.
+
+What you write to it is sent to a language model outside Purdue. The admins
+read the channel too, so ask there when the agent cannot help.
+
 ## Purdue AF mailing list
 
 Send a message to the following address:

@@ -1,4 +1,4 @@
-# SSH access to Purdue AF
+# SSH access
 
 Although the web-based JupyterLab interface is the recommended way to access
 Purdue AF, it is also possible to connect to your session from a terminal via SSH.
@@ -6,13 +6,14 @@ Purdue AF, it is also possible to connect to your session from a terminal via SS
 !!! note
 
     SSH connects you **to your running AF session**, not to a separate login node —
-    you must start the session in a web browser first. If you would rather work in
-    a full local IDE, see [Access via VSCode-based IDEs](guide-ide-connection.md).
+    start the session first, in a web browser or with an
+    [AI agent](guide-agentic-interface.md). If you would rather work in
+    a full local IDE, see [Local IDE access](guide-ide-connection.md).
 
 ## JupyterHub API token
 
 SSH, [local IDEs](guide-ide-connection.md), and
-[AI agents on your own machine](guide-agentic-interface.md#connecting-from-your-own-machine)
+[AI agents on your own machine](guide-agentic-interface.md#set-up)
 authenticate to Purdue AF with a JupyterHub API token. To obtain one, open
 [https://cms.geddes.rcac.purdue.edu/hub/token](https://cms.geddes.rcac.purdue.edu/hub/token)
 (or, in JupyterLab, go to `File → Hub Control Panel` and click the `Token` tab),
@@ -51,7 +52,7 @@ request a new token, save it the same way.
 
     * If you are using a CERN or FNAL account, remember that your username must
       include the `-cern` or `-fnal` suffix, respectively —
-      see [Login methods and usernames](login-methods.md).
+      see [Login methods](login-methods.md).
     * Instead of a password, paste the **token** obtained in the previous step.
 
 4. **(Optional) Set up an alias in `.bashrc`**
@@ -78,5 +79,16 @@ request a new token, save it the same way.
 
 !!! warning "No SFTP / scp support"
 
-    `scp` to and from this SSH server does not work — see
-    [Uploading and downloading files](guide-file-transfer.md) for alternatives.
+    `scp` to and from this SSH server does not work. To copy files with `scp`,
+    connect the other way: from an AF terminal into your own computer, once it
+    accepts SSH logins
+    ([macOS](https://support.apple.com/guide/mac-help/allow-a-remote-computer-to-access-your-mac-mchlp1066/mac),
+    [Ubuntu](https://help.ubuntu.com/stable/ubuntu-help/sharing-secure-shell.html.en),
+    [Windows](https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/factoryos/connect-using-ssh?view=windows-11)):
+
+    ```shell
+    scp myfile.root <local-username>@<your-computer-address>:/path/on/local/machine/
+    ```
+
+    For other ways to move files, see
+    [Uploading and downloading files](interface.md#uploading-and-downloading-files).

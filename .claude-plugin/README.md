@@ -4,7 +4,7 @@ The `purdue-af` plugin gives an agent outside an AF session the
 [agentic interface](../apps/agentic-interface/README.md): its MCP server entry
 and [the skill](../.claude/skills/purdue-af-agentic-interface/SKILL.md).
 Installing and updating it:
-[the user guide](../docs/docs/guide-agentic-interface.md#connecting-from-your-own-machine).
+[the user guide](../docs/docs/guide-agentic-interface.md#set-up).
 
 | File                                 | What it is                                       |
 | ------------------------------------ | ------------------------------------------------ |
