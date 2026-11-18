@@ -680,11 +680,11 @@ def test_pvcs_are_not_declared_in_git(interlink_clusters):
 
 def test_only_namespace_is_substituted(interlink_clusters):
     """Flux postBuild substitutes every `${VAR}` in the rendered stream, and an
-    unset one becomes an empty string. Bare `$VAR` (the wstunnel command) is
-    passed through untouched, so it needs no escaping."""
+    unset one without a `:=` default becomes an empty string. Bare `$VAR` (the
+    wstunnel command) is passed through untouched, so it needs no escaping."""
     files = [app["dir"] / "values.yaml" for app in interlink_clusters.values()]
     for path in [INTERLINK / "values.yaml", *files]:
-        found = set(re.findall(r"\$\{([^}]*)\}", path.read_text()))
+        found = set(re.findall(r"\$\{([^}:]*)\}", path.read_text()))
         assert found <= {"namespace"}, f"{path}: {found - {'namespace'}}"
 
 

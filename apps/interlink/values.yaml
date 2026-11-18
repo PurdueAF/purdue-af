@@ -51,7 +51,7 @@ virtualNode:
               app.kubernetes.io/component: {{.Name}}
           spec:
             nodeSelector:
-              cms-af-prod: "true"
+              ${af_node_label:=cms-af-prod}: ${af_node_label_value:="true"}
             tolerations:
               - key: hub.jupyter.org/dedicated
                 operator: Equal
@@ -132,7 +132,7 @@ virtualNode:
 
 podScheduling:
   nodeSelector:
-    cms-af-prod: "true"
+    ${af_node_label:=cms-af-prod}: ${af_node_label_value:="true"}
   tolerations:
     - key: "hub.jupyter.org/dedicated"
       operator: "Equal"

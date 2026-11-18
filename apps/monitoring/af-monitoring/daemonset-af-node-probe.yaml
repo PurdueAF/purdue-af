@@ -44,9 +44,10 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                  - key: cms-af-prod
+                  - key: ${af_node_label:=cms-af-prod}
                     operator: In
-                    values: ["true"]
+                    values:
+                      - ${af_node_label_value:="true"}
               - matchExpressions:
                   - key: cms-af-dev
                     operator: In
@@ -175,9 +176,10 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                  - key: cms-af-prod
+                  - key: ${af_node_label:=cms-af-prod}
                     operator: In
-                    values: ["true"]
+                    values:
+                      - ${af_node_label_value:="true"}
               - matchExpressions:
                   - key: cms-af-dev
                     operator: In
@@ -304,9 +306,10 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                  - key: cms-af-prod
+                  - key: ${af_node_label:=cms-af-prod}
                     operator: In
-                    values: ["true"]
+                    values:
+                      - ${af_node_label_value:="true"}
               - matchExpressions:
                   - key: cms-af-dev
                     operator: In
@@ -434,9 +437,10 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                  - key: cms-af-prod
+                  - key: ${af_node_label:=cms-af-prod}
                     operator: In
-                    values: ["true"]
+                    values:
+                      - ${af_node_label_value:="true"}
               - matchExpressions:
                   - key: cms-af-dev
                     operator: In

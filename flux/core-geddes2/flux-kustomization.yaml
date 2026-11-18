@@ -28,6 +28,9 @@ spec:
       multinode_storage_class: "depot-cloud-filesystem"
       singlenode_storage_class: "depot-cloud-block"
       x509_secret_name: "af-x509-proxy"
+      # Geddes2 nodes carry no cms-af-prod label: select every Linux node.
+      af_node_label: "kubernetes.io/os"
+      af_node_label_value: "linux"
   decryption:
     provider: sops
     secretRef:
