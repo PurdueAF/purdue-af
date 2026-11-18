@@ -13,7 +13,7 @@ Purdue AF, it is also possible to connect to your session from a terminal via SS
 ## JupyterHub API token
 
 SSH, [local IDEs](guide-ide-connection.md), and
-[AI agents on your own machine](guide-agentic-interface.md#connecting-from-your-own-machine)
+[AI agents on your own machine](guide-agentic-interface.md#set-up)
 authenticate to Purdue AF with a JupyterHub API token. To obtain one, open
 [https://cms.geddes.rcac.purdue.edu/hub/token](https://cms.geddes.rcac.purdue.edu/hub/token)
 (or, in JupyterLab, go to `File → Hub Control Panel` and click the `Token` tab),

@@ -1,23 +1,18 @@
 # AI agents on your machine
 
-Purdue AF runs a remote [MCP](https://modelcontextprotocol.io) (Model Context
-Protocol) server through which an AI agent on your own machine — Claude Code,
-Codex, Cursor and others — manages the facility for you: it starts and stops
-your session, creates Dask clusters, submits Ray jobs, and reads your storage
-use, your logs and this documentation.
+An AI agent on your own computer — Claude Code, Codex, Cursor and others — can
+manage Purdue AF for you: start and stop your session, create Dask clusters,
+submit Ray jobs, and read your storage use, your logs and this documentation.
+It does so through the facility's [MCP](https://modelcontextprotocol.io) server
+and a **skill**, a Markdown playbook that tells the agent which tool to call
+when and what to confirm with you first.
 
-Agents inside an AF session are connected already — see
-[AI agents in a session](agents.md). The setup below is for an agent on your own machine.
+Agents inside an AF session have both already — see
+[AI agents in a session](agents.md).
 
-## Connecting from your own machine
+## Set up
 
-|               |                                                                    |
-| ------------- | ------------------------------------------------------------------ |
-| **URL**       | `https://cms.geddes.rcac.purdue.edu/services/agentic-interface/mcp` |
-| **Transport** | HTTP (streamable)                                                  |
-| **Auth**      | header `Authorization: Bearer <token>`                             |
-
-Two steps, once per machine.
+Once per machine.
 
 **1. Save a token.** Obtain a
 [JupyterHub API token](guide-ssh-access.md#jupyterhub-api-token) and save it in
@@ -30,8 +25,7 @@ and open a new terminal:
 export JUPYTERHUB_TOKEN="$(cat ~/.config/purdue-af/token)"
 ```
 
-**2. Install for your agent.** Each set of commands adds the MCP server and the
-[skill](#installing-the-skill-recommended).
+**2. Add the server and the skill to your agent.**
 
 === "Claude Code"
 
@@ -114,8 +108,9 @@ export JUPYTERHUB_TOKEN="$(cat ~/.config/purdue-af/token)"
 
 === "Other agents"
 
-    Most agents accept this configuration — in a config file, a settings
-    panel, or a CLI command:
+    The server takes streamable HTTP, with the token in an `Authorization`
+    header. Most agents accept this configuration — in a config file, a
+    settings panel, or a CLI command:
 
     ```json
     {
@@ -137,16 +132,12 @@ export JUPYTERHUB_TOKEN="$(cat ~/.config/purdue-af/token)"
     npx skills add PurdueAF/purdue-af --global
     ```
 
-## Installing the skill (recommended)
+**3. Check it.** Ask your agent "Is the AF healthy?".
 
-The **skill** is a Markdown playbook that teaches an agent the AF workflows:
-which tool to call when, and what to confirm with you first. The commands
-[above](#connecting-from-your-own-machine) install it with the MCP server, and
-it activates when you mention your AF session, Dask clusters, Ray jobs, logs or
-storage.
+## Updating the skill { #installing-the-skill-recommended }
 
-The MCP server announces the current skill version, so the agent tells you when
-your copy is out of date. Update it with your agent's own command:
+The server announces the current skill version, so your agent tells you when
+its copy is out of date. Update it with your agent's own command:
 
 | Agent        | Update                                                                                         |
 | ------------ | ---------------------------------------------------------------------------------------------- |
@@ -156,9 +147,9 @@ your copy is out of date. Update it with your agent's own command:
 | Gemini CLI   | the `gemini skills install` command again                                                      |
 | Other agents | `npx skills update --global`                                                                   |
 
-## What you can do
+## What you can ask
 
-Your username and session are resolved automatically, so you ask in plain
+Your username and session are resolved from the token, so you ask in plain
 language.
 
 | Area | Ask, for example |
@@ -173,20 +164,12 @@ language.
 
 ## Troubleshooting
 
-Failures are self-describing: a failing tool result (which the agent relays
-to you) says what was attempted, why it failed, and what to do next. If the
-connection itself is refused — the agent shows the server as failed or
-needing authentication — the server's response carries an `error` and a
-`hint` with the same information; ask the agent for it, or check your MCP
-client's server status.
+When a tool fails, its result says what was attempted, why it failed and what
+to do next; the agent relays it to you.
 
 | Symptom | What to do |
 | --- | --- |
-| Agent reports a facility problem | Check the [monitoring dashboard](https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-alerts) and [contact support](support.md) if it persists. |
-| HTTP 404 on the service URL | Check the URL — it must end with `/services/agentic-interface/mcp`. |
+| The agent shows the server as failed or needing authentication | Most often the token: for any agent but Claude Code, `JUPYTERHUB_TOKEN` is not set where the agent started; otherwise the token is mistyped or expired, so request a new one and save it as in [step 1](#set-up). |
+| HTTP 404 on the server's URL | The URL must end with `/services/agentic-interface/mcp`. |
+| The agent reports a facility problem | Check the [alerts dashboard](https://cms.geddes.rcac.purdue.edu/grafana/d/purdue-af-alerts), and [contact support](support.md) if it persists. |
 | A message says the fault is in the service itself | [Contact support](support.md) with the tool name and the time. |
-
-!!! note "See also"
-
-    * [Local IDE access](guide-ide-connection.md)
-    * [Dask Gateway](guide-dask-gateway.md)

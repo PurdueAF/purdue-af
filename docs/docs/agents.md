@@ -33,7 +33,7 @@ Nothing to set up: an agent in a session starts with
   `/work` is invisible to Slurm jobs;
 * **the facility's tools** — your session, storage use, Dask clusters, Ray
   jobs, logs, the facility's health and this documentation, with no token to
-  handle. [What you can ask](guide-agentic-interface.md#what-you-can-do) lists
+  handle. [What you can ask](guide-agentic-interface.md#what-you-can-ask) lists
   them.
 
 So you can ask in plain language:
@@ -41,9 +41,7 @@ So you can ask in plain language:
 * "Create a Dask cluster with 20 workers on my project's environment and run
   `analysis.py` on it."
 * "Why did my Dask workers die in the last hour?"
-* "Train `train.py` on 4 GPUs."
-* "How much of my home and work quota am I using?"
-* "How do I read a dataset through XCache?"
+* "Set up a Pixi environment for this repository and make it a kernel."
 
 ## An agent acts as you
 
