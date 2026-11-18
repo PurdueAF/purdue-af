@@ -25,7 +25,9 @@ and open a new terminal:
 export JUPYTERHUB_TOKEN="$(cat ~/.config/purdue-af/token)"
 ```
 
-**2. Add the server and the skill to your agent.**
+**2. Add the server and the skill to your agent.** Claude Code, Codex and
+Copilot CLI get both as one plugin, `purdue-af`; other agents add them
+separately.
 
 === "Claude Code"
 
