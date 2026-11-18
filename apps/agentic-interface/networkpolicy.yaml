@@ -19,7 +19,7 @@ spec:
             matchLabels:
               app: jupyterhub
               component: proxy
-        # (b) AF user sessions: config-agents.sh registers the in-cluster URL.
+        # (b) AF user sessions: the session image configures each agent with the in-cluster URL.
         - podSelector:
             matchLabels:
               app: jupyterhub

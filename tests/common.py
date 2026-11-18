@@ -2,6 +2,7 @@
 
 import hashlib
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -12,9 +13,17 @@ EXPERIMENTAL = REPO / "flux" / "experimental" / "kustomization.yaml"
 CORE = REPO / "flux" / "core-production" / "kustomization.yaml"
 
 
+DEFAULTED = re.compile(r"\$\{(\w+):=([^}]*)\}")
+
+
+def with_defaults(text):
+    """Each `${var:=default}` as its default: what a root that sets no such variable renders."""
+    return DEFAULTED.sub(lambda m: m.group(2), text)
+
+
 def load_yaml(path):
     """The single document of a YAML file."""
-    return yaml.safe_load(path.read_text())
+    return yaml.safe_load(with_defaults(path.read_text()))
 
 
 def generator(root, name):
@@ -34,7 +43,7 @@ def load_script(path, module_name):
 
 def load_all(path):
     """The documents of a YAML file."""
-    return [doc for doc in yaml.safe_load_all(path.read_text()) if doc]
+    return [doc for doc in yaml.safe_load_all(with_defaults(path.read_text())) if doc]
 
 
 HUB_VALUES = REPO / "apps" / "jupyterhub" / "jupyterhub" / "values.yaml"
@@ -51,7 +60,7 @@ def hub_values():
             return [rendered(v) for v in value]
         return value
 
-    return rendered(yaml.safe_load(HUB_VALUES.read_text()))
+    return rendered(yaml.safe_load(with_defaults(HUB_VALUES.read_text())))
 
 
 def mount_configmap(volume, version, files):

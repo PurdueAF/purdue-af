@@ -27,7 +27,7 @@ spec:
         app: flyte-postgres
     spec:
       nodeSelector:
-        cms-af-prod: "true"
+        ${af_node_label:=cms-af-prod}: ${af_node_label_value:="true"}
       tolerations:
         - key: hub.jupyter.org/dedicated
           operator: Equal
@@ -36,6 +36,10 @@ spec:
       containers:
         - name: postgres
           image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/postgres:16.15-alpine
+          # The entrypoint chowns its dirs as root, then su-execs to postgres: needed where a cluster drops ALL.
+          securityContext:
+            capabilities:
+              add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
           env:
             - name: POSTGRES_USER
               value: flyte

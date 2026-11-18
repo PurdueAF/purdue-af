@@ -179,7 +179,7 @@ configMapGenerator:
       - ../../apps/mattermost-agent/agent.py
       - ../../apps/mattermost-agent/system-prompt.md
 
-  - name: mattermost-agent-docs
+  - name: user-docs
     options:
       annotations:
         kustomize.toolkit.fluxcd.io/substitute: disabled
