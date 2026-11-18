@@ -29,6 +29,10 @@ spec:
             - name: af-userlist-sync-purdue
               image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/rockylinux/rockylinux:8.10
               command: [/bin/bash, /scripts/sync-userlist.sh, purdue]
+              # dnf writes into the 0555 /usr/lib64: root needs DAC_OVERRIDE where a cluster drops ALL.
+              securityContext:
+                capabilities:
+                  add: [DAC_OVERRIDE]
               resources:
                 requests:
                   memory: "128Mi"
