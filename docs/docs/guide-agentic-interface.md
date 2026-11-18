@@ -166,7 +166,7 @@ language.
 | Session | "Start my AF session with 32 CPUs and the VS Code interface" — the agent asks which profile and options you want unless you ask for the defaults. Also stop, restart and status. |
 | Storage | "How much home and work storage am I using?" |
 | Dask clusters | "Create a Dask cluster", "scale it to 10 workers", "how much memory did my workers use over the last day?", "shut it down" — see [Dask Gateway](guide-dask-gateway.md). |
-| Ray on GPUs | "How many GPUs are free for 4 workers with T4s?", "Train `train.py` on 4 GPUs on NRP, with `/work/users/<username>/events` as input" — see [Ray jobs](guide-ray-train.md). |
+| Ray on GPUs | "How many GPUs are free for 4 workers with T4s?", "Train `train.py` on 4 GPUs on NRP, with `/work/users/<username>/events` as input" — see [Multi-GPU training](guide-ray-train.md). |
 | Logs | "Show the last 30 minutes of error logs from my notebook", or from your Dask workers. |
 | Facility | "Is the AF healthy?", "How busy is it?", and any number the facility's monitoring holds. Other people's sessions, clusters and jobs are left out, so a sum over sessions or workers counts only yours. |
 | Documentation | "How do I read a dataset through XCache?" — the agent reads the page of this site and links it. |

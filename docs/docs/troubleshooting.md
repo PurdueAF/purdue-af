@@ -21,7 +21,7 @@ start while you are over the
    storage — see [Storage volumes](storage.md).
 
 If you selected a **GPU**, the session is refused while all GPUs of that kind
-are in use by other sessions; the selection form shows how many are free.
+are in use; the selection form shows how many are free.
 Choose another kind of GPU, or start without one.
 
 ### My session is very slow
@@ -160,7 +160,8 @@ stop it — see [Settings](guide-ray-train.md#settings).
 
 ### "You have no Ray cluster"
 
-A job's log is removed 15 minutes after it ends, and its status an hour after
+Your Ray cluster is removed 15 minutes after its last task, job or call, and
+the records and logs of its jobs with it. The next submission starts a new one
 — see [Good to know](guide-ray-train.md#good-to-know).
 
 ### A training stops with "Unable to set up cluster storage"
@@ -201,8 +202,8 @@ Your session has no `RAY_AUTH_TOKEN`: restart it.
 ### Remote-SSH connection from VSCode/Cursor fails
 
 See the [troubleshooting section of the IDE connection guide](guide-ide-connection.md#troubleshooting).
-The usual suspects: home directory permissions (`chmod 755 ~/`), a missing or
-not-on-PATH `websocat` binary, or an expired JupyterHub token.
+The usual suspects: a missing or not-on-PATH `websocat` binary, or an expired
+JupyterHub token.
 
 
 ## Still stuck?

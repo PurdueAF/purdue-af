@@ -80,7 +80,7 @@ see [Conda environments](guide-conda.md).
 
 ## Analysis tools
 
-The global Pixi environment carries the common HEP analysis tools; the
+All of these but PocketCoffea are in the global Pixi environment; the
 [CMS Common Analysis Tools documentation](https://cms-analysis.docs.cern.ch)
 covers more.
 
@@ -91,7 +91,7 @@ covers more.
   [RooFit on GPUs](guide-roofit-cuda.md).
 * [Coffea](https://coffea-hep.readthedocs.io/) — columnar analysis in Python.
 * [PocketCoffea](https://pocketcoffea.readthedocs.io/en/stable/) — a declarative
-  framework on top of Coffea; its
+  framework on top of Coffea, installed in your own environment; its
   [dask@purdue-af executor](https://pocketcoffea.readthedocs.io/en/stable/running.html#executors-availability)
   runs on [Dask Gateway](guide-dask-gateway.md).
 * [RDataFrame](https://root.cern.ch/doc/master/group__tutorial__dataframe.html) —

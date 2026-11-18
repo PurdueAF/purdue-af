@@ -12,8 +12,9 @@ Purdue AF provides several user interfaces for analysis development:
 * [Connection from local VSCode-based IDEs](guide-ide-connection.md) (VSCode, Cursor, etc.)
 * [SSH connection from a local terminal](guide-ssh-access.md)
 * [AI agents](agents.md) — Claude Code, Codex and OpenCode run in every
-  session, in the terminal, in VS Code and as a chat panel in JupyterLab. An
-  agent on your own machine [connects with a token](guide-agentic-interface.md).
+  session's terminal; Claude Code and Codex also as VS Code extensions, and all
+  three in a chat panel in JupyterLab. An agent on your own machine
+  [connects with a token](guide-agentic-interface.md).
 
 Notebooks run on Jupyter kernels made from Pixi or Conda environments — see
 [Software stacks](software.md).

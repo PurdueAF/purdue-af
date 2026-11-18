@@ -4,7 +4,7 @@ The [Dask Gateway](https://gateway.dask.org) chart, `dask-gateway` from
 `helm.dask.org`, that gives each AF user and each
 [workload account](#workload-accounts) a Dask cluster on the AF nodes, running
 as them. How users create and size one:
-[Dask Gateway at Purdue AF](../../docs/docs/guide-dask-gateway.md).
+[Dask Gateway](../../docs/docs/guide-dask-gateway.md).
 
 | File               | What it is                                                                                                                                                                                                                                                                                           |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
