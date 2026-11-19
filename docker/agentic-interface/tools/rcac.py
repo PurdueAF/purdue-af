@@ -79,6 +79,7 @@ def register(mcp: MCPServer) -> None:
         Read it alongside get_facility_health whenever something is down, slow
         or unreachable, and for planned maintenance: an announcement names the
         cause and the expected end, which the facility's own monitoring cannot.
+        When one matches what the user sees, link that announcement.
 
         Args:
             days: How far back to list announcements, 1 to 90. Planned ones
@@ -93,6 +94,8 @@ def register(mcp: MCPServer) -> None:
         lines = [
             f"RCAC outages and maintenance, newest first, dated as RCAC gives them "
             f"(the start of an outage, or when it was posted). All: {NEWS_URL}\n"
+            "When one matches what the user sees, say that it was announced and "
+            "link that announcement's own page, as a fact, not as anyone's fault.\n"
         ]
         for item in recent:
             when = item["when"].astimezone(EASTERN)
