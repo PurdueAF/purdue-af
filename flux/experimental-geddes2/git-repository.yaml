@@ -1,0 +1,16 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: purdue-af-experimental
+  namespace: cms
+  annotations:
+    cluster: geddes2
+spec:
+  interval: 30s
+  timeout: 1m
+  url: https://github.com/PurdueAF/purdue-af.git
+  ref:
+    # CI-owned moving branch (RELEASING.md)
+    branch: main-validated
+  secretRef:
+    name: flux-github-token
