@@ -220,6 +220,10 @@ configMapGenerator:
       - ../../apps/agentic-analysis/llm_proxy.py
       - ../../apps/agentic-analysis/models.toml
 
+  - name: ray-train-raycluster
+    files:
+      - ../../apps/ray-train/raycluster.yaml
+
   - name: ray-train-gateway
     options:
       annotations:
@@ -227,7 +231,6 @@ configMapGenerator:
     files:
       - ../../apps/ray-train/gateway.py
       - ../../apps/ray-train/config.yaml
-      - ../../apps/ray-train/raycluster.yaml
       - ../../apps/ray-train/nrp_gpus.py
       - ../../apps/ray-train/nrp_jobs.py
       - ../../apps/ray-train/stage.py

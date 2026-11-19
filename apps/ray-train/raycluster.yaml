@@ -29,7 +29,7 @@ spec:
           runAsNonRoot: true
           supplementalGroups: [100]
         nodeSelector: &node-selector
-          cms-af-prod: "true"
+          ${af_node_label:=cms-af-prod}: ${af_node_label_value:="true"}
         tolerations: &tolerations
           - key: hub.jupyter.org/dedicated
             operator: Equal

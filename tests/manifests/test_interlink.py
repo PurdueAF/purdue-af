@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from common import REPO, load_script
+from common import REPO, load_script, load_yaml
 
 INTERLINK = REPO / "apps" / "interlink"
 
@@ -478,7 +478,7 @@ def test_shadow_server_allows_only_the_clients_reverse_tunnels(interlink_cluster
 
 
 def _tunnel_traefik():
-    return yaml.safe_load((INTERLINK / "traefik" / "values.yaml").read_text())
+    return load_yaml(INTERLINK / "traefik" / "values.yaml")
 
 
 def test_tunnel_ingress_is_served_by_the_tunnel_traefik(interlink_clusters):
@@ -545,7 +545,7 @@ def test_supersonic_on_a_tunnel_node_gets_a_unique_shadow(interlink_clusters):
     }
     checked = set()
     for values_file in sorted((REPO / "apps" / "sonic").glob("*/values.yaml")):
-        values = yaml.safe_load(values_file.read_text())
+        values = load_yaml(values_file)
         server = values.get("inferenceServer", {})
         node = server.get("nodeSelector", {}).get("kubernetes.io/hostname")
         if node not in tunnel_nodes:
@@ -571,7 +571,7 @@ def test_pod_pruner_sweeps_every_release_on_a_tunnel_node(interlink_clusters):
     }
     offloaded = set()
     for values_file in sorted((REPO / "apps" / "sonic").glob("*/values.yaml")):
-        values = yaml.safe_load(values_file.read_text())
+        values = load_yaml(values_file)
         node = values.get("inferenceServer", {}).get("nodeSelector", {})
         if node.get("kubernetes.io/hostname") in tunnel_nodes:
             offloaded.add(values["nameOverride"])
@@ -606,7 +606,7 @@ def test_remote_affinity_annotations_are_node_affinity_json(interlink_clusters):
     }
     checked = 0
     for values_file in sorted((REPO / "apps").glob("**/values.yaml")):
-        values = yaml.safe_load(values_file.read_text()) or {}
+        values = load_yaml(values_file) or {}
         server = values.get("inferenceServer", {}) if isinstance(values, dict) else {}
         raw = (server.get("annotations") or {}).get("interlink.eu/remote-affinity")
         if raw is None:

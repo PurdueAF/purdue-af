@@ -31,7 +31,7 @@ virtualNode:
 
   network:
     enableTunnel: true
-    wildcardDNS: "geddes.rcac.purdue.edu"
+    wildcardDNS: "${cluster_domain:=geddes.rcac.purdue.edu}"
     # The chart's nginx template on apps/interlink/traefik and a pinned image;
     # the server accepts only the client's reverse tunnels to the pod's ports.
     customTemplate: |

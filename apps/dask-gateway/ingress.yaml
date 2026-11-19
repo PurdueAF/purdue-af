@@ -5,7 +5,7 @@ metadata:
 spec:
   ingressClassName: public
   rules:
-    - host: dask-gateway.geddes.rcac.purdue.edu
+    - host: dask-gateway.${cluster_domain:=geddes.rcac.purdue.edu}
       http:
         paths:
           - backend:

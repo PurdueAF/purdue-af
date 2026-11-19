@@ -64,7 +64,7 @@ virtualNode:
         ln "$WSTUNNEL_TMP/wstunnel" "$WSTUNNEL"; \
         rm -rf "$WSTUNNEL_TMP"; [ -x "$WSTUNNEL" ]; \
       }; } && \
-      "$WSTUNNEL" client --log-lvl WARN --http-upgrade-path-prefix %[1]s %[2]s -H "Host: %[3]s" ws://128.211.160.122:80 2>&1 &
+      "$WSTUNNEL" client --log-lvl WARN --http-upgrade-path-prefix %[1]s %[2]s -H "Host: %[3]s" ws://${interlink_traefik_ip:=128.211.160.122}:80 2>&1 &
 
 extraVolumes:
   - name: plugin-data
