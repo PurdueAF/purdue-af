@@ -239,6 +239,11 @@ class Unauthorized(Exception):
     """Mattermost refused the tokens: the service account has to log in again."""
 
 
+class CodeChanged(Exception):
+    """agent.py on disk is no longer the code running: the process ends, and
+    Kubernetes starts it again on the new code."""
+
+
 class OAuth(httpx.Auth):
     """Mattermost's OAuth tokens. Each refresh replaces the refresh token, so
     they live in a file that outlasts the pod. ``ready`` is set while it holds
@@ -740,6 +745,15 @@ class Agent:
         self.asked: defaultdict[str, deque[float]] = defaultdict(deque)
         self.slots = asyncio.Semaphore(CONCURRENT_ANSWERS)
         self.tasks: set[asyncio.Task[None]] = set()
+        # The ConfigMap's files change in place on a merge; the prompt is read per answer.
+        self.code = Path(__file__)
+        self.loaded = self.code.read_bytes()
+
+    def changed(self) -> bool:
+        try:
+            return self.code.read_bytes() != self.loaded
+        except OSError:
+            return False
 
     async def start(self) -> None:
         self.me = await self.mattermost.get("/users/me")
@@ -1124,6 +1138,12 @@ class Agent:
         await self.start()
         log.info("polling as %s", self.me["username"])
         while True:
+            if self.changed():
+                log.info(
+                    "new code: finishing %d answers, then restarting", len(self.tasks)
+                )
+                await asyncio.gather(*self.tasks, return_exceptions=True)
+                raise CodeChanged
             try:
                 await self.poll()
             except httpx.HTTPStatusError as exc:
@@ -1148,6 +1168,8 @@ class Agent:
             await self.oauth.ready.wait()
             try:
                 await self.polling()
+            except CodeChanged:
+                return
             except Unauthorized as exc:
                 log.error("Mattermost refused the tokens: %s", exc)
                 self.oauth.forget()
@@ -1208,7 +1230,15 @@ async def serve(agent: Agent, base_url: str) -> None:
     config = uvicorn.Config(
         web(agent, base_url), host="0.0.0.0", port=PORT, log_level="warning"
     )
-    await asyncio.gather(uvicorn.Server(config).serve(), agent.run())
+    server = uvicorn.Server(config)
+    pages = asyncio.create_task(server.serve())
+    running = asyncio.create_task(agent.run())
+    done, _ = await asyncio.wait([pages, running], return_when=asyncio.FIRST_COMPLETED)
+    server.should_exit = True
+    running.cancel()
+    await asyncio.gather(pages, running, return_exceptions=True)
+    for task in done:
+        task.result()
 
 
 def main() -> None:

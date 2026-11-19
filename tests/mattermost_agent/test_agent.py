@@ -455,6 +455,47 @@ async def test_a_refused_poll_logs_the_request_it_was(make, caplog, monkeypatch)
     assert message == "poll: HTTP 403 for GET /api/v4/channels/c1/posts"
 
 
+async def test_new_code_ends_polling_once_its_answers_finish(
+    make, tmp_path, monkeypatch
+):
+    bot, *_ = await make()
+    bot.code = tmp_path / "agent.py"
+    bot.code.write_bytes(b"old")
+    bot.loaded = b"old"
+    polls = []
+
+    async def counted():
+        polls.append(1)
+
+    monkeypatch.setattr(bot, "poll", counted)
+    monkeypatch.setattr(agent, "POLL_SECONDS", 0)
+    answering = asyncio.Event()
+    bot.tasks.add(asyncio.create_task(answering.wait()))
+    running = asyncio.create_task(bot.polling())
+    while not polls:
+        await asyncio.sleep(0)
+    bot.code.write_bytes(b"new")
+    for _ in range(10):
+        await asyncio.sleep(0)
+    seen = len(polls)
+    for _ in range(10):
+        await asyncio.sleep(0)
+    assert len(polls) == seen and not running.done()
+    answering.set()
+    with pytest.raises(agent.CodeChanged):
+        await running
+
+
+async def test_new_code_ends_the_run(make, monkeypatch):
+    bot, *_ = await make()
+
+    async def changed():
+        raise agent.CodeChanged
+
+    monkeypatch.setattr(bot, "polling", changed)
+    await asyncio.wait_for(bot.run(), 1)
+
+
 async def test_the_channel_is_found_by_the_names_in_its_url(make):
     bot, *_ = await make()
     home, direct, groups = await bot.mattermost.channels("bot", TEAM_URL, CHANNEL_URL)
