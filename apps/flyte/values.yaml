@@ -78,11 +78,11 @@ console:
 # The auth Secret is secret-console-auth.yaml.
 ingress:
   create: ${enable_ingresses}
-  host: flyte-cms.geddes.rcac.purdue.edu
+  host: flyte-${jupyterhub_host:=cms.geddes.rcac.purdue.edu}
   ingressClassName: public
   tls:
     - hosts:
-        - flyte-cms.geddes.rcac.purdue.edu
+        - flyte-${jupyterhub_host:=cms.geddes.rcac.purdue.edu}
   # Basic auth gates the console and the API, which has no auth of its own.
   commonAnnotations:
     nginx.ingress.kubernetes.io/auth-type: basic

@@ -18,7 +18,7 @@
       "title": "Purdue AF Login",
       "tooltip": "Login to Purdue AF",
       "type": "link",
-      "url": "https://cms.geddes.rcac.purdue.edu"
+      "url": "https://${jupyterhub_host}"
     },
     {
       "asDropdown": false,

@@ -139,7 +139,7 @@ serverFiles:
           credentials_file: /etc/hub-metrics/token
         static_configs:
           - targets:
-              - "cms.geddes.rcac.purdue.edu"
+              - "${jupyterhub_host}"
       - job_name: "kube-state-metrics"
         honor_timestamps: false
         static_configs:

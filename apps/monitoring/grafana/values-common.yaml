@@ -18,7 +18,7 @@ ingress:
   ingressClassName: public
   pathType: Prefix
   hosts:
-    - cms.geddes.rcac.purdue.edu
+    - ${jupyterhub_host}
 
 service:
   type: ClusterIP

@@ -200,7 +200,7 @@
                   {
                     "targetBlank": true,
                     "title": "",
-                    "url": "https://cms.geddes.rcac.purdue.edu/grafana/d/single-user-stat-dashboard/single-user-statistics?&var-user=purdue-af-$${__data.fields.ID}"
+                    "url": "https://${jupyterhub_host}/grafana/d/single-user-stat-dashboard/single-user-statistics?&var-user=purdue-af-$${__data.fields.ID}"
                   }
                 ]
               }
@@ -241,7 +241,7 @@
                   {
                     "targetBlank": true,
                     "title": "",
-                    "url": "https://cms.geddes.rcac.purdue.edu/grafana/d/single-user-stat-dashboard/single-user-statistics?&var-user=purdue-af-$${__data.fields.ID}"
+                    "url": "https://${jupyterhub_host}/grafana/d/single-user-stat-dashboard/single-user-statistics?&var-user=purdue-af-$${__data.fields.ID}"
                   }
                 ]
               }

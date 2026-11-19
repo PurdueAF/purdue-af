@@ -15,7 +15,7 @@ resources:
 
 grafana.ini:
   server:
-    root_url: https://cms.geddes.rcac.purdue.edu/grafana-private/
+    root_url: https://${jupyterhub_host}/grafana-private/
   dashboards:
     default_home_dashboard_path: /var/lib/grafana/dashboards/private/users-overview.json
   auth.anonymous:

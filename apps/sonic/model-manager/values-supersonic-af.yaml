@@ -16,7 +16,7 @@ modelRepository:
   storageClassName: geddes-standard-multinode
 
 # The Envoy LoadBalancer clients dial; discovery would report the in-cluster Service.
-inferenceEndpoint: supersonic-af.cms.geddes.rcac.purdue.edu:8001
+inferenceEndpoint: supersonic-af.${jupyterhub_host:=cms.geddes.rcac.purdue.edu}:8001
 
 prometheus:
   url: http://prometheus-server.cms.svc.cluster.local:9090

@@ -1,4 +1,4 @@
-hubUrl: https://cms.geddes.rcac.purdue.edu
+hubUrl: https://${jupyterhub_host}
 
 ssh:
   config:
