@@ -26,7 +26,7 @@ from urllib.parse import urlsplit
 import pytest
 import yaml
 from analysis_helpers import APP, EXPERIMENTAL
-from common import REPO, load_all, load_script
+from common import REPO, hub_values, load_all, load_script
 
 WORKFLOW = REPO / "workflows" / "agentic-analysis"
 
@@ -288,9 +288,7 @@ def test_task_pods_reach_the_sessions_gateway_from_a_pod_as_their_account():
     (template,) = load_all(APP / "podtemplate.yaml")
     container = template["template"]["spec"]["containers"][0]
     env = _variables(container)
-    spawner = (
-        REPO / "apps/jupyterhub/jupyterhub/extraFiles/custom-spawner.py"
-    ).read_text()
+    sessions = hub_values()["singleuser"]["extraEnv"]
     (release,) = load_all(REPO / "apps/dask-gateway/helmrelease.yaml")
     (ingress,) = load_all(REPO / "apps/dask-gateway/ingress.yaml")
     names = sorted(name for name in env if name.startswith("DASK_GATEWAY__"))
@@ -313,7 +311,7 @@ def test_task_pods_reach_the_sessions_gateway_from_a_pod_as_their_account():
     assert env["DASK_GATEWAY__AUTH__TYPE"] == (
         f"{clusters.__name__}.{clusters.AccountAuth.__name__}"
     )
-    (port,) = re.findall(r'"DASK_GATEWAY__PROXY_ADDRESS",\s*"[^"]*:(\d+)"', spawner)
+    port = sessions["DASK_GATEWAY__PROXY_ADDRESS"].rsplit(":", 1)[1]
     assert env["DASK_GATEWAY__PROXY_ADDRESS"] == (
         f"traefik-{release['metadata']['name']}:{port}"
     )
