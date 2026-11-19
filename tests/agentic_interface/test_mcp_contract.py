@@ -30,6 +30,8 @@ EXPECTED_TOOLS = {
     "list_prometheus_metrics": "reads facility",
     # docs
     "read_af_doc": "reads facility",
+    # rcac
+    "get_rcac_outages": "reads facility",
     # logs
     "query_notebook_logs": "reads",
     "query_dask_logs": "reads",

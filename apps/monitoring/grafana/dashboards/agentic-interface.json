@@ -1621,7 +1621,7 @@
         "type": "constant",
         "hide": 2,
         "skipUrlSync": true,
-        "query": "get_facility_health"
+        "query": "get_facility_health|get_rcac_outages"
       },
       {
         "name": "ray_tools",
