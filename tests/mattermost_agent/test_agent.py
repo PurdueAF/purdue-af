@@ -1803,6 +1803,59 @@ async def test_addresses_in_tool_results_never_reach_the_model(make):
     assert out == 'up{instance="<address>",node="paf-a01",version="1.2.3"} 1'
 
 
+async def test_linking_and_link_first_replies_do_not_count_toward_the_limit(make):
+    bot, server, llm, _ = await make({"content": "Answered."})
+    await ready(bot)
+    for n in range(agent.USER_LIMIT + 2):
+        llm.personal = "link"
+        await bot.handle(dm(f"l{n}", "link my account please"))
+        llm.personal = "personal"
+        await bot.handle(dm(f"p{n}", "is my session running?"))
+    llm.personal = "general"
+    await bot.handle(dm("g", "is the AF up?"))
+    assert replies(server)[-1] == "Answered."
+    assert agent.LIMITED not in replies(server)
+
+
+async def test_full_answers_still_count_toward_the_limit(make):
+    bot, server, *_ = await make(*[{"content": "ok"}] * agent.USER_LIMIT)
+    await ready(bot)
+    for n in range(agent.USER_LIMIT + 1):
+        await bot.handle(post(f"p{n}"))
+    assert replies(server) == ["ok"] * agent.USER_LIMIT + [agent.LIMITED]
+
+
+async def test_an_unopened_link_is_named_instead_of_link_first(make):
+    bot, server, llm, _ = await make()
+    await ready(bot)
+    await bot.handle(dm("d", "link"))
+    llm.personal = "personal"
+    await bot.handle(dm("q", "is my session running?"))
+    assert replies(server)[-1] == agent.LINK_UNFINISHED["link"]
+
+
+async def test_an_awaited_code_is_named_instead_of_link_first(make):
+    bot, server, llm, _ = await make({"content": "Not yet."})
+    await ready(bot)
+    await bot.handle(dm("d", "link"))
+    state = next(iter(bot.linking.pending))
+    await bot.linking.login(state, "alice-login")
+    llm.personal = "personal"
+    await bot.handle(dm("q", "is my session running?"))
+    assert replies(server)[-1] == agent.LINK_UNFINISHED["code"]
+    llm.personal = "general"
+    await bot.handle(dm("r", "Linked done", at=3000))
+    system = llm.bodies[-1]["messages"][0]["content"]
+    assert agent.LINK_IN_PROGRESS["code"] in system
+
+
+async def test_a_finished_link_is_not_in_progress(make):
+    bot, server, *_ = await make()
+    await ready(bot)
+    await link(bot, server)
+    assert bot.linking.progress("u1") is None
+
+
 def test_every_key_the_pod_reads_is_in_the_secret():
     deployment = load_yaml(APP / "deployment.yaml")
     container = deployment["spec"]["template"]["spec"]["containers"][0]

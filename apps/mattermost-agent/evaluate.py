@@ -74,6 +74,9 @@ class Linked:
     def forget(self, user: str) -> None:
         pass
 
+    def progress(self, user: str) -> str | None:
+        return None
+
     def link_url(self, user: str) -> str:
         return (
             "https://cms.geddes.rcac.purdue.edu/services/mattermost-agent/link?state=x"

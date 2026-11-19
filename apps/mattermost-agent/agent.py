@@ -54,7 +54,7 @@ ANSWER_SECONDS = 300.0
 # Each model call: the LLM proxy holds a request through an outage for hours.
 LLM_CALL_SECONDS = 120.0
 CONCURRENT_ANSWERS = 4
-USER_LIMIT = 5
+USER_LIMIT = 30
 USER_WINDOW_SECONDS = 600.0
 HUB_CLIENT_ID = "service-mattermost-agent"
 LINK_SECONDS = 24 * 3600
@@ -172,6 +172,27 @@ NEEDS_LINK = (
 ONLY_IN_DM = "Please ask me that in a direct message."
 LINK_STATUS = "The person asking has linked their facility account until {until}."
 NO_LINK_STATUS = "The person asking has not linked their facility account."
+# A link begun and not finished: its page not yet opened, or its code not yet sent.
+LINK_UNFINISHED = {
+    "link": (
+        "Your linking is not finished: open the link I sent you in our direct "
+        "message and log in, then send me the code the page shows."
+    ),
+    "code": (
+        "Your linking is not finished: send me the code from the link page in our "
+        "direct message."
+    ),
+}
+LINK_IN_PROGRESS = {
+    "link": (
+        "The person asking has started linking but has not opened the link yet; "
+        "they are not linked until they open it, log in and send the code."
+    ),
+    "code": (
+        "The person asking has started linking but has not sent the code from the "
+        "link page yet; they are not linked until they send it in a direct message."
+    ),
+}
 LINK_REPLY = (
     "Open this within 24 hours and log in to the Analysis Facility: {url}\n\n"
     "It works once, for you only, so do not forward it. The page gives you a code; "
@@ -489,6 +510,19 @@ class Linking:
         self.save()
         return f"{self.hub.public_url}{PREFIX}/link?state={state}"
 
+    def progress(self, user: str) -> str | None:
+        """How far a user's unfinished link is: "code" while its code is
+        awaited, "link" while its page is unopened, or None."""
+        now = time.time()
+        code = self.codes.get(user)
+        if code and now < code["expires_at"]:
+            return "code"
+        if any(
+            e["user"] == user and now < e["expires_at"] for e in self.pending.values()
+        ):
+            return "link"
+        return None
+
     def valid(self, state: str) -> bool:
         entry = self.pending.get(state)
         return bool(entry and time.time() < entry["expires_at"])
@@ -791,7 +825,6 @@ class Agent:
         return post["channel_id"] in self.direct | self.groups
 
     async def handle(self, post: dict[str, Any]) -> None:
-        user = post["user_id"]
         root = post["root_id"] if self.private(post) else post["root_id"] or post["id"]
         try:
             command = self.text(post).strip()
@@ -801,10 +834,6 @@ class Agent:
                 reply = await self.command(post, command)
                 await self.mattermost.reply(post, root, reply)
                 log.info("post %s: linking", post["id"])
-                return
-            if not self.allowed(user, time.monotonic()):
-                await self.mattermost.reply(post, root, LIMITED)
-                log.info("post %s: over the limit", post["id"])
                 return
             async with self.slots:
                 answer = await self.answer_or_why(post)
@@ -986,14 +1015,21 @@ class Agent:
                 token = None
         if personal and token is None:
             self.linking.forget(post["user_id"])
-            return NEEDS_LINK
+            return LINK_UNFINISHED.get(
+                self.linking.progress(post["user_id"]) or "", NEEDS_LINK
+            )
+        if not self.allowed(post["user_id"], time.monotonic()):
+            log.info("post %s: over the limit", post["id"])
+            return LIMITED
         place = "a private conversation" if self.private(post) else "the channel"
         mode = PERSONAL_MODE if personal else PUBLIC_MODE
         until = self.linking.until(post["user_id"])
         status = (
             LINK_STATUS.format(until=time.strftime("%d %b %Y", time.gmtime(until)))
             if until
-            else NO_LINK_STATUS
+            else LINK_IN_PROGRESS.get(
+                self.linking.progress(post["user_id"]) or "", NO_LINK_STATUS
+            )
         )
         system = (
             f"{self.prompt_file.read_text()}\n\n{mode} {status}\n\n"
