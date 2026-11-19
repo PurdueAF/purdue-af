@@ -52,7 +52,7 @@ fetch_cern() {
 }
 
 fetch_purdue() {
-	ensure_tools ldapsearch
+	ensure_tools ldapsearch curl
 	local entries rc=0
 	entries=$(ldapsearch -H ldap://auth.hammer.rcac.purdue.edu -x \
 		-b "ou=People,dc=hammer,dc=rcac,dc=purdue,dc=edu" "(uid=*)" uid) || rc=$?
