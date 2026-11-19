@@ -67,7 +67,7 @@ spec:
                   name: mattermost-agent
                   key: username
             - name: PUBLIC_URL
-              value: "https://cms.geddes.rcac.purdue.edu"
+              value: "https://${jupyterhub_host:=cms.geddes.rcac.purdue.edu}"
             - name: STATE_FILE
               value: /state/oauth.json
             - name: LINKS_FILE

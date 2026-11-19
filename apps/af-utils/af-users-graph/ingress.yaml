@@ -5,7 +5,7 @@ metadata:
 spec:
   ingressClassName: public
   rules:
-    - host: cms.geddes.rcac.purdue.edu
+    - host: ${jupyterhub_host}
       http:
         paths:
           - path: /users-graph/

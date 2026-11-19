@@ -33,6 +33,8 @@ spec:
           ports:
             - containerPort: 8888
           env:
+            - name: AF_PUBLIC_URL
+              value: "https://${jupyterhub_host:=cms.geddes.rcac.purdue.edu}"
             - name: NAMESPACE
               valueFrom:
                 fieldRef:
