@@ -95,6 +95,15 @@ PUBLIC_MODE = (
     "conversation may have acted on this person's account at their request: that "
     "happened, so never say it did not."
 )
+UNLINKED_MODE = (
+    "This message asks about the person's own session, files, logs or clusters, but "
+    "you have no linked account for them, so you use none and cannot see or change "
+    "any of that. Answer every part you can from the facility-wide tools, such as "
+    "whether the facility is up and working, and do not answer for anyone else. Then "
+    "say in one sentence that to check their own things they can ask you in a "
+    "direct message to link their account, or how to finish a link they started; "
+    "linking takes a minute and lasts 30 days."
+)
 PERSONAL_MODE = (
     "You are acting on the account of the person who wrote this message, who asked "
     "about their own things. Answer only what they asked, with only the detail it "
@@ -172,24 +181,9 @@ TIMED_OUT = (
 )
 UNEXPECTED = "Something went wrong on my side ({kind}), so I cannot answer this."
 LIMITED = "You have reached my limit of questions for now. Please try again later."
-NEEDS_LINK = (
-    "I need to know who you are for that. Ask me in a direct message to link your "
-    "account; it takes a minute and lasts 30 days."
-)
 ONLY_IN_DM = "Please ask me that in a direct message."
 LINK_STATUS = "The person asking has linked their facility account until {until}."
 NO_LINK_STATUS = "The person asking has not linked their facility account."
-# A link begun and not finished: its page not yet opened, or its code not yet sent.
-LINK_UNFINISHED = {
-    "link": (
-        "Your linking is not finished: open the link I sent you in our direct "
-        "message and log in, then send me the code the page shows."
-    ),
-    "code": (
-        "Your linking is not finished: send me the code from the link page in our "
-        "direct message."
-    ),
-}
 LINK_IN_PROGRESS = {
     "link": (
         "The person asking has started linking but has not opened the link yet; "
@@ -1034,16 +1028,15 @@ class Agent:
                 raise Failure(HUB_UNREACHABLE) from exc
             if owner is None:
                 token = None
-        if personal and token is None:
+        unlinked = personal and token is None
+        if unlinked:
             self.linking.forget(post["user_id"])
-            return LINK_UNFINISHED.get(
-                self.linking.progress(post["user_id"]) or "", NEEDS_LINK
-            )
+            personal = False
         if not self.allowed(post["user_id"], time.monotonic()):
             log.info("post %s: over the limit", post["id"])
             return LIMITED
         place = "a private conversation" if self.private(post) else "the channel"
-        mode = PERSONAL_MODE if personal else PUBLIC_MODE
+        mode = PERSONAL_MODE if personal else UNLINKED_MODE if unlinked else PUBLIC_MODE
         if personal and post["channel_id"] not in self.direct:
             mode = f"{mode} {PERSONAL_IN_COMPANY}"
         until = self.linking.until(post["user_id"])

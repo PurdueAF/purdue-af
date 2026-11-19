@@ -77,6 +77,12 @@
   private: true
   intent: general
   answer_not: ['link\?state=']
+- name: up-and-my-session-unlinked
+  ask: is the facility accessible currently? I am unable to access my session
+  intent: personal
+  tools_any: [get_facility_health]
+  answer: ["link"]
+  answer_not: ["I need to know who you are"]
 - name: my-session-unlinked
   ask: is my session running?
   private: true
