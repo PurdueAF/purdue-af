@@ -101,8 +101,12 @@ spec:
               readOnly: true
       volumes:
         - name: app
-          configMap:
-            name: ray-train-gateway
+          projected:
+            sources:
+              - configMap:
+                  name: ray-train-gateway
+              - configMap:
+                  name: ray-train-raycluster
         - name: deps
           emptyDir: {}
         # One key of the z2jh `hub` Secret, updated in place once the Hub registers the service.

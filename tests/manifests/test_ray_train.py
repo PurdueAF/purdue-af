@@ -53,7 +53,6 @@ def test_flux_deploys_the_gateway():
     assert config["files"] == [
         "../../apps/ray-train/gateway.py",
         "../../apps/ray-train/config.yaml",
-        "../../apps/ray-train/raycluster.yaml",
         "../../apps/ray-train/nrp_gpus.py",
         "../../apps/ray-train/nrp_jobs.py",
         "../../apps/ray-train/stage.py",
@@ -62,6 +61,10 @@ def test_flux_deploys_the_gateway():
     ]
     annotations = config["options"]["annotations"]
     assert annotations["kustomize.toolkit.fluxcd.io/substitute"] == "disabled"
+    # The template alone takes the root's substitutions: its node selector.
+    template = generator(kustomization, "ray-train-raycluster")
+    assert template["files"] == ["../../apps/ray-train/raycluster.yaml"]
+    assert "options" not in template
 
 
 def test_the_gateway_runs_the_files_it_is_given(gateway):
@@ -69,7 +72,8 @@ def test_the_gateway_runs_the_files_it_is_given(gateway):
     (container,) = pod["containers"]
     volumes = {v["name"]: v for v in pod["volumes"]}
     (app,) = [m for m in container["volumeMounts"] if m["name"] == "app"]
-    assert volumes["app"]["configMap"]["name"] == "ray-train-gateway"
+    sources = [s["configMap"]["name"] for s in volumes["app"]["projected"]["sources"]]
+    assert sources == ["ray-train-gateway", "ray-train-raycluster"]
     # kubelet never updates a subPath mount, so the gateway would never see new code.
     assert "subPath" not in app
     assert container["command"] == ["python", f"{app['mountPath']}/gateway.py"]

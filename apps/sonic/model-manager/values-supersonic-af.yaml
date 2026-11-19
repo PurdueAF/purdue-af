@@ -13,7 +13,7 @@ modelRepository:
   claimName: supersonic-model-repository
   accessModes:
     - ReadWriteMany
-  storageClassName: geddes-standard-multinode
+  storageClassName: ${multinode_storage_class}
 
 # The Envoy LoadBalancer clients dial; discovery would report the in-cluster Service.
 inferenceEndpoint: supersonic-af.${jupyterhub_host:=cms.geddes.rcac.purdue.edu}:8001
@@ -26,8 +26,8 @@ auth:
   existingSecret: supersonic-model-manager-auth
 
 ingress:
-  enabled: true
-  hostName: supersonic-models.geddes.rcac.purdue.edu
+  enabled: ${enable_ingresses}
+  hostName: supersonic-models.${cluster_domain:=geddes.rcac.purdue.edu}
   ingressClassName: public
   tls: true
 

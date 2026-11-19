@@ -103,10 +103,11 @@ c.JupyterHub.authenticator_class = PurdueCILogonOAuthenticator
 c.KubeSpawner.apply_user_options = drop_stale_user_options
 
 c.KubeSpawner.environment.setdefault(
-    "DASK_GATEWAY__ADDRESS", "http://dask-gateway.geddes.rcac.purdue.edu"
+    "DASK_GATEWAY__ADDRESS",
+    "http://dask-gateway.${cluster_domain:=geddes.rcac.purdue.edu}",
 )
 c.KubeSpawner.environment.setdefault(
     "DASK_GATEWAY__PROXY_ADDRESS",
-    "traefik-dask-gateway.cms.geddes.rcac.purdue.edu:8786",
+    "traefik-dask-gateway.${jupyterhub_host}:8786",
 )
 c.KubeSpawner.environment.setdefault("DASK_GATEWAY__AUTH__TYPE", "jupyterhub")

@@ -64,7 +64,7 @@ virtualNode:
   # (the plugin's wstunnel-client sidecar), so Geddes reaches its ports.
   network:
     # Runs in the foreground as the sidecar.
-    wstunnelCommand: 'exec /home/app/wstunnel client --log-lvl WARN --http-upgrade-path-prefix %[1]s %[2]s -H "Host: %[3]s" ws://128.211.160.122:80'
+    wstunnelCommand: 'exec /home/app/wstunnel client --log-lvl WARN --http-upgrade-path-prefix %[1]s %[2]s -H "Host: %[3]s" ws://${interlink_traefik_ip:=128.211.160.122}:80'
 
 extraVolumes:
   - name: kubeconfig

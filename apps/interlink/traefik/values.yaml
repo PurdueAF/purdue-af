@@ -44,9 +44,9 @@ global:
 
 service:
   annotations:
-    metallb.universe.tf/address-pool: geddes-public-pool
+    metallb.universe.tf/address-pool: ${lb_public_pool:=geddes-public-pool}
     # Both nodes' wstunnelCommand dial this address.
-    metallb.universe.tf/loadBalancerIPs: 128.211.160.122
+    metallb.universe.tf/loadBalancerIPs: ${interlink_traefik_ip:=128.211.160.122}
 
 nodeSelector:
   ${af_node_label:=cms-af-prod}: ${af_node_label_value:="true"}

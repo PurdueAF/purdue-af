@@ -508,7 +508,7 @@ traefik:
   loglevel: ERROR
   service:
     annotations:
-      metallb.universe.tf/address-pool: geddes-private-pool
+      metallb.universe.tf/address-pool: ${lb_private_pool:=geddes-private-pool}
     ports:
       tcp:
         port: 8786

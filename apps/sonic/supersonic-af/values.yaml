@@ -86,12 +86,12 @@ grafana:
             timeInterval: "5s"
             tlsSkipVerify: true
   ingress:
-    enabled: true
+    enabled: ${enable_ingresses}
     hosts:
-      - supersonic-af-grafana.geddes.rcac.purdue.edu
+      - supersonic-af-grafana.${cluster_domain:=geddes.rcac.purdue.edu}
     tls:
       - hosts:
-          - supersonic-af-grafana.geddes.rcac.purdue.edu
+          - supersonic-af-grafana.${cluster_domain:=geddes.rcac.purdue.edu}
     ingressClassName: public
   grafana.ini:
     # The chart default is Admin, and the ingress is public.
@@ -99,4 +99,4 @@ grafana:
       enabled: true
       org_role: Viewer
     server:
-      root_url: https://supersonic-af-grafana.geddes.rcac.purdue.edu
+      root_url: https://supersonic-af-grafana.${cluster_domain:=geddes.rcac.purdue.edu}
