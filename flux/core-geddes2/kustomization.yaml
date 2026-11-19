@@ -7,6 +7,7 @@ resources:
   - ../../apps/jupyterhub/jupyterhub/helmrelease.yaml
   - ../../apps/jupyterhub/jupyterhub/secret-auth-geddes2.yaml
   - ../../apps/jupyterhub/jupyterhub/helmrepo.yaml
+  - ../../apps/jupyterhub/database-backup/cronjob-restore.yaml
   - ../../apps/jupyterhub/jupyterhub-ssh/helmrelease.yaml
   - ../../apps/jupyterhub/jupyterhub-ssh/helmrepo.yaml
   - ../../apps/jupyterhub/userlist-sync/cronjob-purdue.yaml
@@ -83,6 +84,13 @@ configMapGenerator:
     files:
       - ../../apps/jupyterhub/userlist-sync/sync-userlist.sh
       - ../../docker/purdue-af/configs/certs/CERN-bundle.pem
+
+  - name: database-restore-scripts
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../apps/jupyterhub/database-backup/restore-database.sh
 
   - name: jupyterhub-extra-config
     files:

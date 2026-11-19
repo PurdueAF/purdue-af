@@ -1,0 +1,89 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: jupyterhub-database-restore
+spec:
+  schedule: "30 0,12 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 900
+      template:
+        spec:
+          enableServiceLinks: false
+          serviceAccountName: database-restore
+          securityContext:
+            runAsUser: 616617
+          # Depot's export admits only these Geddes2 nodes.
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: kubernetes.io/hostname
+                        operator: In
+                        values: [geddes-a006, geddes-a007]
+          tolerations:
+            - key: "hub.jupyter.org/dedicated"
+              operator: "Equal"
+              value: "cms-af"
+              effect: "NoSchedule"
+          containers:
+            - name: database-restore
+              image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/alpine/kubectl:1.34.2
+              command: [/bin/sh, /scripts/restore-database.sh]
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "256Mi"
+                  cpu: "200m"
+              volumeMounts:
+                - name: depot
+                  mountPath: /depot/cms
+                  readOnly: true
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+          restartPolicy: Never
+          volumes:
+            - name: scripts
+              configMap:
+                name: database-restore-scripts
+            - name: depot
+              nfs:
+                server: datadepot.rcac.purdue.edu
+                path: /depot/cms
+                readOnly: true
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: database-restore
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: database-restore-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: database-restore-rolebinding
+subjects:
+  - kind: ServiceAccount
+    name: database-restore
+roleRef:
+  kind: Role
+  name: database-restore-role
+  apiGroup: rbac.authorization.k8s.io
