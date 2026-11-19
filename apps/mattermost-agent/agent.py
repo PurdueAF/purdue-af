@@ -54,7 +54,7 @@ ANSWER_SECONDS = 300.0
 # Each model call: the LLM proxy holds a request through an outage for hours.
 LLM_CALL_SECONDS = 120.0
 CONCURRENT_ANSWERS = 4
-USER_LIMIT = 5
+USER_LIMIT = 30
 USER_WINDOW_SECONDS = 600.0
 HUB_CLIENT_ID = "service-mattermost-agent"
 LINK_SECONDS = 24 * 3600
