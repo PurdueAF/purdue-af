@@ -95,6 +95,15 @@ PUBLIC_MODE = (
     "conversation may have acted on this person's account at their request: that "
     "happened, so never say it did not."
 )
+UNLINKED_MODE = (
+    "This message asks about the person's own session, files, logs or clusters, but "
+    "you have no linked account for them, so you use none and cannot see or change "
+    "any of that. Answer every part you can from the facility-wide tools, such as "
+    "whether the facility is up and working, and do not answer for anyone else. Then "
+    "say in one sentence that to check their own things they can ask you in a "
+    "direct message to link their account, or how to finish a link they started; "
+    "linking takes a minute and lasts 30 days."
+)
 PERSONAL_MODE = (
     "You are acting on the account of the person who wrote this message, who asked "
     "about their own things. Answer only what they asked, with only the detail it "
@@ -102,6 +111,13 @@ PERSONAL_MODE = (
     "they explicitly asked for, once, and say what you did. After an action, reply: do "
     "not wait or poll for it, since workers and sessions take minutes to start. You "
     "have no way to reach anyone else's account; say so if asked."
+)
+# Where others read the reply: what a tool showed is not theirs to hear.
+PERSONAL_IN_COMPANY = (
+    "Others read this conversation. Say nothing about this person's account that "
+    "does not answer their question, even when a tool showed it: not their storage "
+    "use or quotas, their other sessions, clusters or jobs, or how they use the "
+    "facility, unless they asked about that."
 )
 # Refreshed this early, so that a poll never races the expiry.
 EXPIRY_MARGIN_SECONDS = 300.0
@@ -165,24 +181,9 @@ TIMED_OUT = (
 )
 UNEXPECTED = "Something went wrong on my side ({kind}), so I cannot answer this."
 LIMITED = "You have reached my limit of questions for now. Please try again later."
-NEEDS_LINK = (
-    "I need to know who you are for that. Ask me in a direct message to link your "
-    "account; it takes a minute and lasts 30 days."
-)
 ONLY_IN_DM = "Please ask me that in a direct message."
 LINK_STATUS = "The person asking has linked their facility account until {until}."
 NO_LINK_STATUS = "The person asking has not linked their facility account."
-# A link begun and not finished: its page not yet opened, or its code not yet sent.
-LINK_UNFINISHED = {
-    "link": (
-        "Your linking is not finished: open the link I sent you in our direct "
-        "message and log in, then send me the code the page shows."
-    ),
-    "code": (
-        "Your linking is not finished: send me the code from the link page in our "
-        "direct message."
-    ),
-}
 LINK_IN_PROGRESS = {
     "link": (
         "The person asking has started linking but has not opened the link yet; "
@@ -230,6 +231,11 @@ def status_of(exc: Exception) -> str:
 
 class Unauthorized(Exception):
     """Mattermost refused the tokens: the service account has to log in again."""
+
+
+class CodeChanged(Exception):
+    """agent.py on disk is no longer the code running: the process ends, and
+    Kubernetes starts it again on the new code."""
 
 
 class OAuth(httpx.Auth):
@@ -733,6 +739,15 @@ class Agent:
         self.asked: defaultdict[str, deque[float]] = defaultdict(deque)
         self.slots = asyncio.Semaphore(CONCURRENT_ANSWERS)
         self.tasks: set[asyncio.Task[None]] = set()
+        # The ConfigMap's files change in place on a merge; the prompt is read per answer.
+        self.code = Path(__file__)
+        self.loaded = self.code.read_bytes()
+
+    def changed(self) -> bool:
+        try:
+            return self.code.read_bytes() != self.loaded
+        except OSError:
+            return False
 
     async def start(self) -> None:
         self.me = await self.mattermost.get("/users/me")
@@ -1013,16 +1028,17 @@ class Agent:
                 raise Failure(HUB_UNREACHABLE) from exc
             if owner is None:
                 token = None
-        if personal and token is None:
+        unlinked = personal and token is None
+        if unlinked:
             self.linking.forget(post["user_id"])
-            return LINK_UNFINISHED.get(
-                self.linking.progress(post["user_id"]) or "", NEEDS_LINK
-            )
+            personal = False
         if not self.allowed(post["user_id"], time.monotonic()):
             log.info("post %s: over the limit", post["id"])
             return LIMITED
         place = "a private conversation" if self.private(post) else "the channel"
-        mode = PERSONAL_MODE if personal else PUBLIC_MODE
+        mode = PERSONAL_MODE if personal else UNLINKED_MODE if unlinked else PUBLIC_MODE
+        if personal and post["channel_id"] not in self.direct:
+            mode = f"{mode} {PERSONAL_IN_COMPANY}"
         until = self.linking.until(post["user_id"])
         status = (
             LINK_STATUS.format(until=time.strftime("%d %b %Y", time.gmtime(until)))
@@ -1115,6 +1131,12 @@ class Agent:
         await self.start()
         log.info("polling as %s", self.me["username"])
         while True:
+            if self.changed():
+                log.info(
+                    "new code: finishing %d answers, then restarting", len(self.tasks)
+                )
+                await asyncio.gather(*self.tasks, return_exceptions=True)
+                raise CodeChanged
             try:
                 await self.poll()
             except httpx.HTTPStatusError as exc:
@@ -1139,6 +1161,8 @@ class Agent:
             await self.oauth.ready.wait()
             try:
                 await self.polling()
+            except CodeChanged:
+                return
             except Unauthorized as exc:
                 log.error("Mattermost refused the tokens: %s", exc)
                 self.oauth.forget()
@@ -1199,7 +1223,15 @@ async def serve(agent: Agent, base_url: str) -> None:
     config = uvicorn.Config(
         web(agent, base_url), host="0.0.0.0", port=PORT, log_level="warning"
     )
-    await asyncio.gather(uvicorn.Server(config).serve(), agent.run())
+    server = uvicorn.Server(config)
+    pages = asyncio.create_task(server.serve())
+    running = asyncio.create_task(agent.run())
+    done, _ = await asyncio.wait([pages, running], return_when=asyncio.FIRST_COMPLETED)
+    server.should_exit = True
+    running.cancel()
+    await asyncio.gather(pages, running, return_exceptions=True)
+    for task in done:
+        task.result()
 
 
 def main() -> None:

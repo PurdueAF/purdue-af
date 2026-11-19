@@ -84,7 +84,7 @@ class Linked:
 
 
 async def ask(case: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
-    private = bool(case.get("private") or case.get("linked"))
+    private = bool(case.get("private", case.get("linked")))
     post: dict[str, Any] = {
         "id": "question",
         "channel_id": "dm" if private else "channel",

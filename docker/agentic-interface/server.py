@@ -31,6 +31,7 @@ from tools import (
     prompts,
     promql,
     ray,
+    rcac,
     session,
     storage,
 )
@@ -293,7 +294,9 @@ mcp = InstrumentedMCPServer(
         "Tools for the Purdue Analysis Facility. Each tool is annotated as "
         "read-only, or as changing or stopping something of the caller's. "
         'Facility-wide questions: get_facility_health for "is the AF healthy / '
-        'is something broken"; list_af_profiles for the session profiles and '
+        'is something broken", with get_rcac_outages for what RCAC, which runs '
+        "the cluster and storage under it, has announced down or under "
+        "maintenance; list_af_profiles for the session profiles and "
         "how many of each GPU a new session can take now; get_ray_capacity for "
         "the free Ray workers and GPUs at Purdue and on NRP; "
         "list_dask_cluster_options for Dask worker choices; "
@@ -330,6 +333,7 @@ mcp = InstrumentedMCPServer(
 logs.register(mcp)
 storage.register(mcp)
 health.register(mcp)
+rcac.register(mcp)
 docs.register(mcp)
 dask.register(mcp)
 ray.register(mcp)
