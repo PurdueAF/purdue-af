@@ -447,10 +447,11 @@ async def test_a_refused_poll_logs_the_request_it_was(make, caplog, monkeypatch)
     monkeypatch.setattr(agent, "POLL_SECONDS", 0)
     with caplog.at_level("WARNING", logger="mattermost-agent"):
         running = asyncio.create_task(bot.polling())
-        while not caplog.records:
+        # Other tests' leftover tasks may log here too.
+        while not (mine := [r for r in caplog.records if r.name == "mattermost-agent"]):
             await asyncio.sleep(0)
         running.cancel()
-    message = caplog.records[0].getMessage()
+    message = mine[0].getMessage()
     assert message == "poll: HTTP 403 for GET /api/v4/channels/c1/posts"
 
 
