@@ -28,7 +28,7 @@ NOW = datetime.now(tz=timezone.utc)
 
 @pytest.fixture
 def client(monkeypatch):
-    monkeypatch.setattr(rcac, "_cached", (0.0, []))
+    monkeypatch.setattr(rcac, "_cached", None)
     monkeypatch.setattr(rcac, "shared_client", lambda name: httpx.AsyncClient())
 
 

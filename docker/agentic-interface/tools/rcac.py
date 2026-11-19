@@ -23,7 +23,8 @@ _CACHE_SECONDS = 300.0
 _TEXT_CHARS = 700
 _TAG = re.compile(r"<[^>]+>")
 _SPACE = re.compile(r"\s+")
-_cached: tuple[float, list[dict]] = (0.0, [])
+# When the cached items expire, and the items; None until the first read.
+_cached: tuple[float, list[dict]] | None = None
 
 
 def _text(fragment: str) -> str:
@@ -52,7 +53,7 @@ def parse(feed: str) -> list[dict]:
 
 async def _items() -> list[dict]:
     global _cached
-    if time.monotonic() - _cached[0] < _CACHE_SECONDS:
+    if _cached and time.monotonic() < _cached[0]:
         return _cached[1]
     try:
         resp = await shared_client("rcac").get(FEED_URL, timeout=15.0)
@@ -64,7 +65,7 @@ async def _items() -> list[dict]:
         items = parse(resp.text)
     except ET.ParseError as exc:
         raise malformed_response(SERVICE, resp, "an RSS feed") from exc
-    _cached = (time.monotonic(), items)
+    _cached = (time.monotonic() + _CACHE_SECONDS, items)
     return items
 
 
