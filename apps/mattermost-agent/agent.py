@@ -103,6 +103,13 @@ PERSONAL_MODE = (
     "not wait or poll for it, since workers and sessions take minutes to start. You "
     "have no way to reach anyone else's account; say so if asked."
 )
+# Where others read the reply: what a tool showed is not theirs to hear.
+PERSONAL_IN_COMPANY = (
+    "Others read this conversation. Say nothing about this person's account that "
+    "does not answer their question, even when a tool showed it: not their storage "
+    "use or quotas, their other sessions, clusters or jobs, or how they use the "
+    "facility, unless they asked about that."
+)
 # Refreshed this early, so that a poll never races the expiry.
 EXPIRY_MARGIN_SECONDS = 300.0
 # Before a name, so a reply can never ping @channel, @all or a person.
@@ -1023,6 +1030,8 @@ class Agent:
             return LIMITED
         place = "a private conversation" if self.private(post) else "the channel"
         mode = PERSONAL_MODE if personal else PUBLIC_MODE
+        if personal and post["channel_id"] not in self.direct:
+            mode = f"{mode} {PERSONAL_IN_COMPANY}"
         until = self.linking.until(post["user_id"])
         status = (
             LINK_STATUS.format(until=time.strftime("%d %b %Y", time.gmtime(until)))
