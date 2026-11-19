@@ -27,12 +27,12 @@ ensure_tools() {
 			command -v "$tool" >/dev/null || missing+=("$tool")
 		done
 		if [ ${#missing[@]} -gt 0 ]; then
-			dnf install -y "${missing[@]/#ldapsearch/openldap-clients}"
+			apk add --no-cache "${missing[@]/#ldapsearch/openldap-clients}"
 		fi
 		if ! command -v kubectl >/dev/null; then
 			local url="https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
 			curl -fsSL -o /tmp/kubectl "$url"
-			echo "$(curl -fsSL "${url}.sha256")  /tmp/kubectl" | sha256sum --check --quiet
+			echo "$(curl -fsSL "${url}.sha256")  /tmp/kubectl" | sha256sum -c
 			install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
 		fi
 	} 1>&2

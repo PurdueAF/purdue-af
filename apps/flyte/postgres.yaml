@@ -33,13 +33,32 @@ spec:
           operator: Equal
           value: cms-af
           effect: NoSchedule
+      initContainers:
+        # A fresh volume's root is root-owned; Postgres runs as uid 70 and needs its own PGDATA.
+        - name: pgdata-owner
+          image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/postgres:16.15-alpine
+          command:
+            - sh
+            - -c
+            - d=/var/lib/postgresql/data/pgdata; mkdir -p $d; [ "$(stat -c %u $d)" = 70 ] || { chmod 700 $d && chown 70:70 $d; }
+          securityContext:
+            capabilities:
+              add: [CHOWN]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
       containers:
         - name: postgres
           image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/postgres:16.15-alpine
-          # The entrypoint chowns its dirs as root, then su-execs to postgres: needed where a cluster drops ALL.
           securityContext:
-            capabilities:
-              add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+            runAsUser: 70
+            runAsGroup: 70
           env:
             - name: POSTGRES_USER
               value: flyte

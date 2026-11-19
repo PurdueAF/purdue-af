@@ -188,12 +188,12 @@ def test_requires_source_argument(shims):
 def test_ensure_tools_is_silent_on_stdout(shims):
     """ensure_tools runs inside the captured fetch functions, so it must keep
     stdout empty or its output lands in the userlist."""
-    dnf = shims["bin"] / "dnf"
-    dnf.write_text('#!/bin/bash\necho "Installing: packages, with spaces"\n')
-    dnf.chmod(0o755)
+    apk = shims["bin"] / "apk"
+    apk.write_text('#!/bin/bash\necho "Installing: packages, with spaces"\n')
+    apk.chmod(0o755)
 
     # Extract the function and call it with a tool that exists nowhere,
-    # forcing the dnf path; capture only stdout.
+    # forcing the apk path; capture only stdout.
     import os
 
     probe = (
