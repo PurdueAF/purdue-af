@@ -1406,6 +1406,18 @@ async def test_the_model_knows_whether_the_asker_is_linked(make):
     assert "alice" not in system and "token-" not in system
 
 
+async def test_a_personal_answer_where_others_read_keeps_to_the_question(make):
+    bot, server, llm, _ = await make({"content": "Fine."}, {"content": "Fine."})
+    await ready(bot)
+    await link(bot, server)
+    llm.personal = "personal"
+    await bot.handle(dm("q", "is my session running?", at=3000))
+    await bot.handle(post("p", "@purdueaf-agent is my Depot mount ok?", at=3000))
+    in_dm, in_channel = (b["messages"][0]["content"] for b in llm.bodies[-2:])
+    assert agent.PERSONAL_IN_COMPANY not in in_dm
+    assert agent.PERSONAL_IN_COMPANY in in_channel
+
+
 async def asked(make, *answers, private=False, **setup):
     """Asks one question and returns what the bot replied."""
     bot, server, llm, facility = await make(*answers)
