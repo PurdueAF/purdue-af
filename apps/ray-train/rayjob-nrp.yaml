@@ -14,7 +14,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: ray-job-submitter
-          image: ghcr.io/purdueaf/ray-nrp:latest
+          image: gitlab-registry.nrp-nautilus.io/kondratyevd/purdueaf/ray-nrp:latest
           imagePullPolicy: Always
           resources:
             requests:
@@ -33,7 +33,7 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: ghcr.io/purdueaf/ray-nrp:latest
+              image: gitlab-registry.nrp-nautilus.io/kondratyevd/purdueaf/ray-nrp:latest
               imagePullPolicy: Always
               # The job's code and data, under its own prefix of the bucket.
               envFrom:
@@ -75,7 +75,7 @@ spec:
           spec:
             containers:
               - name: ray-worker
-                image: ghcr.io/purdueaf/ray-nrp:latest
+                image: gitlab-registry.nrp-nautilus.io/kondratyevd/purdueaf/ray-nrp:latest
                 imagePullPolicy: Always
                 envFrom:
                   - secretRef:
