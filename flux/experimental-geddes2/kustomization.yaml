@@ -1,0 +1,123 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../apps/monitoring/helmrepo-grafana.yaml
+  - ../../apps/monitoring/pyroscope/helmrelease.yaml
+  - ../../apps/monitoring/pyroscope/pvc.yaml
+  - ../../apps/monitoring/loki/helmrelease.yaml
+  - ../../apps/monitoring/alloy/helmrelease.yaml
+
+  - ../../apps/servicex/helmrepo.yaml
+  - ../../apps/servicex/servicex-anvil/helmrelease.yaml
+  - ../../apps/servicex/servicex-anvil/secrets.yaml
+  - ../../apps/servicex/servicex-eos/gitrepo.yaml
+  - ../../apps/servicex/servicex-eos/helmrelease.yaml
+  - ../../apps/servicex/servicex-eos/secrets.yaml
+
+  - ../../apps/flyte/helmrepo.yaml
+  - ../../apps/flyte/helmrelease.yaml
+  - ../../apps/flyte/postgres.yaml
+  - ../../apps/flyte/minio.yaml
+  - ../../apps/flyte/podtemplate.yaml
+  - ../../apps/flyte/secret-console-auth.yaml
+
+  - ../../apps/ray/helmrepo.yaml
+  - ../../apps/ray/operator/helmrelease.yaml
+
+  - ../../apps/krab/gitrepo.yaml
+  - ../../apps/krab/helmrelease.yaml
+  - ../../apps/krab/pvc.yaml
+  - ../../apps/krab/outputs-owner.yaml
+  - ../../apps/krab/secret-postgres.yaml
+  - ../../apps/krab/secret-rabbitmq.yaml
+  - ../../apps/krab/secret-celery.yaml
+
+  - ../../apps/agentic-interface/rbac.yaml
+  - ../../apps/agentic-interface/deployment.yaml
+  - ../../apps/agentic-interface/service.yaml
+  - ../../apps/agentic-interface/networkpolicy.yaml
+
+  - ../../apps/monitoring/af-monitoring/deployment-af-node-monitor.yaml
+  - ../../apps/monitoring/af-monitoring/deployment-af-xcache-probe.yaml
+  - ../../apps/monitoring/af-monitoring/daemonset-af-node-probe.yaml
+  - ../../apps/monitoring/af-monitoring/af-node-monitor-rbac.yaml
+  - ../../apps/monitoring/af-monitoring/services.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: pyroscope-config
+    files:
+      - values.yaml=../../apps/monitoring/pyroscope/values.yaml
+
+  - name: loki-config
+    files:
+      - values.yaml=../../apps/monitoring/loki/values.yaml
+
+  - name: alloy-config
+    files:
+      - values.yaml=../../apps/monitoring/alloy/values.yaml
+
+  - name: servicex-anvil-config
+    files:
+      - values.yaml=../../apps/servicex/servicex-anvil/values.yaml
+
+  - name: servicex-eos-config
+    files:
+      - values.yaml=../../apps/servicex/servicex-eos/values.yaml
+
+  - name: kuberay-operator-config
+    files:
+      - values.yaml=../../apps/ray/operator/values.yaml
+
+  - name: user-docs
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../docs/docs/agents.md
+      - ../../docs/docs/data-access.md
+      - ../../docs/docs/getting-started.md
+      - ../../docs/docs/gpus.md
+      - ../../docs/docs/guide-agentic-interface.md
+      - ../../docs/docs/guide-cern-eos.md
+      - ../../docs/docs/guide-combine.md
+      - ../../docs/docs/guide-conda.md
+      - ../../docs/docs/guide-dask-gateway.md
+      - ../../docs/docs/guide-dask.md
+      - ../../docs/docs/guide-eos-write.md
+      - ../../docs/docs/guide-ide-connection.md
+      - ../../docs/docs/guide-mc-gen.md
+      - ../../docs/docs/guide-pixi.md
+      - ../../docs/docs/guide-ray-train.md
+      - ../../docs/docs/guide-roofit-cuda.md
+      - ../../docs/docs/guide-rucio.md
+      - ../../docs/docs/guide-ssh-access.md
+      - ../../docs/docs/hardware.md
+      - ../../docs/docs/index.md
+      - ../../docs/docs/interface.md
+      - ../../docs/docs/login-methods.md
+      - ../../docs/docs/scaling-out.md
+      - ../../docs/docs/software.md
+      - ../../docs/docs/storage.md
+      - ../../docs/docs/support.md
+      - ../../docs/docs/troubleshooting.md
+
+  - name: krab-config
+    files:
+      - values.yaml=../../apps/krab/values.yaml
+
+  - name: flyte-config
+    files:
+      - values.yaml=../../apps/flyte/values.yaml
+
+  - name: af-node-monitor-config
+    files:
+      - ../../docker/af-node-monitor/node_healthcheck.py
+      - ../../docker/af-node-monitor/probe_agent.py
+      - ../../docker/af-node-monitor/job_runner.py
+
+  - name: af-xcache-probe-config
+    files:
+      - ../../docker/af-node-monitor/xcache_probe.py

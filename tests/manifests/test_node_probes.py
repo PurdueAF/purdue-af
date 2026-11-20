@@ -15,7 +15,7 @@ DEPLOYMENT = REPO / "apps/monitoring/af-monitoring/deployment-af-node-monitor.ya
 XCACHE_PROBE = REPO / "apps/monitoring/af-monitoring/deployment-af-xcache-probe.yaml"
 DEPLOYMENTS = (
     EXPERIMENTAL,
-    REPO / "flux/core-geddes2/kustomization.yaml",
+    REPO / "flux/experimental-geddes2/kustomization.yaml",
 )
 
 

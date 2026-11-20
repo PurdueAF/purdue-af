@@ -1,0 +1,31 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: purdue-af-flux-experimental
+  namespace: cms
+  annotations:
+    cluster: geddes2
+spec:
+  interval: 1m
+  timeout: 1m
+  path: "./flux/experimental-geddes2/"
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: purdue-af-experimental
+  targetNamespace: cms
+  postBuild:
+    substitute:
+      enable_ingresses: "false"
+      namespace: "cms"
+      jupyterhub_host: "cmsdev.geddes.rcac.purdue.edu"
+      multinode_storage_class: "geddes-standard-multinode"
+      singlenode_storage_class: "geddes-standard-singlenode"
+      x509_secret_name: "af-x509-proxy"
+      # Geddes2 nodes carry no cms-af-prod label: select every Linux node.
+      af_node_label: "kubernetes.io/os"
+      af_node_label_value: "linux"
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
