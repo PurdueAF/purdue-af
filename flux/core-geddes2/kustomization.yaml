@@ -28,11 +28,24 @@ resources:
   - ../../apps/storage/cvmfs-pvc.yaml
 
   - ../../apps/af-utils/pixi-global-sync/deployment.yaml
+  - ../../apps/af-utils/af-users-graph/pvc.yaml
+  - ../../apps/af-utils/af-users-graph/deployment.yaml
+  - ../../apps/af-utils/af-users-graph/service.yaml
+  - ../../apps/af-utils/af-users-graph/ingress.yaml
+  - ../../apps/af-utils/af-users-graph/cronjob.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
 
 configMapGenerator:
+  - name: af-users-graph-script
+    files:
+      - ../../apps/af-utils/af-users-graph/plot-af-users.py
+
+  - name: af-users-graph-nginx-config
+    files:
+      - ../../apps/af-utils/af-users-graph/nginx.conf
+
   - name: jupyterhub-config
     files:
       - values.yaml=../../apps/jupyterhub/jupyterhub/values.yaml
@@ -58,6 +71,7 @@ configMapGenerator:
       - 01-set-user-info.py=../../apps/jupyterhub/jupyterhub/extraFiles/set-user-info.py
       - 02-gpu-availability.py=../../apps/jupyterhub/jupyterhub/extraFiles/gpu-availability.py
       - 03-session-activity.py=../../apps/jupyterhub/jupyterhub/extraFiles/session-activity.py
+      - 04-ray-train.py=../../apps/jupyterhub/jupyterhub/extraFiles/ray-train.py
       - gpu_queries.py=../../apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py
 
   - name: jupyterhub-gpu-culler
