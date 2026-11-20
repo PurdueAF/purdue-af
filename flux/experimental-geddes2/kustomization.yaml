@@ -24,6 +24,11 @@ resources:
   - ../../apps/ray/helmrepo.yaml
   - ../../apps/ray/operator/helmrelease.yaml
 
+  - ../../apps/ray-train/rbac.yaml
+  - ../../apps/ray-train/deployment.yaml
+  - ../../apps/ray-train/service.yaml
+  - ../../apps/ray-train/networkpolicy.yaml
+
   - ../../apps/krab/gitrepo.yaml
   - ../../apps/krab/helmrelease.yaml
   - ../../apps/krab/pvc.yaml
@@ -103,6 +108,23 @@ configMapGenerator:
       - ../../docs/docs/storage.md
       - ../../docs/docs/support.md
       - ../../docs/docs/troubleshooting.md
+
+  - name: ray-train-raycluster
+    files:
+      - ../../apps/ray-train/raycluster.yaml
+
+  - name: ray-train-gateway
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../apps/ray-train/gateway.py
+      - ../../apps/ray-train/config.yaml
+      - ../../apps/ray-train/nrp_gpus.py
+      - ../../apps/ray-train/nrp_jobs.py
+      - ../../apps/ray-train/stage.py
+      - ../../apps/ray-train/rayjob-nrp.yaml
+      - ../../apps/jupyterhub/jupyterhub/extraFiles/gpu_queries.py
 
   - name: krab-config
     files:
