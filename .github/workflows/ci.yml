@@ -162,6 +162,32 @@ jobs:
             -t "$repo:pre-release" \
             "$repo@$AF_DIGEST"
           echo "published $repo@$AF_DIGEST -> :sha-${GITHUB_SHA::12} + :pre-release" | tee -a "$GITHUB_STEP_SUMMARY"
+      # NRP's pods pull ray-nrp from NRP's own registry (docker/REGISTRY.md); a failure there blocks no deploy.
+      - name: Mirror ray-nrp to NRP's registry
+        continue-on-error: true
+        env:
+          NRP_REGISTRY_USER: ${{ secrets.NRP_REGISTRY_USER }}
+          NRP_REGISTRY_TOKEN: ${{ secrets.NRP_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$NRP_REGISTRY_USER" ] || [ -z "$NRP_REGISTRY_TOKEN" ]; then
+            echo "::warning::no NRP_REGISTRY_USER or NRP_REGISTRY_TOKEN secret: ray-nrp is not mirrored to NRP's registry"
+            exit 0
+          fi
+          source .github/workflows/ghcr.sh
+          src=ghcr.io/purdueaf/ray-nrp
+          dest=gitlab-registry.nrp-nautilus.io/kondratyevd/purdueaf/ray-nrp
+          printf '%s' "$NRP_REGISTRY_TOKEN" \
+            | skopeo login --username "$NRP_REGISTRY_USER" --password-stdin "${dest%%/*}"
+          raw=$(ghcr_retry "skopeo inspect $src:latest" skopeo inspect --raw "docker://$src:latest")
+          digest="sha256:$(printf '%s' "$raw" | sha256sum | cut -d' ' -f1)"
+          if [ "$(skopeo inspect --raw "docker://$dest:latest" 2>/dev/null || true)" = "$raw" ]; then
+            echo "unchanged $dest:latest — already $digest" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          ghcr_retry "skopeo copy to NRP" skopeo copy --all --preserve-digests --retry-times 3 \
+            "docker://$src@$digest" "docker://$dest:latest"
+          echo "mirrored $src@$digest -> $dest:latest" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Auto-release agentic-interface (version bump when the image changed)
         id: autorelease
         env:
