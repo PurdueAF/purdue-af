@@ -16,7 +16,7 @@ spec:
   targetNamespace: cms
   postBuild:
     substitute:
-      enable_ingresses: "false"
+      enable_ingresses: "true"
       namespace: "cms"
       jupyterhub_db_pv_selector: ""
       jupyterhub_db_storage_class: "geddes-standard-singlenode"

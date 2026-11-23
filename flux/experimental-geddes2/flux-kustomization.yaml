@@ -16,7 +16,7 @@ spec:
   targetNamespace: cms
   postBuild:
     substitute:
-      enable_ingresses: "false"
+      enable_ingresses: "true"
       namespace: "cms"
       jupyterhub_host: "cmsdev.geddes.rcac.purdue.edu"
       multinode_storage_class: "geddes-standard-multinode"
