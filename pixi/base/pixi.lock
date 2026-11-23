@@ -374,7 +374,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/rfc3987-syntax-1.1.0-pyhe01879c_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/rich-15.0.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/rich-rst-2.1.0-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.5.1-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.5.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/send2trash-2.1.0-pyha191276_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/shellingham-1.5.4-pyhd8ed1ab_2.conda
@@ -809,7 +809,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/rfc3987-syntax-1.1.0-pyhe01879c_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/rich-15.0.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/rich-rst-2.1.0-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.5.1-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.5.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/send2trash-2.1.0-pyha191276_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/shellingham-1.5.4-pyhd8ed1ab_2.conda
@@ -6108,9 +6108,9 @@ packages:
   - pkg:pypi/rich-rst?source=hash-mapping
   size: 212432
   timestamp: 1783238203113
-- conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.5.1-pyhd8ed1ab_0.conda
-  sha256: 24a96a440e1ebd6cddd1cc14bf2d732fc4c1a701d462b35f97dc9a9db2ba7f8a
-  md5: 3d6537ccb6a08c4158178ccfff325a35
+- conda: https://conda.anaconda.org/conda-forge/noarch/rucio-clients-41.5.2-pyhd8ed1ab_0.conda
+  sha256: 86ce66245e66c1479a953be910dad171fcfbfa97c9d4c899aa9fccd58e05c49a
+  md5: e0ca22ffec73a79df9c1fe29675f4786
   depends:
   - click
   - dogpile.cache
@@ -6123,12 +6123,11 @@ packages:
   - typing_extensions
   - urllib3
   license: Apache-2.0
-  license_family: APACHE
   purls:
   - pkg:pypi/rucio-clients?source=hash-mapping
   run_exports: {}
-  size: 269135
-  timestamp: 1792616864867
+  size: 269351
+  timestamp: 1795447584676
 - conda: https://conda.anaconda.org/conda-forge/noarch/send2trash-2.1.0-pyha191276_1.conda
   sha256: 59656f6b2db07229351dfb3a859c35e57cc8e8bcbc86d4e501bff881a6f771f1
   md5: 28eb91468df04f655a57bcfbb35fc5c5
