@@ -125,15 +125,15 @@ RUN mkdir -p "${PIXI_HOME}/bin" && \
 # Coding-agent CLIs in their own prefix, out of reach of a pixi rebuild. jupyter-ai's
 # Claude/Codex personas appear only when the *-acp adapters are on PATH.
 # renovate: datasource=npm depName=@anthropic-ai/claude-code
-ARG CLAUDE_CODE_VERSION="2.1.326"
+ARG CLAUDE_CODE_VERSION="2.1.330"
 # renovate: datasource=npm depName=@openai/codex
-ARG CODEX_VERSION="0.169.0"
+ARG CODEX_VERSION="0.171.0"
 # renovate: datasource=npm depName=opencode-ai
 ARG OPENCODE_VERSION="1.19.6"
 # renovate: datasource=npm depName=@agentclientprotocol/claude-agent-acp
-ARG CLAUDE_AGENT_ACP_VERSION="0.108.0"
+ARG CLAUDE_AGENT_ACP_VERSION="0.109.1"
 # renovate: datasource=npm depName=@agentclientprotocol/codex-acp
-ARG CODEX_ACP_VERSION="2.7.0"
+ARG CODEX_ACP_VERSION="2.9.0"
 ENV NPM_GLOBAL="/opt/npm-global"
 # hadolint ignore=DL3016  # versions ARE pinned, via the ARGs above
 RUN PATH="${BASE_ENV_DIR}/bin:${PATH}" \
