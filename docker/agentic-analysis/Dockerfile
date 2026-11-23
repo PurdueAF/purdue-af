@@ -2,8 +2,8 @@
 # OpenCode with ripgrep and poppler.
 FROM python:3.12-slim
 
-COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /uvx /bin/
-COPY --from=ghcr.io/prefix-dev/pixi:0.83.0 /usr/local/bin/pixi /usr/local/bin/pixi
+COPY --from=ghcr.io/astral-sh/uv:0.13.9 /uv /uvx /bin/
+COPY --from=ghcr.io/prefix-dev/pixi:0.84.2 /usr/local/bin/pixi /usr/local/bin/pixi
 
 # ripgrep: OpenCode's search tools, which otherwise fetch it at run time.
 # poppler-utils: PDF pages as PNG for the agents that read figures.
@@ -16,7 +16,7 @@ RUN apt-get update \
 # OpenCode is one binary, published as an npm package per platform. The
 # baseline build needs no AVX2, so it runs on every AF node.
 # renovate: datasource=npm depName=opencode-ai
-ARG OPENCODE_VERSION="1.19.5"
+ARG OPENCODE_VERSION="1.19.6"
 RUN curl -fsSL --retry 3 --retry-delay 2 -o /tmp/opencode.tgz \
         "https://registry.npmjs.org/opencode-linux-x64-baseline/-/opencode-linux-x64-baseline-${OPENCODE_VERSION}.tgz" \
     && tar -xzf /tmp/opencode.tgz -C /tmp package/bin/opencode \
