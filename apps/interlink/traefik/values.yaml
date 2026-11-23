@@ -3,7 +3,7 @@
 image:
   registry: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache
   repository: library/traefik
-  tag: v3.7.17
+  tag: v3.7.19
 
 deployment:
   replicas: 2

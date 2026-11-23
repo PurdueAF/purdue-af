@@ -27,7 +27,7 @@ spec:
           # A failed step ends the run here, with the Secret as it was.
           initContainers:
             - name: voms-proxy
-              image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/sslhep/x509-secrets:v1.8.6
+              image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/sslhep/x509-secrets:v1.9.0
               command: ["/bin/bash", "-ec"]
               args:
                 - |

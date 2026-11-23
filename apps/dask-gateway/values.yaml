@@ -497,7 +497,7 @@ traefik:
   replicas: 2
   image:
     name: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/traefik
-    tag: 2.11.61
+    tag: 2.11.63
   resources:
     limits:
       cpu: 2
