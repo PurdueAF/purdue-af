@@ -1,4 +1,4 @@
-FROM golang:1.26.10-alpine AS promql-scope
+FROM golang:1.27.4-alpine AS promql-scope
 
 WORKDIR /src
 COPY docker/agentic-interface/promql-scope/ ./
@@ -6,7 +6,7 @@ RUN go test ./... && CGO_ENABLED=0 go build -trimpath -ldflags=-s -o /promql-sco
 
 FROM python:3.12-slim
 
-COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.9 /uv /uvx /bin/
 
 # The Deployment's runAsUser. No home: only /tmp, an emptyDir, is writable at runtime.
 RUN useradd --uid 1000 --user-group --no-create-home --shell /usr/sbin/nologin app
