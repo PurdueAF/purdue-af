@@ -36,7 +36,7 @@ spec:
       initContainers:
         # A fresh volume's root is root-owned; Postgres runs as uid 70 and needs its own PGDATA.
         - name: pgdata-owner
-          image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/postgres:16.15-alpine
+          image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/postgres:16.16-alpine
           command:
             - sh
             - -c
@@ -55,7 +55,7 @@ spec:
               mountPath: /var/lib/postgresql/data
       containers:
         - name: postgres
-          image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/postgres:16.15-alpine
+          image: geddes2-registry.rcac.purdue.edu/dockerhub-proxy-cache/library/postgres:16.16-alpine
           securityContext:
             runAsUser: 70
             runAsGroup: 70
