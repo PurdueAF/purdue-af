@@ -2,7 +2,7 @@
 # (pixi/global) installed into the image, since NRP pods see no AF storage.
 FROM ubuntu:26.04
 
-COPY --from=ghcr.io/prefix-dev/pixi:0.83.0 /usr/local/bin/pixi /usr/local/bin/pixi
+COPY --from=ghcr.io/prefix-dev/pixi:0.84.2 /usr/local/bin/pixi /usr/local/bin/pixi
 
 # wget: KubeRay's probes of a Ray pod run it.
 # hadolint ignore=DL3008
