@@ -13,7 +13,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "flyte", specifier = "==2.12.4" },
+    { name = "flyte", specifier = "==2.14.0" },
     { name = "httpx", specifier = "==0.28.1" },
 ]
 
@@ -265,7 +265,7 @@ wheels = [
 
 [[package]]
 name = "flyte"
-version = "2.12.4"
+version = "2.14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
@@ -292,12 +292,12 @@ dependencies = [
     { name = "toml" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0a/50/ccd246d7446e4d535c27bb20883a92f6a755bd01dd70d50c9274c9cc74e4/flyte-2.12.4-py3-none-any.whl", hash = "sha256:13ad26643ba2966d2876494408899d986cf917f1d4765ede548ca6795c925f02", size = 1237823, upload-time = "2026-11-02T23:01:11.419Z" },
+    { url = "https://files.pythonhosted.org/packages/84/12/6f63fbddd7d0a109d1295ee9f2fbaf2bdea2005e587af1385893aa27681d/flyte-2.14.0-py3-none-any.whl", hash = "sha256:b382255f60e229c3446681f63726ef44775b187af6af11cf4d8b930d55f0e969", size = 1306660, upload-time = "2026-11-20T23:45:20.133Z" },
 ]
 
 [[package]]
 name = "flyteidl2"
-version = "2.0.53"
+version = "2.0.56"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "googleapis-common-protos" },
@@ -306,7 +306,7 @@ dependencies = [
     { name = "protovalidate" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/30/c5/f71f7f6c06144437c4c089f0b505df4215d824d4296b5a358ec8e05d16a3/flyteidl2-2.0.53-py3-none-any.whl", hash = "sha256:61a1fc68dd2e590104b402082dd509aa1dc64870271ff978c0cc12fd799a8c34", size = 387747, upload-time = "2026-10-27T04:35:17.151Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/a6/57855255f3db0a8fca3f7b545a1d23ec3034319f4cdae8e73d0962eea890/flyteidl2-2.0.56-py3-none-any.whl", hash = "sha256:c49a781c2b394e89701029571081e1cd9597e99fd5edc4ae8c3d999f783f47b8", size = 394642, upload-time = "2026-11-18T08:43:14.336Z" },
 ]
 
 [[package]]
@@ -644,7 +644,7 @@ name = "protobuf-py"
 version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "protobuf-py-ext", marker = "(platform_machine == 'arm64' and platform_python_implementation == 'CPython' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux') or (platform_machine == 'x86_64' and platform_python_implementation == 'CPython' and sys_platform == 'linux') or (platform_machine == 'AMD64' and platform_python_implementation == 'CPython' and sys_platform == 'win32') or (platform_machine == 'ARM64' and platform_python_implementation == 'CPython' and sys_platform == 'win32')" },
+    { name = "protobuf-py-ext", marker = "platform_machine == 'arm64' and platform_python_implementation == 'CPython' and sys_platform == 'darwin' or (platform_machine == 'aarch64' or platform_machine == 'x86_64') and platform_python_implementation == 'CPython' and sys_platform == 'linux' or (platform_machine == 'AMD64' or platform_machine == 'ARM64') and platform_python_implementation == 'CPython' and sys_platform == 'win32'" },
     { name = "protobuf-py-pure" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f2/fd/905856e412bd77c9e64948547fdf4441e21871912b9df3d42a41b61d48e8/protobuf_py-0.7.0.tar.gz", hash = "sha256:2cec47c0462f8d0bfc1a1cbbe9cf766ec65ca95130700f0afeb962e9d7d3454f", size = 8396, upload-time = "2026-10-22T05:40:37.533Z" }
