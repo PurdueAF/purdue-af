@@ -16,15 +16,8 @@ spec:
           serviceAccountName: database-restore
           securityContext:
             runAsUser: 616617
-          # Depot's export admits only these Geddes2 nodes.
-          affinity:
-            nodeAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-                nodeSelectorTerms:
-                  - matchExpressions:
-                      - key: kubernetes.io/hostname
-                        operator: In
-                        values: [geddes-a006, geddes-a007]
+          nodeSelector:
+            ${af_node_label:=cms-af-prod}: ${af_node_label_value:="true"}
           tolerations:
             - key: "hub.jupyter.org/dedicated"
               operator: "Equal"
