@@ -1,7 +1,8 @@
 """Workload accounts (apps/dask-gateway/README.md#workload-accounts): each
-declaration is in the af-accounts ConfigMap of the Flux root that deploys both
+declaration is in the af-accounts ConfigMap of each Flux root that deploys both
 gateways, beside the volume and the token Secret of its app."""
 
+import pytest
 from common import REPO, load_all, load_yaml
 
 APPS = REPO / "apps"
@@ -18,20 +19,25 @@ def declarations():
     return {path: load_yaml(path) for path in APPS.rglob("account.yaml")}
 
 
-def accounts_root():
-    """The kustomization of the one Flux root that generates af-accounts, and that generator."""
+def accounts_roots():
+    """Each Flux root that generates af-accounts: its directory, kustomization and generator."""
     found = []
     for path in sorted(FLUX.glob("*/kustomization.yaml")):
         kustomization = load_yaml(path)
         for generator in kustomization.get("configMapGenerator") or []:
             if generator["name"] == "af-accounts":
-                found.append((kustomization, generator))
-    (root,) = found
-    return root
+                found.append(
+                    pytest.param(kustomization, generator, id=path.parent.name)
+                )
+    return found
 
 
-def test_af_accounts_holds_every_declaration_under_its_name():
-    _, generator = accounts_root()
+def test_af_accounts_is_generated_by_some_root():
+    assert accounts_roots()
+
+
+@pytest.mark.parametrize("kustomization,generator", accounts_roots())
+def test_af_accounts_holds_every_declaration_under_its_name(kustomization, generator):
     assert declarations()
     assert sorted(generator["files"]) == sorted(
         f"{declared['name']}.yaml={listed(path)}"
@@ -41,15 +47,17 @@ def test_af_accounts_holds_every_declaration_under_its_name():
     assert annotations["kustomize.toolkit.fluxcd.io/substitute"] == "disabled"
 
 
-def test_the_root_of_the_accounts_deploys_both_gateways():
-    kustomization, _ = accounts_root()
+@pytest.mark.parametrize("kustomization,generator", accounts_roots())
+def test_the_root_of_the_accounts_deploys_both_gateways(kustomization, generator):
     resources = kustomization["resources"]
     assert listed(APPS / "dask-gateway" / "helmrelease.yaml") in resources
     assert listed(APPS / "ray-train" / "deployment.yaml") in resources
 
 
-def test_each_account_has_its_volume_and_its_encrypted_token_beside_it():
-    kustomization, _ = accounts_root()
+@pytest.mark.parametrize("kustomization,generator", accounts_roots())
+def test_each_account_has_its_volume_and_its_encrypted_token_beside_it(
+    kustomization, generator
+):
     resources = kustomization["resources"]
     for path, declared in declarations().items():
         name = declared["name"]
