@@ -29,7 +29,7 @@ tokenSha256: <SHA-256 of the token, lowercase hex>
 
 Beside it are the PVC `<name>` and `secret-account.yaml`, the SOPS-encrypted
 Secret `<name>-account`, whose key `token` holds the account's token: random
-hex. The Flux root that deploys both gateways holds each declaration in its
+hex. Each Flux root that deploys both gateways holds each declaration in its
 `af-accounts` ConfigMap as `<name>.yaml`, and lists the PVC and the Secret.
 Both gateways mount `af-accounts` at `/etc/af-accounts` and read it on every
 request; without it, there are no accounts.
@@ -69,7 +69,7 @@ lowercase DNS label of at most `ACCOUNT_NAME_MAX` characters, or that is in
 or `gid` outside `ACCOUNT_IDS`; a `tokenSha256` other than lowercase hex of a
 SHA-256; and every declaration that shares its name or its hash with another.
 
-To add one, in the workload's app directory and its Flux root:
+To add one, in the workload's app directory and its Flux roots:
 
 1. a token, written only encrypted, and its `tokenSha256` for `account.yaml`,
    from the repository's root:
@@ -81,7 +81,7 @@ To add one, in the workload's app directory and its Flux root:
    ```
 
 2. `volume.yaml`, the PVC `<name>`;
-3. `<name>.yaml=../../apps/<app>/account.yaml` in the root's `af-accounts`
+3. `<name>.yaml=../../apps/<app>/account.yaml` in each such root's `af-accounts`
    generator, and the Secret and the PVC in its `resources`.
 
 ```bash

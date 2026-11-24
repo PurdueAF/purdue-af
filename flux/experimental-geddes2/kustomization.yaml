@@ -1,6 +1,11 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - ../../apps/dask-gateway/helmrepo.yaml
+  - ../../apps/dask-gateway/helmrelease.yaml
+  - ../../apps/dask-gateway/rbac.yaml
+  - ../../apps/dask-gateway/ingress.yaml
+
   - ../../apps/monitoring/helmrepo-grafana.yaml
   - ../../apps/monitoring/pyroscope/helmrelease.yaml
   - ../../apps/monitoring/pyroscope/pvc.yaml
@@ -14,12 +19,30 @@ resources:
   - ../../apps/servicex/servicex-eos/helmrelease.yaml
   - ../../apps/servicex/servicex-eos/secrets.yaml
 
+  - ../../apps/sonic/supersonic/helmrepo.yaml
+  - ../../apps/sonic/supersonic/helmrelease.yaml
+  - ../../apps/sonic/supersonic-af/helmrelease.yaml
+  - ../../apps/sonic/supersonic-interlink/helmrelease.yaml
+  - ../../apps/sonic/supersonic-interlink/pod-pruner-rbac.yaml
+  - ../../apps/sonic/supersonic-interlink/pod-pruner-cronjob.yaml
+  - ../../apps/sonic/supersonic-interlink-nrp/helmrelease.yaml
+  - ../../apps/sonic/model-manager/helmrelease.yaml
+
   - ../../apps/flyte/helmrepo.yaml
   - ../../apps/flyte/helmrelease.yaml
   - ../../apps/flyte/postgres.yaml
   - ../../apps/flyte/minio.yaml
   - ../../apps/flyte/podtemplate.yaml
   - ../../apps/flyte/secret-console-auth.yaml
+
+  - ../../apps/agentic-analysis/llm-proxy.yaml
+  - ../../apps/agentic-analysis/networkpolicy.yaml
+  - ../../apps/agentic-analysis/podtemplate.yaml
+  - ../../apps/agentic-analysis/secret-account.yaml
+  - ../../apps/agentic-analysis/secret-llm-proxy.yaml
+  - ../../apps/agentic-analysis/secret-nrp.yaml
+  - ../../apps/agentic-analysis/volume.yaml
+  - ../../apps/agentic-analysis/workspace.yaml
 
   - ../../apps/ray/helmrepo.yaml
   - ../../apps/ray/operator/helmrelease.yaml
@@ -28,6 +51,13 @@ resources:
   - ../../apps/ray-train/deployment.yaml
   - ../../apps/ray-train/service.yaml
   - ../../apps/ray-train/networkpolicy.yaml
+
+  - ../../apps/interlink/helmrepo.yaml
+  - ../../apps/interlink/hammer/helmrelease.yaml
+  - ../../apps/interlink/nrp/helmrelease.yaml
+  - ../../apps/interlink/nrp/secret-s3.yaml
+  - ../../apps/interlink/nrp/token-renewal/rbac.yaml
+  - ../../apps/interlink/nrp/token-renewal/cronjob.yaml
 
   - ../../apps/krab/gitrepo.yaml
   - ../../apps/krab/helmrelease.yaml
@@ -52,6 +82,25 @@ generatorOptions:
   disableNameSuffixHash: true
 
 configMapGenerator:
+  - name: interlink-nrp-token-renewal
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - renew.py=../../apps/interlink/nrp/token-renewal/renew.py
+
+  # Workload accounts, read by both gateways (apps/dask-gateway/README.md#workload-accounts).
+  - name: af-accounts
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - agentic-analysis.yaml=../../apps/agentic-analysis/account.yaml
+
+  - name: dask-gateway-config
+    files:
+      - values.yaml=../../apps/dask-gateway/values.yaml
+
   - name: pyroscope-config
     files:
       - values.yaml=../../apps/monitoring/pyroscope/values.yaml
@@ -71,6 +120,44 @@ configMapGenerator:
   - name: servicex-eos-config
     files:
       - values.yaml=../../apps/servicex/servicex-eos/values.yaml
+
+  - name: supersonic-shared-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic/shared/values.yaml
+
+  - name: supersonic-miniaod-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic/miniaod/values.yaml
+
+  - name: supersonic-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic/values.yaml
+
+  - name: supersonic-af-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic-af/values.yaml
+
+  - name: supersonic-interlink-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic-interlink/values.yaml
+
+  # Hand-written Envoy config for supersonic-interlink, referenced by
+  # envoy.external_config in its values.
+  - name: supersonic-interlink-envoy-config-custom
+    files:
+      - envoy.yaml=../../apps/sonic/supersonic-interlink/envoy-config.yaml
+
+  - name: supersonic-interlink-nrp-config
+    files:
+      - values.yaml=../../apps/sonic/supersonic-interlink-nrp/values.yaml
+
+  - name: supersonic-interlink-nrp-envoy-config-custom
+    files:
+      - envoy.yaml=../../apps/sonic/supersonic-interlink-nrp/envoy-config.yaml
+
+  - name: supersonic-model-manager-config
+    files:
+      - values.yaml=../../apps/sonic/model-manager/values-supersonic-af.yaml
 
   - name: kuberay-operator-config
     files:
@@ -109,6 +196,14 @@ configMapGenerator:
       - ../../docs/docs/support.md
       - ../../docs/docs/troubleshooting.md
 
+  - name: agentic-analysis-llm-proxy
+    options:
+      annotations:
+        kustomize.toolkit.fluxcd.io/substitute: disabled
+    files:
+      - ../../apps/agentic-analysis/llm_proxy.py
+      - ../../apps/agentic-analysis/models.toml
+
   - name: ray-train-raycluster
     files:
       - ../../apps/ray-train/raycluster.yaml
@@ -133,6 +228,16 @@ configMapGenerator:
   - name: flyte-config
     files:
       - values.yaml=../../apps/flyte/values.yaml
+
+  - name: interlink-hammer-config
+    files:
+      - shared.yaml=../../apps/interlink/values.yaml
+      - values.yaml=../../apps/interlink/hammer/values.yaml
+
+  - name: interlink-nrp-config
+    files:
+      - shared.yaml=../../apps/interlink/values.yaml
+      - values.yaml=../../apps/interlink/nrp/values.yaml
 
   - name: af-node-monitor-config
     files:

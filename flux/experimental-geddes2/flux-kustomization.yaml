@@ -16,6 +16,7 @@ spec:
   targetNamespace: cms
   postBuild:
     substitute:
+      cluster_domain: "cmsdev.geddes.rcac.purdue.edu"
       enable_ingresses: "true"
       namespace: "cms"
       jupyterhub_host: "cmsdev.geddes.rcac.purdue.edu"
